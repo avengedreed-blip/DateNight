@@ -1,86 +1,170 @@
-import { useEffect, useRef, useCallback } from 'react';
-
-export const useSound = (sfxVolume, scriptsLoaded) => {
-  const synths = useRef(null);
-  const sounds = useRef({});
-  const spinnerLoop = useRef(null);
-
-  useEffect(() => {
-    if (scriptsLoaded && !synths.current && window.Tone) {
-      synths.current = {
-        fanfare: new window.Tone.PolySynth(window.Tone.Synth, { oscillator: { type: "sawtooth" } }).toDestination(),
-        spicy: new window.Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.2 } }).toDestination(),
-        extreme: new window.Tone.MonoSynth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.2, release: 0.5 }, filterEnvelope: { attack: 0.05, decay: 0.2, sustain: 0.1, release: 0.8, baseFrequency: 400, octaves: 4 } }).toDestination(),
-        boo: new window.Tone.Synth({ oscillator: { type: "square" }, envelope: { attack: 0.05, decay: 0.3, sustain: 0.1, release: 0.3 } }).toDestination(),
-        click: new window.Tone.MembraneSynth({ pitchDecay: 0.01, octaves: 3, oscillator: { type: "sine" }, envelope: { attack: 0.001, decay: 0.2, sustain: 0.01, release: 0.4 } }).toDestination(),
-        spinner: new window.Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.005, decay: 0.05, sustain: 0 }, volume: -14 }).toDestination(),
-      };
-
-      sounds.current = {
-        fanfare: () => {
-          const now = window.Tone.now();
-          synths.current.fanfare.triggerAttackRelease(["C4", "E4", "G4", "C5"], "8n", now);
-          synths.current.fanfare.triggerAttackRelease(["G4", "A4", "B4", "C5"], "8n", now + 0.2);
-        },
-        spicyGiggle: () => {
-          const now = window.Tone.now();
-          synths.current.spicy.triggerAttackRelease("G5", "16n", now);
-          synths.current.spicy.triggerAttackRelease("E5", "16n", now + 0.1);
-          synths.current.spicy.triggerAttackRelease("G5", "16n", now + 0.2);
-        },
-        extremeWooo: () => {
-          const now = window.Tone.now();
-          synths.current.extreme.triggerAttack("C4", now);
-          synths.current.extreme.frequency.rampTo("G4", 0.3, now);
-          synths.current.extreme.triggerRelease(now + 0.3);
-        },
-        refusalBoo: () => {
-          const now = window.Tone.now();
-          synths.current.boo.triggerAttackRelease("A2", "8n", now);
-          synths.current.boo.triggerAttackRelease("G#2", "4n", now + 0.125);
-        },
-        click: () => {
-          synths.current.click.triggerAttackRelease("C2", "8n", window.Tone.now());
-        },
-      };
-
-      spinnerLoop.current = new window.Tone.Loop((time) => {
-        if (synths.current.spinner) {
-          synths.current.spinner.triggerAttack(time);
-        }
-      }, "16n");
-    }
-  }, [scriptsLoaded]);
-
-  useEffect(() => {
-    if (synths.current) {
-      synths.current.fanfare.volume.value = -18 + sfxVolume * 18;
-      synths.current.spicy.volume.value = -12 + sfxVolume * 12;
-      synths.current.extreme.volume.value = -10 + sfxVolume * 10;
-      synths.current.boo.volume.value = -10 + sfxVolume * 10;
-      synths.current.click.volume.value = -12 + sfxVolume * 12;
-    }
-  }, [sfxVolume]);
-
-  const play = useCallback((soundName) => {
-    if (sounds.current[soundName] && window.Tone?.Transport.state === "started") {
-      window.Tone.Transport.scheduleOnce(() => {
-        sounds.current[soundName]();
-      }, window.Tone.now());
-    }
-  }, []);
-
-  const startLoop = useCallback(() => {
-    if (spinnerLoop.current && spinnerLoop.current.state !== "started") {
-      spinnerLoop.current.start(0);
-    }
-  }, []);
-
-  const stopLoop = useCallback(() => {
-    if (spinnerLoop.current?.state === "started") {
-      spinnerLoop.current.stop();
-    }
-  }, []);
-
-  return { play, startLoop, stopLoop };
-};
+diff --git a//dev/null b/.codesandbox/date-night-app-vite/src/hooks/useSound.js
+index 0000000000000000000000000000000000000000..33d18fdc0266cfdd6f00e9ded0bbe26159d91d00 100644
+--- a//dev/null
++++ b/.codesandbox/date-night-app-vite/src/hooks/useSound.js
+@@ -0,0 +1,165 @@
++import { useCallback, useEffect, useRef } from "react";
++
++const createPlayers = (Tone, synths) => ({
++  fanfare: () => {
++    const now = Tone.now();
++    synths.fanfare.triggerAttackRelease(["C4", "E4", "G4", "C5"], "8n", now);
++    synths.fanfare.triggerAttackRelease(["G4", "A4", "B4", "C5"], "8n", now + 0.2);
++  },
++  spicyGiggle: () => {
++    const now = Tone.now();
++    synths.spicy.triggerAttackRelease("G5", "16n", now);
++    synths.spicy.triggerAttackRelease("E5", "16n", now + 0.12);
++    synths.spicy.triggerAttackRelease("G5", "16n", now + 0.24);
++  },
++  extremeWooo: () => {
++    const now = Tone.now();
++    synths.extreme.triggerAttack("C4", now);
++    synths.extreme.frequency.rampTo("G4", 0.3, now);
++    synths.extreme.triggerRelease(now + 0.35);
++  },
++  refusalBoo: () => {
++    const now = Tone.now();
++    synths.boo.triggerAttackRelease("A2", "8n", now);
++    synths.boo.triggerAttackRelease("G#2", "4n", now + 0.15);
++  },
++  click: () => {
++    synths.click.triggerAttackRelease("C2", "16n", Tone.now());
++  },
++});
++
++export function useSound(volume, toneReady) {
++  const resourcesRef = useRef(null);
++
++  useEffect(() => {
++    const Tone = window.Tone;
++
++    if (!toneReady || !Tone || resourcesRef.current) {
++      return undefined;
++    }
++
++    const fanfare = new Tone.PolySynth(Tone.Synth, {
++      oscillator: { type: "sawtooth" },
++    }).toDestination();
++
++    const spicy = new Tone.Synth({
++      oscillator: { type: "sine" },
++      envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.2 },
++    }).toDestination();
++
++    const extreme = new Tone.MonoSynth({
++      oscillator: { type: "sawtooth" },
++      envelope: { attack: 0.01, decay: 0.1, sustain: 0.2, release: 0.5 },
++      filterEnvelope: {
++        attack: 0.04,
++        decay: 0.2,
++        sustain: 0.1,
++        release: 0.8,
++        baseFrequency: 400,
++        octaves: 4,
++      },
++    }).toDestination();
++
++    const boo = new Tone.Synth({
++      oscillator: { type: "square" },
++      envelope: { attack: 0.03, decay: 0.3, sustain: 0.1, release: 0.3 },
++    }).toDestination();
++
++    const click = new Tone.MembraneSynth({
++      pitchDecay: 0.005,
++      octaves: 3,
++      oscillator: { type: "sine" },
++      envelope: { attack: 0.001, decay: 0.1, sustain: 0.01, release: 0.3 },
++    }).toDestination();
++
++    const spinner = new Tone.NoiseSynth({
++      noise: { type: "white" },
++      envelope: { attack: 0.005, decay: 0.05, sustain: 0 },
++      volume: -14,
++    }).toDestination();
++
++    const spinnerLoop = new Tone.Loop((time) => {
++      spinner.triggerAttack(time);
++    }, "16n");
++
++    const synths = { fanfare, spicy, extreme, boo, click, spinner };
++
++    resourcesRef.current = {
++      synths,
++      players: createPlayers(Tone, synths),
++      spinnerLoop,
++    };
++
++    return () => {
++      spinnerLoop.dispose();
++      Object.values(synths).forEach((node) => node.dispose());
++      resourcesRef.current = null;
++    };
++  }, [toneReady]);
++
++  useEffect(() => {
++    const resources = resourcesRef.current;
++
++    if (!resources) {
++      return;
++    }
++
++    resources.synths.fanfare.volume.value = -18 + volume * 18;
++    resources.synths.spicy.volume.value = -12 + volume * 12;
++    resources.synths.extreme.volume.value = -10 + volume * 10;
++    resources.synths.boo.volume.value = -10 + volume * 10;
++    resources.synths.click.volume.value = -12 + volume * 12;
++  }, [volume]);
++
++  const play = useCallback((soundName) => {
++    const Tone = window.Tone;
++    const resources = resourcesRef.current;
++
++    if (!Tone || !resources) {
++      return;
++    }
++
++    const handler = resources.players[soundName];
++    if (!handler) {
++      return;
++    }
++
++    if (Tone.Transport.state !== "started") {
++      Tone.Transport.start();
++    }
++
++    Tone.Transport.scheduleOnce(() => {
++      handler();
++    }, Tone.now());
++  }, []);
++
++  const startLoop = useCallback(() => {
++    const Tone = window.Tone;
++    const resources = resourcesRef.current;
++
++    if (!Tone || !resources) {
++      return;
++    }
++
++    if (resources.spinnerLoop.state !== "started") {
++      resources.spinnerLoop.start(0);
++    }
++
++    if (Tone.Transport.state !== "started") {
++      Tone.Transport.start();
++    }
++  }, []);
++
++  const stopLoop = useCallback(() => {
++    const resources = resourcesRef.current;
++    if (!resources) {
++      return;
++    }
++
++    if (resources.spinnerLoop.state === "started") {
++      resources.spinnerLoop.stop();
++    }
++  }, []);
++
++  return { play, startLoop, stopLoop };
++}
