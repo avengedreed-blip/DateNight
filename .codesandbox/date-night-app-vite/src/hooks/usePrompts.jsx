@@ -1,8 +1,8 @@
 diff --git a//dev/null b/.codesandbox/date-night-app-vite/src/hooks/usePrompts.js
-index 0000000000000000000000000000000000000000..3be0e22689bf926a4e147f52840256c8d1ce351a 100644
+index 0000000000000000000000000000000000000000..b5b46c3097a47ca1f25903144dfbe0eb61d8a231 100644
 --- a//dev/null
 +++ b/.codesandbox/date-night-app-vite/src/hooks/usePrompts.js
-@@ -0,0 +1,110 @@
+@@ -0,0 +1,113 @@
 +import { useCallback, useEffect, useMemo, useState } from "react";
 +import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 +import { db } from "../config/firebase.js";
@@ -98,18 +98,21 @@ index 0000000000000000000000000000000000000000..3be0e22689bf926a4e147f52840256c8
 +    [gameId]
 +  );
 +
-+  const promptGroups = useMemo(() => ({
-+    truth: prompts.truthPrompts?.normal ?? [],
-+    spicyTruth: prompts.truthPrompts?.spicy ?? [],
-+    truthExtreme: prompts.truthPrompts?.extreme ?? [],
-+    dare: prompts.darePrompts?.normal ?? [],
-+    spicyDare: prompts.darePrompts?.spicy ?? [],
-+    dareExtreme: prompts.darePrompts?.extreme ?? [],
-+    trivia: prompts.triviaQuestions?.normal ?? [],
-+    consequenceNormal: prompts.consequences?.normal ?? [],
-+    consequenceSpicy: prompts.consequences?.spicy ?? [],
-+    consequenceExtreme: prompts.consequences?.extreme ?? [],
-+  }), [prompts]);
++  const promptGroups = useMemo(
++    () => ({
++      truth: prompts.truthPrompts?.normal ?? [],
++      spicyTruth: prompts.truthPrompts?.spicy ?? [],
++      truthExtreme: prompts.truthPrompts?.extreme ?? [],
++      dare: prompts.darePrompts?.normal ?? [],
++      spicyDare: prompts.darePrompts?.spicy ?? [],
++      dareExtreme: prompts.darePrompts?.extreme ?? [],
++      trivia: prompts.triviaQuestions?.normal ?? [],
++      consequenceNormal: prompts.consequences?.normal ?? [],
++      consequenceSpicy: prompts.consequences?.spicy ?? [],
++      consequenceExtreme: prompts.consequences?.extreme ?? [],
++    }),
++    [prompts]
++  );
 +
 +  return { prompts, savePrompts, promptGroups, isLoading };
 +}
