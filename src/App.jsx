@@ -14,6 +14,7 @@ import {
   SettingsIcon,
   SoundIcon,
   SparklesIcon,
+  FlameIcon,
 } from "./components/icons/Icons.jsx";
 import { useBackgroundMusic } from "./hooks/useBackgroundMusic.js";
 import { usePersistentState } from "./hooks/usePersistentState.js";
@@ -125,6 +126,7 @@ export default function App() {
   const [copySuccess, setCopySuccess] = useState(false);
   const [soundPulse, setSoundPulse] = useState(false);
   const [isLoopingSound, setIsLoopingSound] = useState(false);
+  const [extremePulseLevel, setExtremePulseLevel] = useState(0);
   const rotationRef = useRef(0);
   const spinTimeoutRef = useRef(null);
   const copyFeedbackTimeoutRef = useRef(null);
@@ -380,6 +382,27 @@ export default function App() {
       stopSoundLoop();
     };
   }, [stopSoundLoop]);
+
+  useEffect(() => {
+    if (!pendingExtremeSpin) {
+      setExtremePulseLevel(0);
+      return;
+    }
+
+    setExtremePulseLevel(1);
+    const interval = window.setInterval(() => {
+      setExtremePulseLevel((previous) => {
+        if (previous >= 4) {
+          return 4;
+        }
+        return previous + 1;
+      });
+    }, 1400);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [pendingExtremeSpin]);
 
   const choosePrompt = useCallback(
     (outcomeKey) => {
@@ -813,6 +836,12 @@ export default function App() {
   }
 
   const isSfxActive = soundPulse || isLoopingSound;
+  const extremeSpinActive = isSpinning && isExtremeRound;
+  const activeExtremeLevel = pendingExtremeSpin
+    ? Math.min(Math.max(extremePulseLevel, 1), 4)
+    : extremeSpinActive
+      ? 4
+      : 0;
 
   return (
     <div className="app-shell">
@@ -873,6 +902,30 @@ export default function App() {
               Round {roundCount + 1}
             </div>
           </header>
+
+          {activeExtremeLevel > 0 && (
+            <div
+              className={`extreme-meter extreme-meter--level-${activeExtremeLevel}`}
+              role="status"
+              aria-live="assertive"
+            >
+              <div className="extreme-meter__pulse" aria-hidden="true" />
+              <div className="extreme-meter__icon" aria-hidden="true">
+                <FlameIcon />
+              </div>
+              <div className="extreme-meter__content">
+                <span className="extreme-meter__label">Extreme Meter</span>
+                <span className="extreme-meter__status">
+                  {activeExtremeLevel >= 4
+                    ? "Extreme spin imminent!"
+                    : "Extreme round incoming"}
+                </span>
+              </div>
+              <span className="sr-only">
+                Extreme round incoming. Meter level {activeExtremeLevel}.
+              </span>
+            </div>
+          )}
 
           <Wheel
             rotation={rotation}
