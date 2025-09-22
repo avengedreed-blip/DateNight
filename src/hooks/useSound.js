@@ -8,6 +8,44 @@ const volumeToGain = (value, Tone) => {
   return Math.pow(value, 1.4);
 };
 
+const createSynths = (Tone, masterGain) => ({
+  fanfare: new Tone.PolySynth(Tone.Synth, {
+    oscillator: { type: "sawtooth" },
+    envelope: { attack: 0.02, decay: 0.25, sustain: 0.4, release: 0.8 },
+  }).connect(masterGain),
+  spicy: new Tone.Synth({
+    oscillator: { type: "triangle" },
+    envelope: { attack: 0.01, decay: 0.18, sustain: 0.2, release: 0.24 },
+  }).connect(masterGain),
+  extreme: new Tone.MonoSynth({
+    oscillator: { type: "sawtooth" },
+    envelope: { attack: 0.01, decay: 0.1, sustain: 0.2, release: 0.6 },
+    filterEnvelope: {
+      attack: 0.05,
+      decay: 0.18,
+      sustain: 0.1,
+      release: 0.9,
+      baseFrequency: 380,
+      octaves: 4,
+    },
+  }).connect(masterGain),
+  boo: new Tone.Synth({
+    oscillator: { type: "square" },
+    envelope: { attack: 0.03, decay: 0.3, sustain: 0.1, release: 0.3 },
+  }).connect(masterGain),
+  click: new Tone.MembraneSynth({
+    pitchDecay: 0.008,
+    octaves: 3,
+    oscillator: { type: "sine" },
+    envelope: { attack: 0.002, decay: 0.1, sustain: 0.01, release: 0.2 },
+  }).connect(masterGain),
+  spinner: new Tone.NoiseSynth({
+    noise: { type: "pink" },
+    envelope: { attack: 0.01, decay: 0.08, sustain: 0 },
+    volume: -12,
+  }).connect(masterGain),
+});
+
 const createPlayers = (Tone, synths) => ({
   fanfare: () => {
     const now = Tone.now();
@@ -48,61 +86,20 @@ export function useSound(volume, toneReady) {
 
     const masterGain = new Tone.Gain(0).toDestination();
 
-    const fanfare = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: "sawtooth" },
-      envelope: { attack: 0.02, decay: 0.25, sustain: 0.4, release: 0.8 },
-    }).connect(masterGain);
-
-    const spicy = new Tone.Synth({
-      oscillator: { type: "triangle" },
-      envelope: { attack: 0.01, decay: 0.18, sustain: 0.2, release: 0.24 },
-    }).connect(masterGain);
-
-    const extreme = new Tone.MonoSynth({
-      oscillator: { type: "sawtooth" },
-      envelope: { attack: 0.01, decay: 0.1, sustain: 0.2, release: 0.6 },
-      filterEnvelope: {
-        attack: 0.05,
-        decay: 0.18,
-        sustain: 0.1,
-        release: 0.9,
-        baseFrequency: 380,
-        octaves: 4,
-      },
-    }).connect(masterGain);
-
-    const boo = new Tone.Synth({
-      oscillator: { type: "square" },
-      envelope: { attack: 0.03, decay: 0.3, sustain: 0.1, release: 0.3 },
-    }).connect(masterGain);
-
-    const click = new Tone.MembraneSynth({
-      pitchDecay: 0.008,
-      octaves: 3,
-      oscillator: { type: "sine" },
-      envelope: { attack: 0.002, decay: 0.1, sustain: 0.01, release: 0.2 },
-    }).connect(masterGain);
-
-    const spinner = new Tone.NoiseSynth({
-      noise: { type: "pink" },
-      envelope: { attack: 0.01, decay: 0.08, sustain: 0 },
-      volume: -12,
-    }).connect(masterGain);
+    const synths = createSynths(Tone, masterGain);
 
     const spinnerLoop = new Tone.Loop((time) => {
-      spinner.triggerAttackRelease("16n", time);
+      synths.spinner.triggerAttackRelease("16n", time);
     }, "16n");
 
     const warmUpTime = Tone.now() + 0.15;
     masterGain.gain.setValueAtTime(0, Tone.now());
-    fanfare.triggerAttackRelease(["C4", "E4", "G4"], "32n", warmUpTime);
-    spicy.triggerAttackRelease("G5", "32n", warmUpTime + 0.05);
-    extreme.triggerAttackRelease("C3", "32n", warmUpTime + 0.08);
-    boo.triggerAttackRelease("A2", "32n", warmUpTime + 0.12);
-    click.triggerAttackRelease("C2", "64n", warmUpTime + 0.16);
-    spinner.triggerAttackRelease("32n", warmUpTime + 0.2);
-
-    const synths = { fanfare, spicy, extreme, boo, click, spinner };
+    synths.fanfare.triggerAttackRelease(["C4", "E4", "G4"], "32n", warmUpTime);
+    synths.spicy.triggerAttackRelease("G5", "32n", warmUpTime + 0.05);
+    synths.extreme.triggerAttackRelease("C3", "32n", warmUpTime + 0.08);
+    synths.boo.triggerAttackRelease("A2", "32n", warmUpTime + 0.12);
+    synths.click.triggerAttackRelease("C2", "64n", warmUpTime + 0.16);
+    synths.spinner.triggerAttackRelease("32n", warmUpTime + 0.2);
 
     resourcesRef.current = {
       synths,
