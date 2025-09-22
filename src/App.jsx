@@ -1,3 +1,4 @@
+import confetti from "canvas-confetti";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import AnnouncementModal from "./components/modals/AnnouncementModal.jsx";
 import ConsequenceModal from "./components/modals/ConsequenceModal.jsx";
@@ -68,22 +69,18 @@ const WHEEL_SEGMENTS = [
 const pickRandom = (items) => items[Math.floor(Math.random() * items.length)];
 
 const confettiBurst = () => {
-  if (!window.confetti) {
-    return;
-  }
-
   const colors = ["#a855f7", "#38bdf8", "#f472b6", "#fde68a"];
   const end = Date.now() + 1200;
 
   const frame = () => {
-    window.confetti({
+    confetti({
       particleCount: 6,
       angle: 60,
       spread: 55,
       origin: { x: 0 },
       colors,
     });
-    window.confetti({
+    confetti({
       particleCount: 6,
       angle: 120,
       spread: 55,
