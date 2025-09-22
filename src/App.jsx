@@ -30,7 +30,10 @@ const STORAGE_KEYS = {
 
 const EXTREME_ROUND_CHANCE = 0.2;
 const MAX_RECENT_PROMPTS = 5;
-const SPIN_DURATION_MS = 4000;
+const BASE_SPIN_DURATION_MS = 4000;
+const MIN_SWIPE_DISTANCE = 40;
+const MIN_SWIPE_STRENGTH = 0.35;
+const MAX_SWIPE_STRENGTH = 2;
 
 const WHEEL_SEGMENTS = [
   {
@@ -117,6 +120,7 @@ export default function App() {
   const [currentConsequence, setCurrentConsequence] = useState("");
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
+  const [spinDuration, setSpinDuration] = useState(BASE_SPIN_DURATION_MS);
   const [isExtremeRound, setIsExtremeRound] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [soundPulse, setSoundPulse] = useState(false);
@@ -125,6 +129,17 @@ export default function App() {
   const spinTimeoutRef = useRef(null);
   const copyFeedbackTimeoutRef = useRef(null);
   const soundPulseTimeoutRef = useRef(null);
+  const swipeStateRef = useRef({
+    active: false,
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    startTime: 0,
+    lastX: 0,
+    lastY: 0,
+    lastTime: 0,
+    peakVelocity: 0,
+  });
 
   const [gameId, setGameId] = usePersistentState(STORAGE_KEYS.gameId, null, {
     serialize: (value) => value ?? "",
@@ -456,7 +471,20 @@ export default function App() {
   }, []);
 
   const startSpin = useCallback(
-    (forceExtreme) => {
+    (forceExtreme, swipeStrength = MAX_SWIPE_STRENGTH / 2) => {
+      const clampedStrength = Math.min(
+        Math.max(
+          Number.isFinite(swipeStrength)
+            ? swipeStrength
+            : MAX_SWIPE_STRENGTH / 2,
+          0
+        ),
+        MAX_SWIPE_STRENGTH
+      );
+      const normalizedStrength =
+        MAX_SWIPE_STRENGTH > 0
+          ? clampedStrength / MAX_SWIPE_STRENGTH
+          : 0.5;
       const availableSegments = forceExtreme
         ? WHEEL_SEGMENTS.slice(0, 2)
         : WHEEL_SEGMENTS;
@@ -467,7 +495,11 @@ export default function App() {
       const randomOffset = (Math.random() - 0.5) * sliceAngle * 0.6;
       const targetAngle =
         -(selectedIndex * sliceAngle + sliceAngle / 2) + randomOffset;
-      const extraSpins = 5 * 360;
+      const minDuration = BASE_SPIN_DURATION_MS * 0.7;
+      const maxDuration = BASE_SPIN_DURATION_MS * 1.35;
+      const spinDurationMs =
+        minDuration + (maxDuration - minDuration) * normalizedStrength;
+      const extraSpins = (3.5 + 3 * normalizedStrength) * 360;
 
       if (spinTimeoutRef.current) {
         clearTimeout(spinTimeoutRef.current);
@@ -477,6 +509,7 @@ export default function App() {
       setIsExtremeRound(outcome.isExtreme);
       startSoundLoop();
       triggerHapticFeedback();
+      setSpinDuration(spinDurationMs);
 
       const baseRotation = rotationRef.current - (rotationRef.current % 360);
       const finalRotation = baseRotation + extraSpins + targetAngle;
@@ -486,11 +519,12 @@ export default function App() {
       spinTimeoutRef.current = window.setTimeout(() => {
         stopSoundLoop();
         concludeSpin(selectedSegment, outcome.outcomeKey, outcome);
-      }, SPIN_DURATION_MS);
+      }, spinDurationMs);
     },
     [
       concludeSpin,
       determineOutcome,
+      setSpinDuration,
       startSoundLoop,
       stopSoundLoop,
       triggerHapticFeedback,
@@ -514,6 +548,121 @@ export default function App() {
 
     startSpin(false);
   }, [isSpinning, startSpin, triggerSound]);
+
+  const resetSwipeState = useCallback(() => {
+    swipeStateRef.current = {
+      active: false,
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+      startTime: 0,
+      lastX: 0,
+      lastY: 0,
+      lastTime: 0,
+      peakVelocity: 0,
+    };
+  }, []);
+
+  const handleWheelPointerDown = useCallback(
+    (event) => {
+      if (isSpinning || event.target.closest(".spin-button__trigger")) {
+        return;
+      }
+
+      event.preventDefault();
+      const { pointerId, clientX, clientY, timeStamp, currentTarget } = event;
+      currentTarget.setPointerCapture(pointerId);
+      swipeStateRef.current = {
+        active: true,
+        pointerId,
+        startX: clientX,
+        startY: clientY,
+        startTime: timeStamp,
+        lastX: clientX,
+        lastY: clientY,
+        lastTime: timeStamp,
+        peakVelocity: 0,
+      };
+    },
+    [isSpinning]
+  );
+
+  const handleWheelPointerMove = useCallback((event) => {
+    const state = swipeStateRef.current;
+    if (!state.active || event.pointerId !== state.pointerId) {
+      return;
+    }
+
+    const { clientX, clientY, timeStamp } = event;
+    const deltaX = clientX - state.lastX;
+    const deltaY = clientY - state.lastY;
+    const deltaTime = Math.max(timeStamp - state.lastTime, 1);
+
+    const distance = Math.hypot(deltaX, deltaY);
+    const velocity = deltaTime > 0 ? distance / deltaTime : 0;
+
+    state.lastX = clientX;
+    state.lastY = clientY;
+    state.lastTime = timeStamp;
+    state.peakVelocity = Math.max(state.peakVelocity, velocity);
+  }, []);
+
+  const handleWheelPointerEnd = useCallback(
+    (event) => {
+      const state = swipeStateRef.current;
+      if (!state.active || event.pointerId !== state.pointerId) {
+        return;
+      }
+
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+
+      const totalDistance = Math.hypot(
+        event.clientX - state.startX,
+        event.clientY - state.startY
+      );
+      const duration = Math.max(event.timeStamp - state.startTime, 1);
+      const averageVelocity = totalDistance / duration;
+      const peakVelocity = Math.max(state.peakVelocity, averageVelocity);
+
+      resetSwipeState();
+
+      if (isSpinning) {
+        return;
+      }
+
+      if (totalDistance < MIN_SWIPE_DISTANCE) {
+        return;
+      }
+
+      const normalizedDistance = Math.min(totalDistance / 220, MAX_SWIPE_STRENGTH);
+      const normalizedVelocity = Math.min(peakVelocity / 1.2, MAX_SWIPE_STRENGTH);
+      const rawStrength =
+        normalizedDistance * 0.55 + normalizedVelocity * 0.85;
+      const strength = Math.min(rawStrength, MAX_SWIPE_STRENGTH);
+
+      if (strength < MIN_SWIPE_STRENGTH) {
+        return;
+      }
+
+      startSpin(false, strength);
+    },
+    [isSpinning, resetSwipeState, startSpin]
+  );
+
+  const handleWheelPointerCancel = useCallback(
+    (event) => {
+      const state = swipeStateRef.current;
+      if (state.active && event.pointerId === state.pointerId) {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        resetSwipeState();
+      }
+    },
+    [resetSwipeState]
+  );
 
   const handleAnnouncementClose = useCallback(() => {
     setActiveModal(null);
@@ -730,6 +879,12 @@ export default function App() {
             isExtremeRound={isExtremeRound}
             segments={WHEEL_SEGMENTS}
             showPulse={isSfxActive}
+            spinDuration={spinDuration}
+            onPointerDown={handleWheelPointerDown}
+            onPointerMove={handleWheelPointerMove}
+            onPointerUp={handleWheelPointerEnd}
+            onPointerCancel={handleWheelPointerCancel}
+            onPointerLeave={handleWheelPointerCancel}
           >
             <div className="spin-button">
               <button
