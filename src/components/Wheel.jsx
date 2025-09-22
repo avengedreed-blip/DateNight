@@ -1,6 +1,18 @@
 import React, { useMemo } from "react";
 
-const Wheel = ({ rotation, isExtremeRound, segments, children, showPulse }) => {
+const Wheel = ({
+  rotation,
+  isExtremeRound,
+  segments,
+  children,
+  showPulse,
+  spinDuration,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
+  onPointerLeave,
+}) => {
   const gradient = useMemo(() => {
     if (!segments?.length) {
       return undefined;
@@ -30,10 +42,22 @@ const Wheel = ({ rotation, isExtremeRound, segments, children, showPulse }) => {
   );
 
   return (
-    <div className="wheel-wrapper" role="presentation">
+    <div
+      className="wheel-wrapper"
+      role="presentation"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onPointerLeave={onPointerLeave}
+    >
       <div
         className={`wheel ${isExtremeRound ? "wheel--extreme" : ""}`}
-        style={{ transform: `rotate(${rotation}deg)`, background: gradient }}
+        style={{
+          transform: `rotate(${rotation}deg)`,
+          background: gradient,
+          "--spin-duration": `${spinDuration ?? 4000}ms`,
+        }}
       />
       <div className="wheel__labels">
         {labels.map((item) => (
