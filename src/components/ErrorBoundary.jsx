@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -17,34 +17,18 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ 
-          display: 'flex', 
-          flexDirection: 'column', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          height: '100vh', 
-          backgroundColor: 'var(--bg-main)', 
-          color: 'var(--text-main)',
-          fontFamily: 'Poppins, sans-serif',
-          padding: '1rem'
-        }}>
-          <h1 style={{ fontSize: '2rem', color: 'var(--primary-accent)' }}>Oops! Something went wrong.</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>Please try refreshing the page.</p>
-          <button 
-            onClick={() => window.location.reload()}
-            style={{
-              marginTop: '1.5rem',
-              padding: '0.75rem 1.5rem',
-              backgroundColor: 'var(--primary-accent)',
-              border: 'none',
-              borderRadius: '0.75rem',
-              color: 'white',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            Refresh
-          </button>
+        <div className="loading-screen loading-screen--error">
+          <main className="loading-panel" role="alert" aria-live="assertive">
+            <h1 className="loading-panel__title">Oops! Something went wrong.</h1>
+            <p className="loading-panel__text">Please try refreshing the page.</p>
+            <button
+              type="button"
+              className="primary-button mt-4"
+              onClick={() => window.location.reload()}
+            >
+              Refresh
+            </button>
+          </main>
         </div>
       );
     }
