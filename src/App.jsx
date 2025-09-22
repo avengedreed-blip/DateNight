@@ -254,6 +254,27 @@ export default function App() {
     stopLoop();
   }, [stopLoop]);
 
+  const triggerHapticFeedback = useCallback((pattern = 20) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const prefersCoarsePointer =
+      window.matchMedia?.("(pointer: coarse)")?.matches ||
+      window.matchMedia?.("(any-pointer: coarse)")?.matches;
+
+    if (!prefersCoarsePointer) {
+      return;
+    }
+
+    const { navigator } = window;
+    if (!navigator?.vibrate) {
+      return;
+    }
+
+    navigator.vibrate(pattern);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -408,10 +429,17 @@ export default function App() {
       setCurrentPrompt({ title: segment.title, text: promptText });
       setActiveModal("prompt");
       setIsSpinning(false);
+      triggerHapticFeedback(30);
       setIsExtremeRound(flags.isExtreme);
       setRoundCount((value) => value + 1);
     },
-    [choosePrompt, recordPromptHistory, setRoundCount, triggerSound]
+    [
+      choosePrompt,
+      recordPromptHistory,
+      setRoundCount,
+      triggerHapticFeedback,
+      triggerSound,
+    ]
   );
 
   const determineOutcome = useCallback((segment, forceExtreme) => {
@@ -451,6 +479,7 @@ export default function App() {
       setIsSpinning(true);
       setIsExtremeRound(outcome.isExtreme);
       startSoundLoop();
+      triggerHapticFeedback();
 
       const baseRotation = rotationRef.current - (rotationRef.current % 360);
       const finalRotation = baseRotation + extraSpins + targetAngle;
@@ -462,7 +491,13 @@ export default function App() {
         concludeSpin(selectedSegment, outcome.outcomeKey, outcome);
       }, SPIN_DURATION_MS);
     },
-    [concludeSpin, determineOutcome, startSoundLoop, stopSoundLoop]
+    [
+      concludeSpin,
+      determineOutcome,
+      startSoundLoop,
+      stopSoundLoop,
+      triggerHapticFeedback,
+    ]
   );
 
   const handleSpin = useCallback(() => {
