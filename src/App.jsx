@@ -237,6 +237,10 @@ export default function App() {
     [flashSoundActivity, play]
   );
 
+  const playClick = useCallback(() => {
+    triggerSound("click");
+  }, [triggerSound]);
+
   const startSoundLoop = useCallback(() => {
     if (sfxVolume > 0) {
       setIsLoopingSound(true);
@@ -534,6 +538,10 @@ export default function App() {
     [inputGameId, setGameId, setLastPrompts, setRoundCount]
   );
 
+  const resetInputGameId = useCallback(() => {
+    setInputGameId("");
+  }, [setInputGameId]);
+
   const copyGameId = useCallback(async () => {
     if (!gameId || !navigator.clipboard) {
       return;
@@ -599,6 +607,8 @@ export default function App() {
         joinGame={joinGame}
         inputGameId={inputGameId}
         setInputGameId={setInputGameId}
+        resetInputGameId={resetInputGameId}
+        onButtonClick={playClick}
       />
     );
   }
