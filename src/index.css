@@ -217,7 +217,7 @@
   }
 
   .wheel {
-    @apply flex h-full w-full items-center justify-center rounded-full border-[6px] border-white/90 shadow-[0_30px_60px_rgba(15,23,42,0.45),_inset_0_0_25px_rgba(15,23,42,0.45)] transition-[transform] ease-[cubic-bezier(0.25,1,0.5,1.08)];
+    @apply relative flex h-full w-full items-center justify-center rounded-full border-[6px] border-white/90 shadow-[0_30px_60px_rgba(15,23,42,0.45),_inset_0_0_25px_rgba(15,23,42,0.45)] transition-[transform] ease-[cubic-bezier(0.25,1,0.5,1.08)];
     transition-duration: var(--spin-duration, 4000ms);
   }
 

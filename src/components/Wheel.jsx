@@ -58,19 +58,20 @@ const Wheel = ({
           background: gradient,
           "--spin-duration": `${spinDuration ?? 4000}ms`,
         }}
-      />
-      <div className="wheel__labels">
-        {labels.map((item) => (
-          <span
-            key={item.id}
-            className="wheel__label"
-            style={{
-              transform: `translate(-50%, -50%) rotate(${item.angle}deg) translateY(calc(-1 * var(--label-radius))) rotate(-${item.angle}deg)`,
-            }}
-          >
-            {item.label}
-          </span>
-        ))}
+      >
+        <div className="wheel__labels" aria-hidden="true">
+          {labels.map((item) => (
+            <span
+              key={item.id}
+              className="wheel__label"
+              style={{
+                transform: `translate(-50%, -50%) rotate(${item.angle}deg) translateY(calc(-1 * var(--label-radius))) rotate(-${item.angle}deg)`,
+              }}
+            >
+              {item.label}
+            </span>
+          ))}
+        </div>
       </div>
       <div
         aria-hidden="true"

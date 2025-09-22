@@ -129,6 +129,7 @@ export default function App() {
   const [extremePulseLevel, setExtremePulseLevel] = useState(0);
   const rotationRef = useRef(0);
   const spinTimeoutRef = useRef(null);
+  const pendingSpinRef = useRef(null);
   const copyFeedbackTimeoutRef = useRef(null);
   const soundPulseTimeoutRef = useRef(null);
   const swipeStateRef = useRef({
@@ -378,7 +379,9 @@ export default function App() {
     return () => {
       if (spinTimeoutRef.current) {
         clearTimeout(spinTimeoutRef.current);
+        spinTimeoutRef.current = null;
       }
+      pendingSpinRef.current = null;
       stopSoundLoop();
     };
   }, [stopSoundLoop]);
@@ -493,6 +496,37 @@ export default function App() {
     };
   }, []);
 
+  const finalizeSpin = useCallback(() => {
+    const sliceCount = WHEEL_SEGMENTS.length;
+    if (!sliceCount) {
+      pendingSpinRef.current = null;
+      setIsSpinning(false);
+      return;
+    }
+
+    const sliceAngle = 360 / sliceCount;
+    const normalizedRotation =
+      ((rotationRef.current % 360) + 360) % 360;
+    const landingAngle = (360 - normalizedRotation) % 360;
+    let landingIndex = Math.floor(landingAngle / sliceAngle);
+
+    if (!Number.isFinite(landingIndex)) {
+      landingIndex = 0;
+    }
+
+    landingIndex = Math.max(0, Math.min(sliceCount - 1, landingIndex));
+    const segment = WHEEL_SEGMENTS[landingIndex] ?? WHEEL_SEGMENTS[0];
+    const pending = pendingSpinRef.current;
+    const forceExtreme = pending?.forceExtreme ?? false;
+    const outcomeInfo =
+      pending && pending.selectedIndex === landingIndex && pending.outcome
+        ? pending.outcome
+        : determineOutcome(segment, forceExtreme);
+
+    pendingSpinRef.current = null;
+    concludeSpin(segment, outcomeInfo.outcomeKey, outcomeInfo);
+  }, [concludeSpin, determineOutcome, setIsSpinning]);
+
   const startSpin = useCallback(
     (forceExtreme, swipeStrength = MAX_SWIPE_STRENGTH / 2) => {
       const clampedStrength = Math.min(
@@ -508,13 +542,24 @@ export default function App() {
         MAX_SWIPE_STRENGTH > 0
           ? clampedStrength / MAX_SWIPE_STRENGTH
           : 0.5;
-      const availableSegments = forceExtreme
-        ? WHEEL_SEGMENTS.slice(0, 2)
-        : WHEEL_SEGMENTS;
-      const sliceAngle = 360 / availableSegments.length;
-      const selectedIndex = Math.floor(Math.random() * availableSegments.length);
-      const selectedSegment = availableSegments[selectedIndex];
+      const sliceCount = WHEEL_SEGMENTS.length;
+      if (!sliceCount) {
+        return;
+      }
+
+      const availableIndexes = forceExtreme
+        ? Array.from({ length: Math.min(sliceCount, 2) }, (_, index) => index)
+        : WHEEL_SEGMENTS.map((_, index) => index);
+      const selectedIndex =
+        availableIndexes[Math.floor(Math.random() * availableIndexes.length)] ?? 0;
+      const sliceAngle = 360 / sliceCount;
+      const selectedSegment = WHEEL_SEGMENTS[selectedIndex];
       const outcome = determineOutcome(selectedSegment, forceExtreme);
+      pendingSpinRef.current = {
+        forceExtreme,
+        selectedIndex,
+        outcome,
+      };
       const randomOffset = (Math.random() - 0.5) * sliceAngle * 0.6;
       const targetAngle =
         -(selectedIndex * sliceAngle + sliceAngle / 2) + randomOffset;
@@ -541,12 +586,13 @@ export default function App() {
 
       spinTimeoutRef.current = window.setTimeout(() => {
         stopSoundLoop();
-        concludeSpin(selectedSegment, outcome.outcomeKey, outcome);
+        finalizeSpin();
+        spinTimeoutRef.current = null;
       }, spinDurationMs);
     },
     [
-      concludeSpin,
       determineOutcome,
+      finalizeSpin,
       setSpinDuration,
       startSoundLoop,
       stopSoundLoop,
@@ -772,6 +818,8 @@ export default function App() {
     if (spinTimeoutRef.current) {
       clearTimeout(spinTimeoutRef.current);
     }
+    spinTimeoutRef.current = null;
+    pendingSpinRef.current = null;
     setIsSpinning(false);
     stopSoundLoop();
     setSoundPulse(false);
