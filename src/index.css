@@ -112,6 +112,104 @@
     @apply mt-2 text-[0.85rem] uppercase tracking-[0.2em] text-[color:var(--text-muted)];
   }
 
+  .extreme-meter {
+    --pulse-duration: 1200ms;
+    --glow-opacity: 0.38;
+    --glow-spread: 22px;
+    --border-opacity: 0.35;
+    @apply relative mt-1 flex items-center gap-3 overflow-hidden rounded-2xl border px-4 py-3 text-sm;
+    border-color: rgba(244, 114, 182, var(--border-opacity));
+    background: linear-gradient(
+      120deg,
+      rgba(244, 114, 182, 0.12),
+      rgba(148, 163, 184, 0.05)
+    );
+    box-shadow: 0 0 var(--glow-spread) rgba(244, 114, 182, var(--glow-opacity));
+    color: var(--text-main);
+  }
+
+  .extreme-meter__pulse {
+    position: absolute;
+    inset: -20%;
+    background: radial-gradient(
+      circle at center,
+      rgba(244, 114, 182, 0.25),
+      rgba(244, 114, 182, 0.15) 45%,
+      transparent 70%
+    );
+    opacity: 0.75;
+    filter: blur(0);
+    animation: extremeMeterPulse var(--pulse-duration) ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .extreme-meter__icon {
+    @apply relative z-[1] flex h-10 w-10 items-center justify-center rounded-full text-lg shadow-[0_0_25px_rgba(244,114,182,0.4)];
+    background: radial-gradient(circle at 30% 30%, rgba(244, 114, 182, 0.35), rgba(244, 114, 182, 0.1));
+  }
+
+  .extreme-meter__icon svg {
+    @apply h-5 w-5;
+  }
+
+  .extreme-meter__content {
+    @apply relative z-[1] flex flex-1 flex-col;
+  }
+
+  .extreme-meter__label {
+    @apply text-xs uppercase tracking-[0.25em];
+    color: rgba(248, 250, 252, 0.85);
+    letter-spacing: 0.35em;
+  }
+
+  .extreme-meter__status {
+    @apply mt-1 text-sm font-medium;
+    color: rgba(248, 250, 252, 0.9);
+  }
+
+  .extreme-meter--level-1 {
+    --pulse-duration: 1400ms;
+    --glow-opacity: 0.3;
+    --glow-spread: 16px;
+    --border-opacity: 0.25;
+  }
+
+  .extreme-meter--level-2 {
+    --pulse-duration: 1100ms;
+    --glow-opacity: 0.38;
+    --glow-spread: 26px;
+    --border-opacity: 0.35;
+  }
+
+  .extreme-meter--level-3 {
+    --pulse-duration: 950ms;
+    --glow-opacity: 0.48;
+    --glow-spread: 32px;
+    --border-opacity: 0.45;
+  }
+
+  .extreme-meter--level-4 {
+    --pulse-duration: 780ms;
+    --glow-opacity: 0.6;
+    --glow-spread: 40px;
+    --border-opacity: 0.55;
+  }
+
+  @keyframes extremeMeterPulse {
+    0% {
+      transform: scale(0.96);
+      opacity: 0.55;
+    }
+    50% {
+      transform: scale(1.02);
+      opacity: 0.85;
+    }
+    100% {
+      transform: scale(0.98);
+      opacity: 0.7;
+    }
+  }
+
   .wheel-wrapper {
     --label-radius: 38%;
     @apply relative mx-auto mb-9 flex h-[300px] w-[300px] items-center justify-center;

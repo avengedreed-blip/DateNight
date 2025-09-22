@@ -141,3 +141,20 @@ export const SoundIcon = () => (
     <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
   </svg>
 );
+
+export const FlameIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M8.5 14.5c0-1.86.95-2.73 1.82-3.52.8-.73 1.56-1.43 1.68-2.73.1-1.06-.42-2.5-.42-2.5s2.14.86 3.22 3.18c.73 1.62.46 2.98-.04 4.1-.56 1.26-.96 2.18-.26 3.58.54 1.09.5 2.53-.26 3.5-.64.82-1.74 1.39-3.14 1.39-2.68 0-4.6-1.88-4.6-4.5 0-1.68.9-3.02 2-3.5Z" />
+  </svg>
+);
