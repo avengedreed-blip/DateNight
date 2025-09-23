@@ -117,7 +117,11 @@ export default function App() {
   const [inputGameId, setInputGameId] = useState("");
   const [activeModal, setActiveModal] = useState(null);
   const [pendingExtremeSpin, setPendingExtremeSpin] = useState(false);
-  const [currentPrompt, setCurrentPrompt] = useState({ title: "", text: "" });
+  const [currentPrompt, setCurrentPrompt] = useState({
+    title: "",
+    text: "",
+    type: "",
+  });
   const [currentConsequence, setCurrentConsequence] = useState("");
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
@@ -464,7 +468,11 @@ export default function App() {
         triggerSound("spicyGiggle");
       }
 
-      setCurrentPrompt({ title: segment.title, text: promptText });
+      setCurrentPrompt({
+        title: segment.title,
+        text: promptText,
+        type: segment.id,
+      });
       setActiveModal("prompt");
       setIsSpinning(false);
       triggerHapticFeedback(30);
@@ -837,7 +845,7 @@ export default function App() {
     setGameId(null);
     setRoundCount(0);
     setLastPrompts({});
-    setCurrentPrompt({ title: "", text: "" });
+    setCurrentPrompt({ title: "", text: "", type: "" });
     setCurrentConsequence("");
     setInputGameId("");
     setCopySuccess(false);
