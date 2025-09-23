@@ -1,6 +1,11 @@
 import React from "react";
 
-const LoadingScreen = ({ message, isError = false, onRetry }) => (
+const LoadingScreen = ({
+  message,
+  isError = false,
+  onRetry,
+  onButtonClick: handleButtonClick,
+}) => (
   <div className={`loading-screen ${isError ? "loading-screen--error" : ""}`}>
     <main
       className="loading-panel"
@@ -17,7 +22,14 @@ const LoadingScreen = ({ message, isError = false, onRetry }) => (
           : "Setting the mood for the perfect evening…"}
       </p>
       {isError && onRetry && (
-        <button type="button" className="secondary-button" onClick={onRetry}>
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => {
+            handleButtonClick?.();
+            onRetry();
+          }}
+        >
           Try Again
         </button>
       )}

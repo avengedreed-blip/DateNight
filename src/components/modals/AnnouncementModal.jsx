@@ -1,9 +1,18 @@
 import React from "react";
 import Modal from "./Modal.jsx";
 
-const AnnouncementModal = ({ isOpen, onClose }) => {
+const AnnouncementModal = ({
+  isOpen,
+  onClose,
+  onButtonClick: handleButtonClick,
+  onConfirm,
+}) => {
   const titleId = "announcement-modal-title";
   const bodyId = "announcement-modal-body";
+  const handleConfirm = () => {
+    handleButtonClick?.();
+    (onConfirm ?? onClose)?.();
+  };
 
   return (
     <Modal
@@ -21,7 +30,7 @@ const AnnouncementModal = ({ isOpen, onClose }) => {
         and bragging rights are on the line.
         </p>
         <div className="announcement-card__actions">
-          <button type="button" className="primary-button" onClick={onClose}>
+          <button type="button" className="primary-button" onClick={handleConfirm}>
             Let's Go
           </button>
         </div>

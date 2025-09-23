@@ -1,10 +1,25 @@
 import React from "react";
 import Modal from "./Modal.jsx";
 
-const PromptModal = ({ isOpen, onClose, prompt, onRefuse }) => {
+const PromptModal = ({
+  isOpen,
+  onClose,
+  prompt,
+  onRefuse,
+  onButtonClick: handleButtonClick,
+  onAccept,
+}) => {
   const titleId = "prompt-modal-title";
   const bodyId = "prompt-modal-body";
   const isTrivia = prompt.type === "trivia";
+  const handleRefuse = () => {
+    handleButtonClick?.();
+    onRefuse?.();
+  };
+  const handleAccept = () => {
+    handleButtonClick?.();
+    (onAccept ?? onClose)?.();
+  };
 
   return (
     <Modal
@@ -21,10 +36,10 @@ const PromptModal = ({ isOpen, onClose, prompt, onRefuse }) => {
           {prompt.text}
         </p>
         <div className="prompt-card__actions">
-          <button type="button" className="secondary-button" onClick={onRefuse}>
+          <button type="button" className="secondary-button" onClick={handleRefuse}>
             {isTrivia ? "Incorrect" : "Refuse"}
           </button>
-          <button type="button" className="primary-button" onClick={onClose}>
+          <button type="button" className="primary-button" onClick={handleAccept}>
             {isTrivia ? "Correct" : "Accept"}
           </button>
         </div>

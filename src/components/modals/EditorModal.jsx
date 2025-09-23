@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "./Modal.jsx";
 import { PlusIcon, TrashIcon, XIcon } from "../icons/Icons.jsx";
 
@@ -21,6 +21,7 @@ const EditorModal = ({
   setPrompts,
   generatedPrompts,
   onRegeneratePrompts,
+  onButtonClick: handleButtonClick,
 }) => {
   const [category, setCategory] = useState("truthPrompts");
   const [group, setGroup] = useState("normal");
@@ -37,6 +38,15 @@ const EditorModal = ({
     }
     return Object.keys(activePrompts[category]);
   }, [activePrompts, category]);
+
+  const withButtonClick = useCallback(
+    (callback) =>
+      (...args) => {
+        handleButtonClick?.();
+        return callback?.(...args);
+      },
+    [handleButtonClick]
+  );
 
   useEffect(() => {
     if (!activePrompts || activePrompts[category]) {
@@ -90,6 +100,8 @@ const EditorModal = ({
       return;
     }
 
+    handleButtonClick?.();
+
     setPrompts({
       ...prompts,
       [category]: {
@@ -126,7 +138,7 @@ const EditorModal = ({
             type="button"
             className="icon-button"
             aria-label="Close editor"
-            onClick={onClose}
+            onClick={withButtonClick(onClose)}
           >
             <XIcon />
           </button>
@@ -148,7 +160,7 @@ const EditorModal = ({
                 }`}
                 role="tab"
                 aria-selected={isActive}
-                onClick={() => setPane(option.value)}
+                onClick={withButtonClick(() => setPane(option.value))}
               >
                 {option.label}
               </button>
@@ -191,7 +203,7 @@ const EditorModal = ({
             <button
               type="button"
               className="secondary-button"
-              onClick={() => onRegeneratePrompts?.()}
+              onClick={withButtonClick(() => onRegeneratePrompts?.())}
             >
               Regenerate Mix
             </button>
@@ -231,7 +243,9 @@ const EditorModal = ({
                           type="button"
                           className="icon-button"
                           aria-label="Delete prompt"
-                          onClick={() => removePrompt(promptGroup, index)}
+                          onClick={withButtonClick(() =>
+                            removePrompt(promptGroup, index)
+                          )}
                         >
                           <TrashIcon />
                         </button>

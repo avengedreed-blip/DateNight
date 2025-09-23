@@ -6,23 +6,23 @@ const StartScreen = ({
   inputGameId,
   setInputGameId,
   resetInputGameId,
-  onButtonClick,
+  onButtonClick: handleButtonClick,
 }) => {
-  const handleButtonClick = (callback) => () => {
-    if (onButtonClick) {
-      onButtonClick();
+  const wrapWithFeedback = (callback) => () => {
+    if (handleButtonClick) {
+      handleButtonClick();
     }
     callback();
   };
 
-  const handleCreateNewGame = handleButtonClick(createNewGame);
-  const handleResetGameCode = handleButtonClick(
+  const handleCreateNewGame = wrapWithFeedback(createNewGame);
+  const handleResetGameCode = wrapWithFeedback(
     resetInputGameId ?? (() => setInputGameId(""))
   );
 
   const handleJoinGame = (event) => {
-    if (onButtonClick) {
-      onButtonClick();
+    if (handleButtonClick) {
+      handleButtonClick();
     }
     joinGame(event);
   };
