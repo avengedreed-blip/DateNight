@@ -193,6 +193,36 @@ const shuffle = (items, rng) => {
 
 const sample = (items, count, rng) => shuffle(items, rng).slice(0, count);
 
+const normalizeGroup = (category, group) => {
+  if (category === "triviaQuestions") {
+    return "normal";
+  }
+
+  return group ?? "normal";
+};
+
+export const getGeneratorPool = (category, group) => {
+  const normalizedGroup = normalizeGroup(category, group);
+  const categoryPools = pools[category];
+
+  if (!categoryPools) {
+    return [];
+  }
+
+  const pool = categoryPools[normalizedGroup];
+  return Array.isArray(pool) ? pool : [];
+};
+
+export const generatePromptIdea = (category, group, rng = Math.random) => {
+  const pool = getGeneratorPool(category, group);
+  if (!pool.length) {
+    return null;
+  }
+
+  const index = Math.floor(rng() * pool.length);
+  return pool[index];
+};
+
 export const generatePromptSet = (rng = Math.random) => {
   const result = {};
 

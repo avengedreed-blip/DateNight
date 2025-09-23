@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "./Modal.jsx";
 import { PlusIcon, TrashIcon, XIcon } from "../icons/Icons.jsx";
+import {
+  generatePromptIdea,
+  getGeneratorPool,
+} from "../../utils/promptGenerator.js";
 
 const categoryOptions = [
   { value: "truthPrompts", label: "Truth" },
@@ -27,10 +31,40 @@ const EditorModal = ({
   const [group, setGroup] = useState("normal");
   const [draftPrompt, setDraftPrompt] = useState("");
   const [pane, setPane] = useState("custom");
+  const [generatedDraft, setGeneratedDraft] = useState("");
+  const [generatedMeta, setGeneratedMeta] = useState(null);
+  const [generatorError, setGeneratorError] = useState("");
   const titleId = "editor-modal-title";
   const descriptionId = "editor-modal-description";
   const isCustomPane = pane === "custom";
   const activePrompts = isCustomPane ? prompts : generatedPrompts;
+  const isTriviaCategory = category === "triviaQuestions";
+  const generatorGroup = isTriviaCategory ? "normal" : group;
+  const generatorPool = useMemo(
+    () => getGeneratorPool(category, generatorGroup),
+    [category, generatorGroup]
+  );
+  const generatorMatchesSelection = useMemo(() => {
+    if (!generatedMeta) {
+      return true;
+    }
+
+    const targetGroup = generatedMeta.group;
+    const targetCategory = generatedMeta.category;
+    const normalizedGroup = isTriviaCategory ? "normal" : generatorGroup;
+    return (
+      targetCategory === category &&
+      (targetGroup ?? "normal") === (normalizedGroup ?? "normal")
+    );
+  }, [category, generatedMeta, generatorGroup, isTriviaCategory]);
+  const intensityLabels = useMemo(
+    () => ({
+      normal: "Normal",
+      spicy: "Spicy",
+      extreme: "Extreme",
+    }),
+    []
+  );
 
   const availableGroups = useMemo(() => {
     if (!activePrompts || !activePrompts[category]) {
@@ -64,34 +98,45 @@ const EditorModal = ({
     }
   }, [activePrompts, availableGroups, category, group]);
 
+  const buildPromptUpdate = useCallback(
+    (categoryKey, groupKey, updater) => {
+      const categoryPrompts =
+        (prompts?.[categoryKey] && typeof prompts[categoryKey] === "object"
+          ? prompts[categoryKey]
+          : {}) ?? {};
+      const groupPrompts = Array.isArray(categoryPrompts[groupKey])
+        ? categoryPrompts[groupKey]
+        : [];
+
+      return {
+        ...prompts,
+        [categoryKey]: {
+          ...categoryPrompts,
+          [groupKey]: updater(groupPrompts),
+        },
+      };
+    },
+    [prompts]
+  );
+
   const updatePrompt = (targetGroup, index, value) => {
     if (!isCustomPane) {
       return;
     }
-    setPrompts({
-      ...prompts,
-      [category]: {
-        ...prompts[category],
-        [targetGroup]: prompts[category][targetGroup].map((item, itemIndex) =>
-          itemIndex === index ? value : item
-        ),
-      },
-    });
+    const nextPrompts = buildPromptUpdate(category, targetGroup, (items) =>
+      items.map((item, itemIndex) => (itemIndex === index ? value : item))
+    );
+    setPrompts(nextPrompts);
   };
 
   const removePrompt = (targetGroup, index) => {
     if (!isCustomPane) {
       return;
     }
-    setPrompts({
-      ...prompts,
-      [category]: {
-        ...prompts[category],
-        [targetGroup]: prompts[category][targetGroup].filter(
-          (_, itemIndex) => itemIndex !== index
-        ),
-      },
-    });
+    const nextPrompts = buildPromptUpdate(category, targetGroup, (items) =>
+      items.filter((_, itemIndex) => itemIndex !== index)
+    );
+    setPrompts(nextPrompts);
   };
 
   const handleSubmit = (event) => {
@@ -102,17 +147,76 @@ const EditorModal = ({
 
     handleButtonClick?.();
 
-    setPrompts({
-      ...prompts,
-      [category]: {
-        ...prompts[category],
-        [group]: [...(prompts[category][group] ?? []), draftPrompt.trim()],
-      },
-    });
+    const targetGroup = group ?? "normal";
+    const trimmed = draftPrompt.trim();
+    const nextPrompts = buildPromptUpdate(category, targetGroup, (items) => [
+      ...items,
+      trimmed,
+    ]);
+    setPrompts(nextPrompts);
     setDraftPrompt("");
   };
 
+  const handleGeneratePrompt = withButtonClick(() => {
+    const idea = generatePromptIdea(category, generatorGroup);
+    if (!idea) {
+      setGeneratorError(
+        "No prompts available for that combination. Try another intensity."
+      );
+      setGeneratedDraft("");
+      setGeneratedMeta(null);
+      return;
+    }
+
+    setGeneratorError("");
+    setGeneratedDraft(idea);
+    setGeneratedMeta({ category, group: generatorGroup ?? "normal" });
+  });
+
+  const handleApproveGenerated = withButtonClick(() => {
+    if (!generatedDraft.trim() || !generatedMeta) {
+      return;
+    }
+
+    const trimmed = generatedDraft.trim();
+    const targetCategory = generatedMeta.category;
+    const targetGroup = generatedMeta.group ?? "normal";
+    const nextPrompts = buildPromptUpdate(targetCategory, targetGroup, (
+      items
+    ) => [...items, trimmed]);
+    setPrompts(nextPrompts);
+    setGeneratedDraft("");
+    setGeneratedMeta(null);
+  });
+
+  useEffect(() => {
+    if (!isCustomPane) {
+      setGeneratedDraft("");
+      setGeneratedMeta(null);
+      setGeneratorError("");
+    }
+  }, [isCustomPane]);
+
   const groups = availableGroups;
+  const generatorTargetLabel = useMemo(() => {
+    if (!generatedMeta) {
+      return "";
+    }
+
+    const categoryLabel =
+      categoryOptions.find((option) => option.value === generatedMeta.category)
+        ?.label ?? "";
+    const intensityLabel =
+      intensityLabels[generatedMeta.group ?? "normal"] ?? "Normal";
+
+    if (generatedMeta.category === "triviaQuestions") {
+      return `${categoryLabel}`;
+    }
+
+    return `${categoryLabel} • ${intensityLabel}`;
+  }, [generatedMeta, intensityLabels]);
+  const canApproveGenerated =
+    Boolean(generatedDraft.trim() && generatedMeta) && generatorMatchesSelection;
 
   return (
     <Modal
@@ -194,6 +298,72 @@ const EditorModal = ({
             </select>
           )}
         </div>
+
+        {isCustomPane && (
+          <section className="editor-generator" aria-live="polite">
+            <div className="editor-generator__header">
+              <div>
+                <p className="editor-generator__title">Prompt Generator</p>
+                <p className="editor-generator__subtitle">
+                  Create fresh {" "}
+                  {
+                    categoryOptions.find((option) => option.value === category)
+                      ?.label
+                  }{" "}
+                  prompts with one click.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={handleGeneratePrompt}
+                disabled={generatorPool.length === 0}
+              >
+                {generatedDraft ? "New Idea" : "Generate Prompt"}
+              </button>
+            </div>
+            {generatorError ? (
+              <p className="editor-generator__error">{generatorError}</p>
+            ) : null}
+            {generatedDraft ? (
+              <>
+                {generatorTargetLabel ? (
+                  <p className="editor-generator__preview-meta">
+                    Generated for {generatorTargetLabel}
+                  </p>
+                ) : null}
+                <textarea
+                  className="editor-textarea"
+                  value={generatedDraft}
+                  onChange={(event) => setGeneratedDraft(event.target.value)}
+                />
+                {!generatorMatchesSelection && (
+                  <p className="editor-generator__hint">
+                    Switch back to {generatorTargetLabel || "the original selection"}
+                    {" "}
+                    to approve this prompt, or generate a new one for the current
+                    filters.
+                  </p>
+                )}
+                <div className="editor-generator__actions">
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={!canApproveGenerated}
+                    onClick={handleApproveGenerated}
+                  >
+                    Approve &amp; Add
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="editor-generator__subtitle">
+                Pick a category and intensity, then let the generator suggest a
+                new prompt. Edit anything before approving to suit your vibe.
+              </p>
+            )}
+          </section>
+        )}
 
         {!isCustomPane && (
           <div className="editor-generated-bar">
