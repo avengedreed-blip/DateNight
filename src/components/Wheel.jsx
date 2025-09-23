@@ -12,6 +12,7 @@ const Wheel = ({
   onPointerUp,
   onPointerCancel,
   onPointerLeave,
+  isSpinning,
 }) => {
   const gradient = useMemo(() => {
     if (!segments?.length) {
@@ -36,7 +37,7 @@ const Wheel = ({
     }
 
     const sliceAngle = 360 / segments.length;
-    const radiusFactor = 0.65;
+    const radiusFactor = 0.5;
 
     return segments.map((segment, index) => {
       const id = segment.id ?? segment.label ?? index;
@@ -74,27 +75,41 @@ const Wheel = ({
           background: gradient,
           "--spin-duration": `${spinDuration ?? 4000}ms`,
         }}
+      />
+      <div
+        className={`wheel__labels ${isSpinning ? "wheel__labels--spinning" : ""}`}
+        aria-hidden="true"
       >
-        <div className="wheel__labels" aria-hidden="true">
-          <svg
-            className="wheel__label-layer"
-            viewBox="0 0 100 100"
-            preserveAspectRatio="xMidYMid meet"
-            style={{ width: "100%", height: "100%" }}
-          >
-            {labels.map((item) => (
-              <text
-                key={item.id}
-                x={item.x}
-                y={item.y}
-                textAnchor="middle"
-                dominantBaseline="middle"
-              >
-                {item.label}
-              </text>
-            ))}
-          </svg>
-        </div>
+        <svg
+          className="wheel__label-layer"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="xMidYMid meet"
+        >
+          <defs>
+            <filter id="wheelLabelShadow" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow
+                dx="0"
+                dy="1.2"
+                stdDeviation="1.6"
+                floodColor="rgba(15, 23, 42, 0.7)"
+              />
+            </filter>
+          </defs>
+          {labels.map((item) => (
+            <text
+              key={item.id}
+              x={item.x}
+              y={item.y}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              className="wheel__label-text"
+              filter="url(#wheelLabelShadow)"
+              style={{ whiteSpace: "nowrap" }}
+            >
+              {item.label}
+            </text>
+          ))}
+        </svg>
       </div>
       <div
         aria-hidden="true"
