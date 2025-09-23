@@ -6,9 +6,6 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     port: 5173,
-    allowedHosts: [
-      ".csb.app", // allow any CodeSandbox preview host
-      "localhost", // keep localhost for local testing
-    ],
+    allowedHosts: [/^.*\.csb\.app$/],
   },
 });
