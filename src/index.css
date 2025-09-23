@@ -24,10 +24,14 @@
     --wheel-truth: #38bdf8;
     --wheel-dare: #a855f7;
     --wheel-trivia: #f472b6;
-    --wheel-label-color: #0f172a;
-    --wheel-label-default: #0f172a;
-    --wheel-label-light: #f8fafc;
-    --wheel-label-dark: #0f172a;
+    --wheel-label-color: #102240;
+    --wheel-label-default: rgba(248, 250, 252, 0.96);
+    --wheel-label-light: rgba(248, 250, 252, 0.96);
+    --wheel-label-dark: #102240;
+    --wheel-truth-label: #123459;
+    --wheel-dare-label: #f2e9ff;
+    --wheel-trivia-label: #4d1835;
+    --wheel-label-shadow: 0 1px 3px rgba(3, 7, 18, 0.42), 0 0 1px rgba(15, 23, 42, 0.6);
     --transition-fast: 150ms ease;
     --panel-highlight: linear-gradient(
       120deg,
@@ -427,13 +431,21 @@
   }
 
   .wheel-wrapper {
-    @apply relative mx-auto mb-9 flex h-[300px] w-[300px] items-center justify-center;
+    --wheel-size: min(82vw, 340px);
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: var(--wheel-size);
+    height: var(--wheel-size);
+    margin: 0 auto clamp(2.5rem, 6vw, 3.75rem);
     touch-action: none;
-    padding-bottom: 72px;
   }
 
   .wheel {
-    @apply relative flex h-full w-full items-center justify-center rounded-full border-[6px] border-white/90 shadow-[0_30px_60px_rgba(15,23,42,0.45),_inset_0_0_25px_rgba(15,23,42,0.45)] transition-[transform] ease-[cubic-bezier(0.25,1,0.5,1.08)];
+    @apply relative flex items-center justify-center rounded-full border-[6px] border-white/90 shadow-[0_30px_60px_rgba(15,23,42,0.45),_inset_0_0_25px_rgba(15,23,42,0.45)] transition-[transform] ease-[cubic-bezier(0.25,1,0.5,1.08)];
+    width: 100%;
+    height: 100%;
+    aspect-ratio: 1 / 1;
     transition-duration: var(--spin-duration, 4000ms);
     z-index: 0;
   }
@@ -443,7 +455,7 @@
   }
 
   .wheel__labels {
-    @apply pointer-events-none absolute inset-0 flex items-center justify-center;
+    @apply pointer-events-none absolute inset-0 grid place-items-center;
     z-index: 1;
     opacity: 1;
     transform: scale(1);
@@ -459,8 +471,8 @@
     @apply absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center text-center;
     transform-origin: center;
     pointer-events: none;
-    max-width: min(60%, 320px);
-    padding: 0.35rem 0.55rem;
+    max-width: min(62%, 320px);
+    padding: clamp(0.25rem, 0.7vw, 0.45rem) clamp(0.45rem, 1vw, 0.65rem);
     backface-visibility: hidden;
     will-change: transform;
   }
@@ -474,9 +486,13 @@
       "Segoe UI",
       sans-serif
     );
+    font-weight: 800;
     line-height: 1.08;
     transition: opacity 220ms ease, transform 220ms ease;
     white-space: normal;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-shadow: var(--wheel-label-shadow, 0 1px 2px rgba(15, 23, 42, 0.42));
   }
 
   .wheel__labels--spinning .wheel__label-text {
@@ -484,14 +500,12 @@
   }
 
   .wheel-label {
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
     color: inherit;
   }
 
   .wheel__pointer {
-    @apply absolute -top-7 left-1/2 -translate-x-1/2 text-3xl text-[color:var(--secondary-accent)] drop-shadow-[0_6px_20px_rgba(15,23,42,0.7)];
+    @apply absolute left-1/2 -translate-x-1/2 text-3xl text-[color:var(--secondary-accent)] drop-shadow-[0_6px_20px_rgba(15,23,42,0.7)];
+    top: calc(-1 * clamp(1.75rem, 4.5vw, 2.25rem));
     z-index: 2;
   }
 
@@ -509,8 +523,12 @@
   }
 
   .spin-button__trigger {
-    @apply pointer-events-auto h-28 w-28 rounded-full border-none text-lg font-semibold uppercase tracking-[0.16em] text-slate-900 shadow-[0_25px_45px_rgba(15,23,42,0.35)] transition-all duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-70;
+    @apply pointer-events-auto rounded-full border-none text-lg font-semibold uppercase tracking-[0.16em] text-slate-900 shadow-[0_25px_45px_rgba(15,23,42,0.35)] transition-all duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-70;
+    width: clamp(5.1rem, 18vw, 6.75rem);
+    height: clamp(5.1rem, 18vw, 6.75rem);
     background: radial-gradient(circle at top, #ffffff, #e8e8ff 75%);
+    display: grid;
+    place-items: center;
   }
 
   .spin-button__trigger--active {
@@ -1146,16 +1164,13 @@
     }
 
     .wheel-wrapper {
-      @apply h-[260px] w-[260px];
+      --wheel-size: min(88vw, 300px);
+      margin-bottom: clamp(2rem, 8vw, 3.25rem);
     }
 
     .wheel__label-text {
-      font-size: clamp(0.68rem, 4vw, 0.95rem);
-      letter-spacing: 0.06em;
-    }
-
-    .spin-button__trigger {
-      @apply h-24 w-24;
+      font-size: clamp(0.72rem, 4.4vw, 0.98rem);
+      letter-spacing: 0.07em;
     }
 
     .modal-content {
@@ -1164,6 +1179,17 @@
 
     .editor-layout {
       @apply w-[calc(100%-1rem)];
+    }
+  }
+
+  @media (min-width: 768px) {
+    .wheel-wrapper {
+      --wheel-size: min(420px, 52vw);
+      margin-bottom: clamp(3rem, 5vw, 4rem);
+    }
+
+    .wheel__label-text {
+      letter-spacing: 0.1em;
     }
   }
 
