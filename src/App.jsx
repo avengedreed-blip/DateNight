@@ -9,6 +9,7 @@ import React, {
 import AnnouncementModal from "./components/modals/AnnouncementModal.jsx";
 import ConsequenceModal from "./components/modals/ConsequenceModal.jsx";
 import EditorModal from "./components/modals/EditorModal.jsx";
+import HelpModal from "./components/modals/HelpModal.jsx";
 import Modal from "./components/modals/Modal.jsx";
 import PromptModal from "./components/modals/PromptModal.jsx";
 import RewardModal from "./components/modals/RewardModal.jsx";
@@ -380,6 +381,9 @@ export default function App() {
     [customPromptGroups, generatedPromptGroups]
   );
 
+  const isMultiplayerMode = gameMode === "multiplayer";
+  const multiplayerModeEnabled = multiplayerEnabled && isMultiplayerMode;
+
   const {
     isAvailable: multiplayerAvailable,
     isActive: multiplayerActive,
@@ -391,8 +395,8 @@ export default function App() {
     acquireLock: acquireSpinLockRemote,
     releaseLock: releaseSpinLockRemote,
   } = useMultiplayer({
-    gameId: remoteGameId,
-    enabled: multiplayerEnabled && !isOfflineMode,
+    gameId,
+    enabled: multiplayerModeEnabled,
     onRemoteSpin: (payload) =>
       multiplayerHandlersRef.current.onRemoteSpin?.(payload),
     onRemotePrompt: (payload) =>
@@ -1753,6 +1757,11 @@ export default function App() {
     setActiveModal("settings");
   }, [playClick, setActiveModal]);
 
+  const openHelpModal = useCallback(() => {
+    playClick();
+    setActiveModal("help");
+  }, [playClick]);
+
   const openEditorModal = useCallback(() => {
     playClick();
     setActiveModal("editor");
@@ -1920,11 +1929,11 @@ export default function App() {
                 role="status"
                 aria-live="polite"
                 title={
-                  isOfflineMode
-                    ? "Offline mode"
-                    : multiplayerActive
-                    ? `${connectedCount} players connected`
-                    : "Multiplayer disabled"
+                  isMultiplayerMode
+                    ? multiplayerActive
+                      ? `${connectedCount} players connected`
+                      : "Multiplayer disabled"
+                    : "Single Device mode uses one shared screen"
                 }
               >
                 {isOfflineMode
@@ -2057,13 +2066,23 @@ export default function App() {
         onClose={closeModal}
         labelledBy="settings-modal-title"
       >
+      <div className="settings-header">
         <h2
           id="settings-modal-title"
-          className="mb-6 text-2xl font-semibold text-slate-100"
+          className="settings-header__title"
         >
           Settings
         </h2>
-        <div className="settings-section">
+        <button
+          type="button"
+          className="settings-help-button"
+          onClick={openHelpModal}
+          aria-label="View help and instructions"
+        >
+          <span aria-hidden="true">ℹ️</span>
+        </button>
+      </div>
+      <div className="settings-section">
           <div className="settings-row">
             <MusicIcon />
             <input
@@ -2100,26 +2119,29 @@ export default function App() {
                 Multiplayer
               </span>
               <span className="text-xs text-[color:var(--text-muted)]">
-                {isOfflineMode
-                  ? "Unavailable in offline mode"
-                  : multiplayerAvailable
-                  ? "Sync spins across connected devices"
-                  : "Add Firebase config to enable remote play"}
+                {isMultiplayerMode
+                  ? multiplayerAvailable
+                    ? "Sync spins across connected devices"
+                    : "Add Firebase config to enable remote play"
+                  : "Switch to Multiplayer mode to enable sync"}
               </span>
             </div>
             <label className="relative inline-flex items-center">
               <input
                 type="checkbox"
                 className="sr-only"
-                checked={multiplayerEnabled && multiplayerAllowed}
-                onChange={(event) =>
-                  setMultiplayerEnabled(event.target.checked)
-                }
-                disabled={!multiplayerAllowed}
+                checked={multiplayerModeEnabled && multiplayerAvailable}
+                onChange={(event) => {
+                  if (!isMultiplayerMode) {
+                    return;
+                  }
+                  setMultiplayerEnabled(event.target.checked);
+                }}
+                disabled={!multiplayerAvailable || !isMultiplayerMode}
               />
               <span
                 className={`ml-3 flex h-6 w-11 items-center rounded-full border border-white/20 bg-slate-800 transition-colors ${
-                  multiplayerEnabled && multiplayerAllowed
+                  multiplayerModeEnabled && multiplayerAvailable
                     ? "bg-[color:var(--primary-accent)] border-[color:var(--primary-accent)]"
                     : "bg-slate-800"
                 }`}
@@ -2127,7 +2149,7 @@ export default function App() {
               >
                 <span
                   className={`h-5 w-5 rounded-full bg-white transition-transform ${
-                    multiplayerEnabled && multiplayerAllowed
+                    multiplayerModeEnabled && multiplayerAvailable
                       ? "translate-x-4"
                       : "translate-x-1"
                   }`}
@@ -2194,6 +2216,7 @@ export default function App() {
         onButtonClick={playClick}
         reward={pendingReward}
       />
+      <HelpModal isOpen={activeModal === "help"} onClose={closeModal} />
     </div>
   );
 }
