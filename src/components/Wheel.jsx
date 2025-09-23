@@ -30,16 +30,32 @@ const Wheel = ({
     return `conic-gradient(${stops})`;
   }, [segments]);
 
-  const labels = useMemo(
-    () =>
-      segments?.map((segment, index) => ({
-        id: segment.id ?? segment.label ?? index,
-        label:
-          segment.label ?? segment.title ?? segment.id ?? `Segment ${index + 1}`,
-        angle: (index * 360) / segments.length + 180 / segments.length,
-      })) ?? [],
-    [segments]
-  );
+  const labels = useMemo(() => {
+    if (!segments?.length) {
+      return [];
+    }
+
+    const sliceAngle = 360 / segments.length;
+    const radiusFactor = 0.65;
+
+    return segments.map((segment, index) => {
+      const id = segment.id ?? segment.label ?? index;
+      const label =
+        segment.label ?? segment.title ?? segment.id ?? `Segment ${index + 1}`;
+      const midpointDeg = index * sliceAngle + sliceAngle / 2;
+      const radians = ((midpointDeg - 90) * Math.PI) / 180;
+      const radius = 50 * radiusFactor;
+      const x = 50 + radius * Math.cos(radians);
+      const y = 50 + radius * Math.sin(radians);
+
+      return {
+        id,
+        label,
+        x,
+        y,
+      };
+    });
+  }, [segments]);
 
   return (
     <div
@@ -60,17 +76,24 @@ const Wheel = ({
         }}
       >
         <div className="wheel__labels" aria-hidden="true">
-          {labels.map((item) => (
-            <span
-              key={item.id}
-              className="wheel__label"
-              style={{
-                transform: `translate(-50%, -50%) rotate(${item.angle}deg) translateY(calc(-1 * var(--label-radius))) rotate(-${item.angle}deg)`,
-              }}
-            >
-              {item.label}
-            </span>
-          ))}
+          <svg
+            className="wheel__label-layer"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="xMidYMid meet"
+            style={{ width: "100%", height: "100%" }}
+          >
+            {labels.map((item) => (
+              <text
+                key={item.id}
+                x={item.x}
+                y={item.y}
+                textAnchor="middle"
+                dominantBaseline="middle"
+              >
+                {item.label}
+              </text>
+            ))}
+          </svg>
         </div>
       </div>
       <div
