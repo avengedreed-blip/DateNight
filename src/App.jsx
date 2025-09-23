@@ -131,6 +131,8 @@ export default function App() {
   const [rotation, setRotation] = useState(0);
   const [spinDuration, setSpinDuration] = useState(BASE_SPIN_DURATION_MS);
   const [isExtremeRound, setIsExtremeRound] = useState(false);
+  const [pendingPromptSounds, setPendingPromptSounds] = useState([]);
+  const [pendingConsequenceSounds, setPendingConsequenceSounds] = useState([]);
   const [copySuccess, setCopySuccess] = useState(false);
   const [soundPulse, setSoundPulse] = useState(false);
   const [isLoopingSound, setIsLoopingSound] = useState(false);
@@ -529,17 +531,18 @@ export default function App() {
       const promptText = choosePrompt(outcomeKey);
       recordPromptHistory(outcomeKey, promptText);
 
-      if (flags.isExtreme) {
-        triggerSound("extremeWooo");
-      } else if (flags.isSpicy) {
-        triggerSound("spicyGiggle");
-      }
-
       setCurrentPrompt({
         title: segment.title,
         text: promptText,
         type: segment.id,
       });
+      const sounds = [];
+      if (flags.isExtreme) {
+        sounds.push("extremeWooo");
+      } else if (flags.isSpicy) {
+        sounds.push("spicyGiggle");
+      }
+      setPendingPromptSounds(sounds);
       setActiveModal("prompt");
       setIsSpinning(false);
       triggerHapticFeedback(30);
@@ -551,7 +554,6 @@ export default function App() {
       recordPromptHistory,
       setRoundCount,
       triggerHapticFeedback,
-      triggerSound,
     ]
   );
 
@@ -685,8 +687,6 @@ export default function App() {
     if (isExtreme) {
       setPendingExtremeSpin(true);
       setActiveModal("announcement");
-      triggerSound("fanfare");
-      confettiBurst();
       return;
     }
 
@@ -817,16 +817,8 @@ export default function App() {
   }, [pendingExtremeSpin, startSpin]);
 
   const handleRefuse = useCallback(() => {
-    triggerSound("refusalBoo");
     const levels = ["normal", "spicy", "extreme"];
     const selection = pickRandom(levels);
-
-    if (selection === "spicy") {
-      triggerSound("spicyGiggle");
-    }
-    if (selection === "extreme") {
-      triggerSound("extremeWooo");
-    }
 
     const keyMap = {
       normal: "consequenceNormal",
@@ -838,9 +830,38 @@ export default function App() {
       ? pickRandom(pool)
       : "No consequences available. You're safe this time!";
 
+    const sounds = ["refusalBoo"];
+    if (selection === "spicy") {
+      sounds.push("spicyGiggle");
+    }
+    if (selection === "extreme") {
+      sounds.push("extremeWooo");
+    }
+    setPendingConsequenceSounds(sounds);
     setCurrentConsequence(consequence);
     setActiveModal("consequence");
-  }, [promptGroups, triggerSound]);
+  }, [promptGroups]);
+
+  useEffect(() => {
+    if (activeModal === "announcement") {
+      triggerSound("fanfare");
+      confettiBurst();
+    }
+  }, [activeModal, triggerSound]);
+
+  useEffect(() => {
+    if (activeModal === "prompt" && pendingPromptSounds.length) {
+      pendingPromptSounds.forEach((sound) => triggerSound(sound));
+      setPendingPromptSounds([]);
+    }
+  }, [activeModal, pendingPromptSounds, triggerSound]);
+
+  useEffect(() => {
+    if (activeModal === "consequence" && pendingConsequenceSounds.length) {
+      pendingConsequenceSounds.forEach((sound) => triggerSound(sound));
+      setPendingConsequenceSounds([]);
+    }
+  }, [activeModal, pendingConsequenceSounds, triggerSound]);
 
   const createNewGame = useCallback(() => {
     const newId = createRandomGameId();
