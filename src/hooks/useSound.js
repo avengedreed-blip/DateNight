@@ -46,6 +46,8 @@ const createSynths = (Tone, masterGain) => ({
   }).connect(masterGain),
 });
 
+const TIMER_SOUND_IDS = new Set(["timerTick", "timerWarning", "timerEnd"]);
+
 const createPlayers = (Tone, synths) => ({
   fanfare: () => {
     const now = Tone.now();
@@ -71,6 +73,15 @@ const createPlayers = (Tone, synths) => ({
   },
   click: () => {
     synths.click.triggerAttackRelease("C2", "16n", Tone.now());
+  },
+  timerTick: () => {
+    console.log("Play sound:", "timerTick");
+  },
+  timerWarning: () => {
+    console.log("Play sound:", "timerWarning");
+  },
+  timerEnd: () => {
+    console.log("Play sound:", "timerEnd");
   },
 });
 
@@ -149,11 +160,17 @@ export function useSound(volume, toneReady) {
       const resources = resourcesRef.current;
 
       if (!Tone || !resources) {
+        if (TIMER_SOUND_IDS.has(soundName)) {
+          console.log("Play sound:", soundName);
+        }
         return;
       }
 
       const handler = resources.players[soundName];
       if (!handler) {
+        if (TIMER_SOUND_IDS.has(soundName)) {
+          console.log("Play sound:", soundName);
+        }
         return;
       }
 
