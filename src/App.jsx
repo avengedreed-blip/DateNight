@@ -176,6 +176,7 @@ const parseInteger = (value, fallback) => {
 export default function App() {
   const [toneReady, setToneReady] = useState(false);
   const [inputGameId, setInputGameId] = useState("");
+  const [gameMode, setGameMode] = useState("single");
   const [activeModal, setActiveModal] = useState(null);
   const [pendingExtremeSpin, setPendingExtremeSpin] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState({
@@ -1812,6 +1813,8 @@ export default function App() {
         inputGameId={inputGameId}
         setInputGameId={setInputGameId}
         resetInputGameId={resetInputGameId}
+        gameMode={gameMode}
+        onSelectMode={setGameMode}
         onButtonClick={playClick}
       />
     );
