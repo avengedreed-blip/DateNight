@@ -1,7 +1,12 @@
 import React from "react";
 import Modal from "./Modal.jsx";
 
-const ConsequenceModal = ({ isOpen, onClose, text }) => {
+const ConsequenceModal = ({
+  isOpen,
+  onClose,
+  text,
+  onButtonClick: handleButtonClick,
+}) => {
   const titleId = "consequence-modal-title";
   const bodyId = "consequence-modal-body";
 
@@ -19,11 +24,18 @@ const ConsequenceModal = ({ isOpen, onClose, text }) => {
         <p id={bodyId} className="consequence-card__body">
           {text}
         </p>
-      <div className="consequence-card__actions">
-        <button type="button" className="primary-button" onClick={onClose}>
-          I Understand
-        </button>
-      </div>
+        <div className="consequence-card__actions">
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => {
+              handleButtonClick?.();
+              onClose?.();
+            }}
+          >
+            I Understand
+          </button>
+        </div>
       </div>
     </Modal>
   );

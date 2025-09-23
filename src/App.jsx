@@ -76,6 +76,12 @@ const WHEEL_SEGMENTS = [
 
 const pickRandom = (items) => items[Math.floor(Math.random() * items.length)];
 
+const HAPTIC_PATTERNS = {
+  light: 18,
+  medium: [28, 24, 28],
+  heavy: [60, 45, 60],
+};
+
 const confettiBurst = () => {
   const colors = ["#a855f7", "#38bdf8", "#f472b6", "#fde68a"];
   const end = Date.now() + 1200;
@@ -325,24 +331,7 @@ export default function App() {
     [flashSoundActivity, play]
   );
 
-  const playClick = useCallback(() => {
-    triggerSound("click");
-  }, [triggerSound]);
-
-  const startSoundLoop = useCallback(() => {
-    if (sfxVolume > 0) {
-      setIsLoopingSound(true);
-      flashSoundActivity();
-    }
-    startLoop();
-  }, [flashSoundActivity, sfxVolume, startLoop]);
-
-  const stopSoundLoop = useCallback(() => {
-    setIsLoopingSound(false);
-    stopLoop();
-  }, [stopLoop]);
-
-  const triggerHapticFeedback = useCallback((pattern = 20) => {
+  const triggerHapticFeedback = useCallback((pattern = HAPTIC_PATTERNS.light) => {
     if (typeof window === "undefined") {
       return;
     }
@@ -360,8 +349,31 @@ export default function App() {
       return;
     }
 
-    navigator.vibrate(pattern);
+    const vibrationPattern = pattern ?? HAPTIC_PATTERNS.light;
+    if (vibrationPattern === null || vibrationPattern === undefined) {
+      return;
+    }
+
+    navigator.vibrate(vibrationPattern);
   }, []);
+
+  const playClick = useCallback(() => {
+    triggerSound("click");
+    triggerHapticFeedback(HAPTIC_PATTERNS.light);
+  }, [triggerHapticFeedback, triggerSound]);
+
+  const startSoundLoop = useCallback(() => {
+    if (sfxVolume > 0) {
+      setIsLoopingSound(true);
+      flashSoundActivity();
+    }
+    startLoop();
+  }, [flashSoundActivity, sfxVolume, startLoop]);
+
+  const stopSoundLoop = useCallback(() => {
+    setIsLoopingSound(false);
+    stopLoop();
+  }, [stopLoop]);
 
   useEffect(() => {
     let cancelled = false;
@@ -424,6 +436,7 @@ export default function App() {
 
     const resumeContext = async () => {
       try {
+        await window.Tone.start();
         if (window.Tone.context.state === "suspended") {
           await window.Tone.context.resume();
         }
@@ -545,7 +558,9 @@ export default function App() {
       setPendingPromptSounds(sounds);
       setActiveModal("prompt");
       setIsSpinning(false);
-      triggerHapticFeedback(30);
+      triggerHapticFeedback(
+        flags.isExtreme ? HAPTIC_PATTERNS.heavy : HAPTIC_PATTERNS.light
+      );
       setIsExtremeRound(flags.isExtreme);
       setRoundCount((value) => value + 1);
     },
@@ -653,7 +668,7 @@ export default function App() {
       setIsSpinning(true);
       setIsExtremeRound(outcome.isExtreme);
       startSoundLoop();
-      triggerHapticFeedback();
+      triggerHapticFeedback(HAPTIC_PATTERNS.medium);
       setSpinDuration(spinDurationMs);
 
       const baseRotation = rotationRef.current - (rotationRef.current % 360);
@@ -909,7 +924,12 @@ export default function App() {
     }
   }, [gameId]);
 
-  const handleResetGame = useCallback(() => {
+  const handleCopyGameIdClick = useCallback(() => {
+    playClick();
+    copyGameId();
+  }, [copyGameId, playClick]);
+
+  const resetGameState = useCallback(() => {
     stopMusic();
     if (spinTimeoutRef.current) {
       clearTimeout(spinTimeoutRef.current);
@@ -947,6 +967,11 @@ export default function App() {
     stopSoundLoop,
   ]);
 
+  const handleResetGame = useCallback(() => {
+    playClick();
+    resetGameState();
+  }, [playClick, resetGameState]);
+
   const closeModal = useCallback(() => {
     setActiveModal((previous) => {
       if (previous === "prompt") {
@@ -955,6 +980,22 @@ export default function App() {
       return null;
     });
   }, []);
+
+  const openSettingsModal = useCallback(() => {
+    playClick();
+    setActiveModal("settings");
+  }, [playClick, setActiveModal]);
+
+  const openEditorModal = useCallback(() => {
+    playClick();
+    setActiveModal("editor");
+  }, [playClick, setActiveModal]);
+
+  const handleSpinButton = useCallback(() => {
+    playClick();
+    handleSpin();
+  }, [handleSpin, playClick]);
+
 
   if (!gameId) {
     return (
@@ -970,7 +1011,12 @@ export default function App() {
   }
 
   if (promptsLoading) {
-    return <LoadingScreen message="Loading your shared prompts" />;
+    return (
+      <LoadingScreen
+        message="Loading your shared prompts"
+        onButtonClick={playClick}
+      />
+    );
   }
 
   if (promptsError) {
@@ -979,12 +1025,13 @@ export default function App() {
         message={promptsError}
         isError
         onRetry={retryPrompts}
+        onButtonClick={playClick}
       />
     );
   }
 
   if (!prompts) {
-    return <LoadingScreen message="Preparing the wheel" />;
+    return <LoadingScreen message="Preparing the wheel" onButtonClick={playClick} />;
   }
 
   const isSfxActive = soundPulse || isLoopingSound;
@@ -1004,7 +1051,7 @@ export default function App() {
               <button
                 type="button"
                 className={`badge-button ${copySuccess ? "badge-button--success" : ""}`}
-                onClick={copyGameId}
+                onClick={handleCopyGameIdClick}
                 aria-live="polite"
                 aria-label={
                   copySuccess
@@ -1039,7 +1086,7 @@ export default function App() {
               aria-label="Open settings"
               aria-haspopup="dialog"
               aria-expanded={activeModal === "settings"}
-              onClick={() => setActiveModal("settings")}
+              onClick={openSettingsModal}
             >
               <SettingsIcon />
             </button>
@@ -1097,7 +1144,7 @@ export default function App() {
                 className={`spin-button__trigger ${
                   isSfxActive ? "spin-button__trigger--active" : ""
                 }`}
-                onClick={handleSpin}
+                onClick={handleSpinButton}
                 disabled={isSpinning}
                 aria-pressed={isSpinning}
                 aria-live="polite"
@@ -1158,7 +1205,7 @@ export default function App() {
           <button
             type="button"
             className="primary-button flex items-center justify-center gap-2"
-            onClick={() => setActiveModal("editor")}
+            onClick={openEditorModal}
           >
             <PencilIcon /> Edit Prompts
           </button>
@@ -1170,12 +1217,15 @@ export default function App() {
         onClose={closeModal}
         prompt={currentPrompt}
         onRefuse={handleRefuse}
+        onButtonClick={playClick}
+        onAccept={closeModal}
       />
 
       <ConsequenceModal
         isOpen={activeModal === "consequence"}
         onClose={closeModal}
         text={currentConsequence}
+        onButtonClick={playClick}
       />
 
       {activeModal === "editor" && (
@@ -1186,12 +1236,15 @@ export default function App() {
           setPrompts={savePrompts}
           generatedPrompts={generatedPrompts}
           onRegeneratePrompts={regenerateGeneratedPrompts}
+          onButtonClick={playClick}
         />
       )}
 
       <AnnouncementModal
         isOpen={activeModal === "announcement"}
         onClose={handleAnnouncementClose}
+        onButtonClick={playClick}
+        onConfirm={handleAnnouncementClose}
       />
     </div>
   );
