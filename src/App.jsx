@@ -257,6 +257,8 @@ export default function App() {
     serialize: (value) => value ?? "",
     deserialize: (value) => (value ? value : null),
   });
+  const isOfflineMode = gameMode === "offline";
+  const remoteGameId = isOfflineMode ? null : gameId;
   const [musicVolume, setMusicVolume] = usePersistentState(
     STORAGE_KEYS.musicVolume,
     0.2,
@@ -314,6 +316,12 @@ export default function App() {
     }
   );
 
+  useEffect(() => {
+    if (isOfflineMode && multiplayerEnabled) {
+      setMultiplayerEnabled(false);
+    }
+  }, [isOfflineMode, multiplayerEnabled, setMultiplayerEnabled]);
+
   const {
     prompts,
     savePrompts,
@@ -321,7 +329,7 @@ export default function App() {
     isLoading: promptsLoading,
     error: promptsError,
     retry: retryPrompts,
-  } = usePrompts(gameId);
+  } = usePrompts(remoteGameId);
   const generatedPromptGroups = useMemo(
     () => buildPromptGroups(generatedPrompts),
     [generatedPrompts]
@@ -372,9 +380,6 @@ export default function App() {
     [customPromptGroups, generatedPromptGroups]
   );
 
-  const isMultiplayerMode = gameMode === "multiplayer";
-  const multiplayerModeEnabled = multiplayerEnabled && isMultiplayerMode;
-
   const {
     isAvailable: multiplayerAvailable,
     isActive: multiplayerActive,
@@ -386,8 +391,8 @@ export default function App() {
     acquireLock: acquireSpinLockRemote,
     releaseLock: releaseSpinLockRemote,
   } = useMultiplayer({
-    gameId,
-    enabled: multiplayerModeEnabled,
+    gameId: remoteGameId,
+    enabled: multiplayerEnabled && !isOfflineMode,
     onRemoteSpin: (payload) =>
       multiplayerHandlersRef.current.onRemoteSpin?.(payload),
     onRemotePrompt: (payload) =>
@@ -1564,11 +1569,11 @@ export default function App() {
   }, [activeModal, pendingConsequenceSounds, triggerSound]);
 
   const createNewGame = useCallback(() => {
-    const newId = createRandomGameId();
+    const newId = isOfflineMode ? "OFFLINE" : createRandomGameId();
     setGameId(newId);
     setRoundCount(0);
     setLastPrompts({});
-  }, [setGameId, setLastPrompts, setRoundCount]);
+  }, [isOfflineMode, setGameId, setLastPrompts, setRoundCount]);
 
   const joinGame = useCallback(
     (event) => {
@@ -1577,11 +1582,15 @@ export default function App() {
       if (!trimmed) {
         return;
       }
-      setGameId(trimmed);
+      if (isOfflineMode) {
+        setGameId("OFFLINE");
+      } else {
+        setGameId(trimmed);
+      }
       setRoundCount(0);
       setLastPrompts({});
     },
-    [inputGameId, setGameId, setLastPrompts, setRoundCount]
+    [inputGameId, isOfflineMode, setGameId, setLastPrompts, setRoundCount]
   );
 
   const resetInputGameId = useCallback(() => {
@@ -1589,7 +1598,7 @@ export default function App() {
   }, [setInputGameId]);
 
   const copyGameId = useCallback(async () => {
-    if (!gameId || !navigator.clipboard) {
+    if (isOfflineMode || !gameId || !navigator.clipboard) {
       return;
     }
 
@@ -1607,7 +1616,7 @@ export default function App() {
       console.warn("Failed to copy game id", error);
       setCopySuccess(false);
     }
-  }, [gameId]);
+  }, [gameId, isOfflineMode]);
 
   const handleCopyGameIdClick = useCallback(() => {
     playClick();
@@ -1826,7 +1835,9 @@ export default function App() {
   if (promptsLoading) {
     return (
       <LoadingScreen
-        message="Loading your shared prompts"
+        message={
+          isOfflineMode ? "Loading offline prompts" : "Loading your shared prompts"
+        }
         onButtonClick={playClick}
       />
     );
@@ -1856,6 +1867,7 @@ export default function App() {
     : extremeSpinActive
     ? 4
     : 0;
+  const multiplayerAllowed = multiplayerAvailable && !isOfflineMode;
 
   return (
     <div className="app-shell">
@@ -1871,19 +1883,26 @@ export default function App() {
                 onClick={handleCopyGameIdClick}
                 aria-live="polite"
                 aria-label={
-                  copySuccess
+                  isOfflineMode
+                    ? "Offline mode active"
+                    : copySuccess
                     ? `Game ID ${gameId} copied to clipboard`
                     : `Copy game ID ${gameId} to clipboard`
                 }
+                disabled={isOfflineMode}
               >
-                <span aria-hidden="true">ID: {gameId}</span>
+                <span aria-hidden="true">
+                  {isOfflineMode ? "Offline Mode" : `ID: ${gameId}`}
+                </span>
                 {copySuccess && (
                   <span className="badge-button__status" aria-hidden="true">
                     Copied
                   </span>
                 )}
                 <span className="sr-only">
-                  {copySuccess
+                  {isOfflineMode
+                    ? "Offline mode uses local prompts"
+                    : copySuccess
                     ? "Copied game ID to clipboard"
                     : "Tap to copy the game ID"}
                 </span>
@@ -1901,14 +1920,18 @@ export default function App() {
                 role="status"
                 aria-live="polite"
                 title={
-                  isMultiplayerMode
-                    ? multiplayerActive
-                      ? `${connectedCount} players connected`
-                      : "Multiplayer disabled"
-                    : "Single Device mode uses one shared screen"
+                  isOfflineMode
+                    ? "Offline mode"
+                    : multiplayerActive
+                    ? `${connectedCount} players connected`
+                    : "Multiplayer disabled"
                 }
               >
-                {multiplayerActive ? `Players: ${connectedCount}` : "Local Play"}
+                {isOfflineMode
+                  ? "Offline Mode"
+                  : multiplayerActive
+                  ? `Players: ${connectedCount}`
+                  : "Local Play"}
               </span>
               <span
                 className="badge-button"
@@ -2077,29 +2100,26 @@ export default function App() {
                 Multiplayer
               </span>
               <span className="text-xs text-[color:var(--text-muted)]">
-                {isMultiplayerMode
-                  ? multiplayerAvailable
-                    ? "Sync spins across connected devices"
-                    : "Add Firebase config to enable remote play"
-                  : "Switch to Multiplayer mode to enable sync"}
+                {isOfflineMode
+                  ? "Unavailable in offline mode"
+                  : multiplayerAvailable
+                  ? "Sync spins across connected devices"
+                  : "Add Firebase config to enable remote play"}
               </span>
             </div>
             <label className="relative inline-flex items-center">
               <input
                 type="checkbox"
                 className="sr-only"
-                checked={multiplayerModeEnabled && multiplayerAvailable}
-                onChange={(event) => {
-                  if (!isMultiplayerMode) {
-                    return;
-                  }
-                  setMultiplayerEnabled(event.target.checked);
-                }}
-                disabled={!multiplayerAvailable || !isMultiplayerMode}
+                checked={multiplayerEnabled && multiplayerAllowed}
+                onChange={(event) =>
+                  setMultiplayerEnabled(event.target.checked)
+                }
+                disabled={!multiplayerAllowed}
               />
               <span
                 className={`ml-3 flex h-6 w-11 items-center rounded-full border border-white/20 bg-slate-800 transition-colors ${
-                  multiplayerModeEnabled && multiplayerAvailable
+                  multiplayerEnabled && multiplayerAllowed
                     ? "bg-[color:var(--primary-accent)] border-[color:var(--primary-accent)]"
                     : "bg-slate-800"
                 }`}
@@ -2107,13 +2127,13 @@ export default function App() {
               >
                 <span
                   className={`h-5 w-5 rounded-full bg-white transition-transform ${
-                    multiplayerModeEnabled && multiplayerAvailable
+                    multiplayerEnabled && multiplayerAllowed
                       ? "translate-x-4"
                       : "translate-x-1"
                   }`}
-                />
-              </span>
-            </label>
+              />
+            </span>
+          </label>
           </div>
           <button
             type="button"
