@@ -20,6 +20,9 @@
     --wheel-trivia: #f472b6;
     --wheel-label-color: #0f172a;
     --transition-fast: 150ms ease;
+    --extreme-meter-color-normal: #38bdf8;
+    --extreme-meter-color-spicy: #f472b6;
+    --extreme-meter-color-extreme: #a855f7;
   }
 
   body {
@@ -214,6 +217,115 @@
   .wheel-wrapper {
     @apply relative mx-auto mb-9 flex h-[300px] w-[300px] items-center justify-center;
     touch-action: none;
+    padding-bottom: 72px;
+  }
+
+  .wheel-meter {
+    position: absolute;
+    inset: -26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 1;
+    filter: drop-shadow(0 18px 45px rgba(15, 23, 42, 0.55));
+    transition: filter 260ms ease;
+  }
+
+  .wheel-meter__svg {
+    width: 100%;
+    height: 100%;
+    transform-origin: 50% 50%;
+  }
+
+  .wheel-meter__ring {
+    fill: none;
+    stroke: rgba(148, 163, 184, 0.22);
+    stroke-width: 6;
+  }
+
+  .wheel-meter__progress {
+    fill: none;
+    stroke: var(--extreme-meter-ring-color, var(--extreme-meter-color-normal));
+    stroke-width: 7.2;
+    stroke-linecap: round;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+    transition: stroke 280ms ease, stroke-dashoffset 420ms ease;
+    filter: drop-shadow(0 0 22px rgba(56, 189, 248, 0.35));
+  }
+
+  .wheel-meter--normal {
+    --extreme-meter-ring-color: var(--extreme-meter-color-normal);
+  }
+
+  .wheel-meter--spicy {
+    --extreme-meter-ring-color: var(--extreme-meter-color-spicy);
+  }
+
+  .wheel-meter--full {
+    --extreme-meter-ring-color: var(--extreme-meter-color-extreme);
+  }
+
+  .wheel-meter--full .wheel-meter__progress {
+    stroke-width: 8;
+    filter: drop-shadow(0 0 26px rgba(168, 85, 247, 0.45));
+  }
+
+  .wheel-meter--pulse-elevated .wheel-meter__svg {
+    animation: wheelMeterPulseElevated 1.6s ease-in-out infinite;
+  }
+
+  .wheel-meter--pulse-max .wheel-meter__svg {
+    animation: wheelMeterPulseMax 0.7s ease-in-out infinite;
+  }
+
+  @keyframes wheelMeterPulseElevated {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+  }
+
+  @keyframes wheelMeterPulseMax {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.1);
+    }
+  }
+
+  .wheel-meter__caption {
+    position: absolute;
+    bottom: -52px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    pointer-events: none;
+    text-align: center;
+    z-index: 2;
+  }
+
+  .wheel-meter__caption-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: rgba(248, 250, 252, 0.58);
+  }
+
+  .wheel-meter__caption-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-main);
+    text-shadow: 0 6px 16px rgba(15, 23, 42, 0.7);
   }
 
   .wheel {

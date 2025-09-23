@@ -13,6 +13,7 @@ const Wheel = ({
   onPointerCancel,
   onPointerLeave,
   isSpinning,
+  extremeMeter = 0,
 }) => {
   const gradient = useMemo(() => {
     if (!segments?.length) {
@@ -58,6 +59,38 @@ const Wheel = ({
     });
   }, [segments]);
 
+  const meterProgress = useMemo(() => {
+    const numericValue = Number.isFinite(extremeMeter)
+      ? extremeMeter
+      : Number.parseFloat(extremeMeter);
+    if (!Number.isFinite(numericValue)) {
+      return 0;
+    }
+    return Math.min(100, Math.max(0, Math.round(numericValue)));
+  }, [extremeMeter]);
+
+  const meterStateClass = useMemo(() => {
+    if (meterProgress >= 100) {
+      return "wheel-meter--full";
+    }
+    if (meterProgress >= 50) {
+      return "wheel-meter--spicy";
+    }
+    return "wheel-meter--normal";
+  }, [meterProgress]);
+
+  const meterPulseClass = useMemo(() => {
+    if (meterProgress >= 100) {
+      return "wheel-meter--pulse-max";
+    }
+    if (meterProgress > 60) {
+      return "wheel-meter--pulse-elevated";
+    }
+    return "";
+  }, [meterProgress]);
+
+  const meterCircumference = 2 * Math.PI * 54;
+
   return (
     <div
       className="wheel-wrapper"
@@ -68,6 +101,30 @@ const Wheel = ({
       onPointerCancel={onPointerCancel}
       onPointerLeave={onPointerLeave}
     >
+      <div
+        className={`wheel-meter ${meterStateClass} ${meterPulseClass}`.trim()}
+        aria-hidden="true"
+      >
+        <svg className="wheel-meter__svg" viewBox="0 0 120 120">
+          <circle className="wheel-meter__ring" cx="60" cy="60" r="54" />
+          <circle
+            className="wheel-meter__progress"
+            cx="60"
+            cy="60"
+            r="54"
+            style={{
+              strokeDasharray: meterCircumference,
+              strokeDashoffset:
+                meterCircumference -
+                (meterCircumference * meterProgress) / 100,
+            }}
+          />
+        </svg>
+      </div>
+      <div className="wheel-meter__caption" aria-hidden="true">
+        <span className="wheel-meter__caption-label">Extreme Meter</span>
+        <span className="wheel-meter__caption-value">{meterProgress}%</span>
+      </div>
       <div
         className={`wheel ${isExtremeRound ? "wheel--extreme" : ""}`}
         style={{
