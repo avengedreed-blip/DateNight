@@ -2,15 +2,44 @@ import React, { useMemo } from "react";
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
-const responsiveFontSize = (sliceAngle, normalizedLength) => {
-  const base = 0.88 + (sliceAngle / 160) * 0.52;
-  const lengthAdjustment = clamp(1.12 - normalizedLength * 0.042, 0.64, 1.08);
-  const adjusted = base * lengthAdjustment;
-  const minRem = (adjusted * 0.74).toFixed(3);
-  const idealRem = (adjusted * 0.86).toFixed(3);
-  const maxRem = (adjusted * 1.08).toFixed(3);
-  const vwComponent = clamp(sliceAngle * 0.013, 0.32, 1.48).toFixed(3);
+const responsiveFontSize = (sliceAngle, normalizedLength, longestWordLength) => {
+  const angleFactor = clamp(0.92 + (sliceAngle / 160) * 0.58, 0.74, 1.28);
+  const lengthPenalty = clamp(1.18 - normalizedLength * 0.036, 0.6, 1.02);
+  const longWordPenalty = clamp(1.08 - Math.max(0, longestWordLength - 7) * 0.038, 0.7, 1);
+  const adjusted = angleFactor * lengthPenalty * longWordPenalty;
+  const minRem = (adjusted * 0.7).toFixed(3);
+  const idealRem = (adjusted * 0.84).toFixed(3);
+  const maxRem = (adjusted * 1.02).toFixed(3);
+  const vwComponent = clamp(sliceAngle * 0.012, 0.3, 1.32).toFixed(3);
   return `clamp(${minRem}rem, calc(${idealRem}rem + ${vwComponent}vw), ${maxRem}rem)`;
+};
+
+const deriveLabelTypography = (sliceAngle, label) => {
+  const sanitizedLabel = `${label ?? ""}`.replace(/\s+/g, " ").trim();
+  const normalizedLength = Math.max(sanitizedLabel.replace(/\s+/g, "").length, 4);
+  const words = sanitizedLabel.length ? sanitizedLabel.split(" ") : [];
+  const longestWordLength = words.reduce(
+    (max, word) => Math.max(max, word.length),
+    0,
+  );
+  const fontSize = responsiveFontSize(sliceAngle, normalizedLength, longestWordLength);
+  const allowMultiLine = normalizedLength > 10 || longestWordLength > 8 || words.length >= 3;
+  const allowThreeLines = normalizedLength > 18 || words.length >= 4 || longestWordLength > 11;
+  const lineClamp = allowThreeLines ? 3 : allowMultiLine ? 2 : 1;
+  const baseLetterSpacing = clamp(0.16 - normalizedLength * 0.0028, 0.05, 0.14);
+  const letterSpacing = `${baseLetterSpacing.toFixed(3)}em`;
+  const lineHeight = Number(
+    ((allowMultiLine ? 1.16 : 1.08) - (longestWordLength > 12 ? 0.02 : 0)).toFixed(2),
+  );
+
+  return {
+    fontSize,
+    normalizedLength,
+    longestWordLength,
+    lineClamp,
+    letterSpacing,
+    lineHeight,
+  };
 };
 
 const getLabelColorVar = (segmentId, tone) => {
@@ -25,6 +54,20 @@ const getLabelColorVar = (segmentId, tone) => {
   }
 
   return `var(--wheel-${segmentId}-label, ${fallback})`;
+};
+
+const getLabelSurfaceVar = (segmentId, tone) => {
+  const fallback = tone === "light"
+    ? "var(--wheel-label-surface-light, rgba(15, 23, 42, 0.55))"
+    : tone === "dark"
+    ? "var(--wheel-label-surface-dark, rgba(248, 250, 252, 0.32))"
+    : "var(--wheel-label-surface, rgba(15, 23, 42, 0.45))";
+
+  if (!segmentId) {
+    return fallback;
+  }
+
+  return `var(--wheel-${segmentId}-label-surface, ${fallback})`;
 };
 
 const Wheel = ({
@@ -80,8 +123,8 @@ const Wheel = ({
     const sliceAngleRadians = (sliceAngle * Math.PI) / 180;
     const radiusRatioBase = segments.length <= 2
       ? 0.68
-      : clamp(0.56 + (sliceAngle / 360) * 0.2, 0.54, 0.66);
-    const radius = 50 * radiusRatioBase;
+      : clamp(0.57 + (sliceAngle / 360) * 0.22, 0.55, 0.68);
+    const baseRadius = 50 * radiusRatioBase;
 
     return segments.map((segment, index) => {
       const id = segment.id ?? segment.label ?? index;
@@ -89,15 +132,20 @@ const Wheel = ({
         segment.label ?? segment.title ?? segment.id ?? `Segment ${index + 1}`;
       const midpointDeg = index * sliceAngle + sliceAngle / 2;
       const radians = midpointDeg * (Math.PI / 180) + radiansOffset;
+      const typography = deriveLabelTypography(sliceAngle, label);
+      const radiusAdjustment = clamp(
+        1 - Math.max(0, typography.normalizedLength - 6) * 0.008,
+        0.84,
+        0.97,
+      );
+      const radius = baseRadius * radiusAdjustment;
       const x = 50 + radius * Math.cos(radians);
       const y = 50 + radius * Math.sin(radians);
-      const normalizedLength = Math.max(label.replace(/\s+/g, "").length, 4);
-      const fontSize = responsiveFontSize(sliceAngle, normalizedLength);
       const arcWidth = 2 * radius * Math.sin(sliceAngleRadians / 2);
       const width = clamp(
-        arcWidth * 0.88,
-        26,
-        segments.length <= 2 ? 68 : 56,
+        arcWidth * (typography.lineClamp > 1 ? 0.96 : 0.9),
+        24,
+        segments.length <= 2 ? 70 : 58,
       );
       const toneOverrides = {
         truth: "dark",
@@ -106,6 +154,7 @@ const Wheel = ({
       };
       const tone = segment.labelTone ?? toneOverrides[segment.id] ?? undefined;
       const color = getLabelColorVar(segment.id, tone);
+      const surface = getLabelSurfaceVar(segment.id, tone);
 
       return {
         id,
@@ -113,8 +162,12 @@ const Wheel = ({
         x,
         y,
         width,
-        fontSize,
         color,
+        surface,
+        fontSize: typography.fontSize,
+        lineClamp: typography.lineClamp,
+        letterSpacing: typography.letterSpacing,
+        lineHeight: typography.lineHeight,
       };
     });
   }, [segments]);
@@ -199,13 +252,26 @@ const Wheel = ({
                 width: `${item.width}%`,
                 transform: `translate(-50%, -50%) rotate(${-normalizedRotation}deg)`,
                 color: item.color,
+                background: item.surface,
               }}
             >
-              <span
-                className="wheel__label-text wheel-label"
-                style={{ fontSize: item.fontSize }}
+                <span
+                  className="wheel__label-text wheel-label"
+                style={{
+                  fontSize: item.fontSize,
+                  letterSpacing: item.letterSpacing,
+                  lineHeight: item.lineHeight,
+                }}
               >
-                {item.label}
+                <span
+                  className="wheel__label-text-inner"
+                  style={{
+                    WebkitLineClamp: item.lineClamp,
+                    lineClamp: item.lineClamp,
+                  }}
+                >
+                  {item.label}
+                </span>
               </span>
             </div>
           ))}

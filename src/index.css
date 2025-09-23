@@ -31,6 +31,14 @@
     --wheel-truth-label: #123459;
     --wheel-dare-label: #f2e9ff;
     --wheel-trivia-label: #4d1835;
+    --wheel-label-surface: rgba(15, 23, 42, 0.45);
+    --wheel-label-surface-light: rgba(15, 23, 42, 0.58);
+    --wheel-label-surface-dark: rgba(248, 250, 252, 0.32);
+    --wheel-truth-label-surface: rgba(10, 37, 64, 0.48);
+    --wheel-dare-label-surface: rgba(99, 43, 140, 0.38);
+    --wheel-trivia-label-surface: rgba(80, 24, 46, 0.4);
+    --app-font-display: "Poppins", "ui-sans-serif", "system-ui", sans-serif;
+    --wheel-label-font: var(--app-font-display);
     --wheel-label-shadow: 0 1px 3px rgba(3, 7, 18, 0.42), 0 0 1px rgba(15, 23, 42, 0.6);
     --transition-fast: 150ms ease;
     --panel-highlight: linear-gradient(
@@ -472,27 +480,47 @@
     transform-origin: center;
     pointer-events: none;
     max-width: min(62%, 320px);
-    padding: clamp(0.25rem, 0.7vw, 0.45rem) clamp(0.45rem, 1vw, 0.65rem);
+    padding: clamp(0.35rem, 0.8vw, 0.55rem) clamp(0.65rem, 1.35vw, 0.95rem);
+    border-radius: clamp(0.75rem, 1.8vw, 1.05rem);
     backface-visibility: hidden;
     will-change: transform;
+    background: var(--wheel-label-surface, rgba(15, 23, 42, 0.45));
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.36), inset 0 0 0 1px rgba(248, 250, 252, 0.08);
+    backdrop-filter: saturate(140%) blur(6px);
+    -webkit-backdrop-filter: saturate(140%) blur(6px);
+    transition: transform 220ms ease, box-shadow 220ms ease, background 220ms ease;
   }
 
   .wheel__label-text {
-    @apply block w-full text-center uppercase;
-    font-family: var(
-      --wheel-label-font,
-      "Poppins",
-      "Inter",
-      "Segoe UI",
-      sans-serif
-    );
+    @apply w-full uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-family: var(--wheel-label-font, var(--app-font-display));
     font-weight: 800;
     line-height: 1.08;
     transition: opacity 220ms ease, transform 220ms ease;
-    white-space: normal;
-    letter-spacing: 0.08em;
     text-transform: uppercase;
     text-shadow: var(--wheel-label-shadow, 0 1px 2px rgba(15, 23, 42, 0.42));
+    letter-spacing: 0.08em;
+  }
+
+  .wheel__label-text-inner {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    white-space: normal;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+    width: 100%;
+  }
+
+  @supports not (-webkit-line-clamp: 1) {
+    .wheel__label-text-inner {
+      display: block;
+    }
   }
 
   .wheel__labels--spinning .wheel__label-text {
