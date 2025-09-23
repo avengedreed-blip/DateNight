@@ -431,6 +431,18 @@
     @apply flex flex-wrap items-center gap-3;
   }
 
+  .editor-mode-toggle {
+    @apply grid grid-cols-2 gap-2 rounded-2xl bg-slate-900/70 p-1;
+  }
+
+  .editor-mode-toggle__button {
+    @apply rounded-xl px-4 py-2 text-sm font-medium text-[color:var(--text-muted)] transition-colors;
+  }
+
+  .editor-mode-toggle__button--active {
+    @apply bg-[color:var(--accent-primary)] text-slate-950;
+  }
+
   .editor-select {
     @apply min-w-[150px] flex-1 rounded-xl border border-white/30 bg-slate-900/70 px-4 py-2.5 text-left text-[color:var(--text-main)];
   }
@@ -456,8 +468,24 @@
     @apply flex gap-3;
   }
 
+  .editor-prompt-row--readonly {
+    @apply items-start;
+  }
+
   .editor-textarea {
     @apply min-h-[70px] flex-1 resize-y rounded-2xl border border-white/30 bg-slate-900/80 px-4 py-3 text-[color:var(--text-main)];
+  }
+
+  .editor-textarea--readonly {
+    @apply cursor-default border-white/20 bg-slate-900/60 text-[color:var(--text-muted)];
+  }
+
+  .editor-generated-bar {
+    @apply flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/20 bg-slate-900/70 px-4 py-3 text-sm;
+  }
+
+  .editor-generated-note {
+    @apply text-[color:var(--text-muted)];
   }
 
   .modal-backdrop {

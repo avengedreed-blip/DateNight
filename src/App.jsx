@@ -1,5 +1,5 @@
 import confetti from "canvas-confetti";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AnnouncementModal from "./components/modals/AnnouncementModal.jsx";
 import ConsequenceModal from "./components/modals/ConsequenceModal.jsx";
 import EditorModal from "./components/modals/EditorModal.jsx";
@@ -20,6 +20,10 @@ import { useBackgroundMusic } from "./hooks/useBackgroundMusic.js";
 import { usePersistentState } from "./hooks/usePersistentState.js";
 import { usePrompts } from "./hooks/usePrompts.js";
 import { useSound } from "./hooks/useSound.js";
+import {
+  buildPromptGroups,
+  generatePromptSet,
+} from "./utils/promptGenerator.js";
 
 const STORAGE_KEYS = {
   gameId: "dateNightGameId",
@@ -131,6 +135,12 @@ export default function App() {
   const [soundPulse, setSoundPulse] = useState(false);
   const [isLoopingSound, setIsLoopingSound] = useState(false);
   const [extremePulseLevel, setExtremePulseLevel] = useState(0);
+  const [generatedPrompts, setGeneratedPrompts] = useState(() =>
+    generatePromptSet()
+  );
+  const regenerateGeneratedPrompts = useCallback(() => {
+    setGeneratedPrompts(generatePromptSet());
+  }, []);
   const rotationRef = useRef(0);
   const spinTimeoutRef = useRef(null);
   const pendingSpinRef = useRef(null);
@@ -196,11 +206,68 @@ export default function App() {
   const {
     prompts,
     savePrompts,
-    promptGroups,
+    promptGroups: customPromptGroups,
     isLoading: promptsLoading,
     error: promptsError,
     retry: retryPrompts,
   } = usePrompts(gameId);
+  const generatedPromptGroups = useMemo(
+    () => buildPromptGroups(generatedPrompts),
+    [generatedPrompts]
+  );
+  const promptGroups = useMemo(
+    () => ({
+      truth: [
+        ...generatedPromptGroups.truth,
+        ...(customPromptGroups?.truth ?? []),
+      ],
+      spicyTruth: [
+        ...generatedPromptGroups.spicyTruth,
+        ...(customPromptGroups?.spicyTruth ?? []),
+      ],
+      truthExtreme: [
+        ...generatedPromptGroups.truthExtreme,
+        ...(customPromptGroups?.truthExtreme ?? []),
+      ],
+      dare: [
+        ...generatedPromptGroups.dare,
+        ...(customPromptGroups?.dare ?? []),
+      ],
+      spicyDare: [
+        ...generatedPromptGroups.spicyDare,
+        ...(customPromptGroups?.spicyDare ?? []),
+      ],
+      dareExtreme: [
+        ...generatedPromptGroups.dareExtreme,
+        ...(customPromptGroups?.dareExtreme ?? []),
+      ],
+      trivia: [
+        ...generatedPromptGroups.trivia,
+        ...(customPromptGroups?.trivia ?? []),
+      ],
+      consequenceNormal: [
+        ...generatedPromptGroups.consequenceNormal,
+        ...(customPromptGroups?.consequenceNormal ?? []),
+      ],
+      consequenceSpicy: [
+        ...generatedPromptGroups.consequenceSpicy,
+        ...(customPromptGroups?.consequenceSpicy ?? []),
+      ],
+      consequenceExtreme: [
+        ...generatedPromptGroups.consequenceExtreme,
+        ...(customPromptGroups?.consequenceExtreme ?? []),
+      ],
+    }),
+    [customPromptGroups, generatedPromptGroups]
+  );
+  useEffect(() => {
+    if (!gameId) {
+      return;
+    }
+
+    regenerateGeneratedPrompts();
+  }, [gameId, regenerateGeneratedPrompts]);
+
   const shouldPlayMusic = Boolean(gameId) && toneReady && musicVolume > 0;
   const { stop: stopMusic } = useBackgroundMusic(
     musicVolume,
@@ -849,7 +916,15 @@ export default function App() {
     setCurrentConsequence("");
     setInputGameId("");
     setCopySuccess(false);
-  }, [setGameId, setLastPrompts, setRoundCount, stopMusic, stopSoundLoop]);
+    regenerateGeneratedPrompts();
+  }, [
+    regenerateGeneratedPrompts,
+    setGameId,
+    setLastPrompts,
+    setRoundCount,
+    stopMusic,
+    stopSoundLoop,
+  ]);
 
   const closeModal = useCallback(() => {
     setActiveModal((previous) => {
@@ -1088,6 +1163,8 @@ export default function App() {
           onClose={() => setActiveModal("settings")}
           prompts={prompts}
           setPrompts={savePrompts}
+          generatedPrompts={generatedPrompts}
+          onRegeneratePrompts={regenerateGeneratedPrompts}
         />
       )}
 
