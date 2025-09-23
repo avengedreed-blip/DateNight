@@ -31,9 +31,53 @@ const STORAGE_KEYS = {
   sfxVolume: "dateNightSfxVol",
   roundCount: "dateNightRoundCount",
   lastPrompts: "dateNightLastPrompts",
+  extremeMeter: "dateNightExtremeMeter",
 };
 
-const EXTREME_ROUND_CHANCE = 0.2;
+const ROUND_PHASES = {
+  early: {
+    start: 1,
+    end: 5,
+    meterIncrement: 10,
+    extremeChance: 0.1,
+  },
+  mid: {
+    start: 6,
+    end: 15,
+    meterIncrement: 15,
+    extremeChance: 0.2,
+  },
+  late: {
+    start: 16,
+    end: Number.POSITIVE_INFINITY,
+    meterIncrement: 20,
+    extremeChance: 0.25,
+  },
+};
+
+const clampRoundNumber = (value) => {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 1;
+  }
+  return Math.max(1, Math.floor(value));
+};
+
+const getRoundPhase = (roundNumber) => {
+  const current = clampRoundNumber(roundNumber);
+  if (current >= ROUND_PHASES.late.start) {
+    return ROUND_PHASES.late;
+  }
+  if (current >= ROUND_PHASES.mid.start) {
+    return ROUND_PHASES.mid;
+  }
+  return ROUND_PHASES.early;
+};
+
+const getExtremeChanceForRound = (roundNumber) =>
+  getRoundPhase(roundNumber).extremeChance;
+
+const getMeterIncrementForRound = (roundNumber) =>
+  getRoundPhase(roundNumber).meterIncrement;
 const MAX_RECENT_PROMPTS = 5;
 const BASE_SPIN_DURATION_MS = 4000;
 const MIN_SWIPE_DISTANCE = 40;
@@ -156,6 +200,8 @@ export default function App() {
   const pendingSpinRef = useRef(null);
   const copyFeedbackTimeoutRef = useRef(null);
   const soundPulseTimeoutRef = useRef(null);
+  const meterForcedExtremeRef = useRef(false);
+  const randomExtremeStrengthRef = useRef(null);
   const swipeStateRef = useRef({
     active: false,
     pointerId: null,
@@ -190,6 +236,14 @@ export default function App() {
   );
   const [roundCount, setRoundCount] = usePersistentState(
     STORAGE_KEYS.roundCount,
+    0,
+    {
+      serialize: (value) => value.toString(),
+      deserialize: (value) => parseInteger(value, 0),
+    }
+  );
+  const [extremeMeter, setExtremeMeter] = usePersistentState(
+    STORAGE_KEYS.extremeMeter,
     0,
     {
       serialize: (value) => value.toString(),
@@ -564,11 +618,28 @@ export default function App() {
         flags.isExtreme ? HAPTIC_PATTERNS.heavy : HAPTIC_PATTERNS.light
       );
       setIsExtremeRound(flags.isExtreme);
+      const upcomingRoundNumber = roundCount + 1;
       setRoundCount((value) => value + 1);
+      if (flags.isExtreme && meterForcedExtremeRef.current) {
+        meterForcedExtremeRef.current = false;
+        setExtremeMeter(() => {
+          console.log("Extreme meter:", 0);
+          return 0;
+        });
+      } else {
+        const increment = getMeterIncrementForRound(upcomingRoundNumber);
+        setExtremeMeter((previous) => {
+          const next = Math.min(100, previous + increment);
+          console.log("Extreme meter:", next);
+          return next;
+        });
+      }
     },
     [
       choosePrompt,
       recordPromptHistory,
+      roundCount,
+      setExtremeMeter,
       setRoundCount,
       triggerHapticFeedback,
     ]
@@ -706,16 +777,25 @@ export default function App() {
       return;
     }
 
-    const isExtreme = Math.random() < EXTREME_ROUND_CHANCE;
+    if (extremeMeter >= 100) {
+      meterForcedExtremeRef.current = true;
+      randomExtremeStrengthRef.current = null;
+      startSpin(true);
+      return;
+    }
 
-    if (isExtreme) {
+    const upcomingRoundNumber = roundCount + 1;
+    const extremeChance = getExtremeChanceForRound(upcomingRoundNumber);
+
+    if (Math.random() < extremeChance) {
+      randomExtremeStrengthRef.current = null;
       setPendingExtremeSpin(true);
       setActiveModal("announcement");
       return;
     }
 
     startSpin(false);
-  }, [isSpinning, startSpin, triggerSound]);
+  }, [extremeMeter, isSpinning, roundCount, setActiveModal, setPendingExtremeSpin, startSpin]);
 
   const resetSwipeState = useCallback(() => {
     swipeStateRef.current = {
@@ -817,9 +897,34 @@ export default function App() {
           : MIN_SWIPE_STRENGTH * 0.85
       );
 
+      if (extremeMeter >= 100) {
+        meterForcedExtremeRef.current = true;
+        randomExtremeStrengthRef.current = null;
+        startSpin(true, strength);
+        return;
+      }
+
+      const upcomingRoundNumber = roundCount + 1;
+      const extremeChance = getExtremeChanceForRound(upcomingRoundNumber);
+
+      if (Math.random() < extremeChance) {
+        randomExtremeStrengthRef.current = strength;
+        setPendingExtremeSpin(true);
+        setActiveModal("announcement");
+        return;
+      }
+
       startSpin(false, strength);
     },
-    [isSpinning, resetSwipeState, startSpin]
+    [
+      extremeMeter,
+      isSpinning,
+      resetSwipeState,
+      roundCount,
+      setActiveModal,
+      setPendingExtremeSpin,
+      startSpin,
+    ]
   );
 
   const handleWheelPointerCancel = useCallback(
@@ -838,8 +943,10 @@ export default function App() {
   const handleAnnouncementClose = useCallback(() => {
     setActiveModal(null);
     if (pendingExtremeSpin) {
+      const swipeStrength = randomExtremeStrengthRef.current;
+      randomExtremeStrengthRef.current = null;
       setPendingExtremeSpin(false);
-      startSpin(true);
+      startSpin(true, swipeStrength ?? MAX_SWIPE_STRENGTH / 2);
     }
   }, [pendingExtremeSpin, startSpin]);
 
@@ -1053,6 +1160,31 @@ export default function App() {
     : extremeSpinActive
       ? 4
       : 0;
+  const meterPercentage = Math.min(100, Math.max(0, Math.round(extremeMeter)));
+  const meterCircumference = 2 * Math.PI * 24;
+  const meterStateClass =
+    meterPercentage >= 100
+      ? "extreme-meter-indicator--full"
+      : meterPercentage >= 50
+        ? "extreme-meter-indicator--spicy"
+        : "extreme-meter-indicator--normal";
+  const meterPulseClass =
+    meterPercentage >= 100 && !isSpinning
+      ? "extreme-meter-indicator--charged"
+      : meterPercentage >= 80
+        ? "extreme-meter-indicator--pulse-strong"
+        : meterPercentage >= 50
+          ? "extreme-meter-indicator--pulse-medium"
+          : meterPercentage > 0
+            ? "extreme-meter-indicator--pulse-soft"
+            : "";
+  const meterClassName = [
+    "extreme-meter-indicator",
+    meterStateClass,
+    meterPulseClass,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div className="app-shell">
@@ -1092,16 +1224,53 @@ export default function App() {
                 Reset
               </button>
             </div>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Open settings"
-              aria-haspopup="dialog"
-              aria-expanded={activeModal === "settings"}
-              onClick={openSettingsModal}
-            >
-              <SettingsIcon />
-            </button>
+            <div className="app-panel__top-actions">
+              <div
+                className={meterClassName}
+                role="status"
+                aria-live="polite"
+                aria-label={`Extreme meter ${meterPercentage}%`}
+              >
+                <svg
+                  className="extreme-meter-indicator__svg"
+                  viewBox="0 0 56 56"
+                  aria-hidden="true"
+                >
+                  <circle
+                    className="extreme-meter-indicator__ring"
+                    cx="28"
+                    cy="28"
+                    r="24"
+                  />
+                  <circle
+                    className="extreme-meter-indicator__progress"
+                    cx="28"
+                    cy="28"
+                    r="24"
+                    style={{
+                      strokeDasharray: meterCircumference,
+                      strokeDashoffset:
+                        meterCircumference -
+                        (meterCircumference * meterPercentage) / 100,
+                    }}
+                  />
+                </svg>
+                <span className="extreme-meter-indicator__value">
+                  {meterPercentage}%
+                </span>
+                <span className="extreme-meter-indicator__label">Extreme</span>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Open settings"
+                aria-haspopup="dialog"
+                aria-expanded={activeModal === "settings"}
+                onClick={openSettingsModal}
+              >
+                <SettingsIcon />
+              </button>
+            </div>
           </div>
 
           <header className="app-heading">
