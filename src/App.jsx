@@ -629,6 +629,33 @@ export default function App() {
     };
   }, [play, timerActive, triggerTimerVibration]);
 
+  const handleRefuse = useCallback(() => {
+    stopRoundTimer();
+    const levels = ["normal", "spicy", "extreme"];
+    const selection = pickRandom(levels);
+
+    const keyMap = {
+      normal: "consequenceNormal",
+      spicy: "consequenceSpicy",
+      extreme: "consequenceExtreme",
+    };
+    const pool = promptGroups[keyMap[selection]] ?? [];
+    const consequence = pool.length
+      ? pickRandom(pool)
+      : "No consequences available. You're safe this time!";
+
+    const sounds = ["refusalBoo"];
+    if (selection === "spicy") {
+      sounds.push("spicyGiggle");
+    }
+    if (selection === "extreme") {
+      sounds.push("extremeWooo");
+    }
+    setPendingConsequenceSounds(sounds);
+    setCurrentConsequence({ text: consequence, intensity: selection });
+    setActiveModal("consequence");
+  }, [promptGroups, stopRoundTimer]);
+
   useEffect(() => {
     if (!timerActive && activeModal === "prompt" && timerExpiredRef.current) {
       timerExpiredRef.current = false;
@@ -1000,32 +1027,7 @@ export default function App() {
     }
   }, [pendingExtremeSpin, startSpin]);
 
-  const handleRefuse = useCallback(() => {
-    stopRoundTimer();
-    const levels = ["normal", "spicy", "extreme"];
-    const selection = pickRandom(levels);
-
-    const keyMap = {
-      normal: "consequenceNormal",
-      spicy: "consequenceSpicy",
-      extreme: "consequenceExtreme",
-    };
-    const pool = promptGroups[keyMap[selection]] ?? [];
-    const consequence = pool.length
-      ? pickRandom(pool)
-      : "No consequences available. You're safe this time!";
-
-    const sounds = ["refusalBoo"];
-    if (selection === "spicy") {
-      sounds.push("spicyGiggle");
-    }
-    if (selection === "extreme") {
-      sounds.push("extremeWooo");
-    }
-    setPendingConsequenceSounds(sounds);
-    setCurrentConsequence({ text: consequence, intensity: selection });
-    setActiveModal("consequence");
-  }, [promptGroups, stopRoundTimer]);
+  
 
   useEffect(() => {
     if (activeModal === "announcement") {

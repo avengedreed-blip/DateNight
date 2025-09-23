@@ -921,6 +921,38 @@
     @apply text-[color:var(--text-muted)];
   }
 
+  .editor-generator {
+    @apply flex flex-col gap-4 rounded-2xl border border-white/20 bg-slate-900/70 p-4;
+  }
+
+  .editor-generator__header {
+    @apply flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between;
+  }
+
+  .editor-generator__title {
+    @apply text-base font-semibold text-[color:var(--text-main)];
+  }
+
+  .editor-generator__subtitle {
+    @apply text-sm text-[color:var(--text-muted)];
+  }
+
+  .editor-generator__preview-meta {
+    @apply text-xs uppercase tracking-[0.14em] text-[color:var(--text-muted)];
+  }
+
+  .editor-generator__actions {
+    @apply flex flex-wrap items-center justify-end gap-3;
+  }
+
+  .editor-generator__hint {
+    @apply text-xs text-amber-300;
+  }
+
+  .editor-generator__error {
+    @apply text-xs text-rose-300;
+  }
+
   .modal-backdrop {
     @apply fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/70 backdrop-blur-md;
   }
