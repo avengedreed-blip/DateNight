@@ -38,10 +38,11 @@ const STORAGE_KEYS = {
   roundCount: "dateNightRoundCount",
   lastPrompts: "dateNightLastPrompts",
   extremeMeter: "dateNightExtremeMeter",
+  generatedPrompts: "dateNightGeneratedPrompts",
 };
 
 const EXTREME_ROUND_CHANCE = 0.2;
-const MAX_RECENT_PROMPTS = 5;
+const MAX_RECENT_PROMPTS = 25;
 const BASE_SPIN_DURATION_MS = 4000;
 const MIN_SWIPE_DISTANCE = 40;
 const MIN_SWIPE_STRENGTH = 0.35;
@@ -157,14 +158,29 @@ export default function App() {
   const [soundPulse, setSoundPulse] = useState(false);
   const [isLoopingSound, setIsLoopingSound] = useState(false);
   const [extremePulseLevel, setExtremePulseLevel] = useState(0);
-  const [generatedPrompts, setGeneratedPrompts] = useState(() =>
-    generatePromptSet()
+  const [generatedPrompts, setGeneratedPrompts] = usePersistentState(
+    STORAGE_KEYS.generatedPrompts,
+    generatePromptSet(),
+    {
+      serialize: JSON.stringify,
+      deserialize: (value) => {
+        try {
+          const parsed = JSON.parse(value);
+          return parsed && typeof parsed === "object"
+            ? parsed
+            : generatePromptSet();
+        } catch (error) {
+          console.warn("Failed to parse cached generated prompts", error);
+          return generatePromptSet();
+        }
+      },
+    }
   );
   const [roundTimer, setRoundTimer] = useState(30);
   const [timerActive, setTimerActive] = useState(false);
   const regenerateGeneratedPrompts = useCallback(() => {
     setGeneratedPrompts(generatePromptSet());
-  }, []);
+  }, [setGeneratedPrompts]);
   const rotationRef = useRef(0);
   const spinTimeoutRef = useRef(null);
   const pendingSpinRef = useRef(null);
@@ -633,28 +649,15 @@ export default function App() {
         return "No prompts available for this category.";
       }
 
-      const recentPrompts = new Set(
-        (lastPrompts?.[outcomeKey] ?? []).slice(-MAX_RECENT_PROMPTS)
+      const recentHistory = (lastPrompts?.[outcomeKey] ?? []).slice(
+        -MAX_RECENT_PROMPTS
       );
-      const weightedPool = pool.map((prompt) => ({
-        prompt,
-        weight: recentPrompts.has(prompt) ? 0.2 : 1,
-      }));
+      const recentSet = new Set(recentHistory);
+      const freshOptions = pool.filter((prompt) => !recentSet.has(prompt));
+      const selectionPool = freshOptions.length > 0 ? freshOptions : pool;
 
-      const totalWeight = weightedPool.reduce(
-        (total, item) => total + item.weight,
-        0
-      );
-      let threshold = Math.random() * totalWeight;
-
-      for (const item of weightedPool) {
-        threshold -= item.weight;
-        if (threshold <= 0) {
-          return item.prompt;
-        }
-      }
-
-      return weightedPool.at(-1)?.prompt ?? pool[0];
+      const index = Math.floor(Math.random() * selectionPool.length);
+      return selectionPool[index] ?? pool[0];
     },
     [lastPrompts, promptGroups]
   );
