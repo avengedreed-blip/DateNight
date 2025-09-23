@@ -54,6 +54,8 @@ const MIN_SWIPE_STRENGTH = 0.35;
 const MAX_SWIPE_STRENGTH = 2;
 const MIN_EXTRA_ROTATIONS = 4;
 const MAX_EXTRA_ROTATIONS = 8;
+const EXTREME_INDICATOR_RADIUS = 26;
+const EXTREME_INDICATOR_CIRCUMFERENCE = 2 * Math.PI * EXTREME_INDICATOR_RADIUS;
 
 const WHEEL_SEGMENTS = [
   {
@@ -1876,107 +1878,97 @@ export default function App() {
     : extremeSpinActive
     ? 4
     : 0;
-  const multiplayerAllowed = multiplayerAvailable && !isOfflineMode;
+  const normalizedExtremeMeter = Number.isFinite(extremeMeter)
+    ? Math.min(100, Math.max(0, Math.round(extremeMeter)))
+    : 0;
+  const indicatorState =
+    normalizedExtremeMeter >= 100
+      ? "full"
+      : normalizedExtremeMeter >= 60
+      ? "spicy"
+      : "normal";
+  const indicatorPulseClass =
+    activeExtremeLevel >= 4
+      ? "extreme-meter-indicator--pulse-strong"
+      : activeExtremeLevel >= 3
+      ? "extreme-meter-indicator--pulse-medium"
+      : activeExtremeLevel >= 2
+      ? "extreme-meter-indicator--pulse-soft"
+      : "";
+  const extremeIndicatorClasses = [
+    "extreme-meter-indicator",
+    `extreme-meter-indicator--${indicatorState}`,
+    indicatorPulseClass,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const indicatorDashOffset =
+    EXTREME_INDICATOR_CIRCUMFERENCE -
+    (EXTREME_INDICATOR_CIRCUMFERENCE * normalizedExtremeMeter) / 100;
+  const sessionStatus = isOfflineMode
+    ? "Offline Mode"
+    : multiplayerActive
+    ? `${connectedCount} player${connectedCount === 1 ? "" : "s"} connected`
+    : isMultiplayerMode
+    ? "Multiplayer paused"
+    : "Single device";
+  const multiplayerToggleEnabled = multiplayerAvailable && isMultiplayerMode;
 
   return (
     <div className="app-shell">
       <main className="app-panel">
         <div className="app-panel__body">
           <div className="app-panel__top-bar">
-            <div className="app-panel__badge-group">
-              <button
-                type="button"
-                className={`badge-button ${
-                  copySuccess ? "badge-button--success" : ""
-                }`}
-                onClick={handleCopyGameIdClick}
-                aria-live="polite"
-                aria-label={
-                  isOfflineMode
-                    ? "Offline mode active"
-                    : copySuccess
-                    ? `Game ID ${gameId} copied to clipboard`
-                    : `Copy game ID ${gameId} to clipboard`
-                }
-                disabled={isOfflineMode}
-              >
-                <span aria-hidden="true">
-                  {isOfflineMode ? "Offline Mode" : `ID: ${gameId}`}
-                </span>
-                {copySuccess && (
-                  <span className="badge-button__status" aria-hidden="true">
-                    Copied
-                  </span>
-                )}
-                <span className="sr-only">
-                  {isOfflineMode
-                    ? "Offline mode uses local prompts"
-                    : copySuccess
-                    ? "Copied game ID to clipboard"
-                    : "Tap to copy the game ID"}
-                </span>
-              </button>
-              <button
-                type="button"
-                className="badge-button"
-                onClick={handleResetGame}
-                aria-label="Reset game session"
-              >
-                Reset
-              </button>
-              <span
-                className="badge-button"
-                role="status"
-                aria-live="polite"
-                title={
-                  isMultiplayerMode
-                    ? multiplayerActive
-                      ? `${connectedCount} players connected`
-                      : "Multiplayer disabled"
-                    : "Single Device mode uses one shared screen"
-                }
-              >
-                {isOfflineMode
-                  ? "Offline Mode"
-                  : multiplayerActive
-                  ? `Players: ${connectedCount}`
-                  : "Local Play"}
+            <div className="app-brand" aria-live="polite">
+              <span className="app-brand__icon" aria-hidden="true">
+                <SparklesIcon />
               </span>
-              <span
-                className="badge-button"
-                role="status"
-                aria-live="polite"
-                title={`Your streak — Accepts: ${playerStreak.accepts}, Refusals: ${playerStreak.refusals}`}
-              >
-                You A{playerStreak.accepts} / R{playerStreak.refusals}
-              </span>
-            </div>
-            <div
-              className={`streak-indicator ${
-                streakHighlight ? "streak-indicator--active" : ""
-              }`}
-              role="status"
-              aria-live="polite"
-            >
-              <span className="streak-indicator__icon" aria-hidden="true">
-                🔥
-              </span>
-              <div className="streak-indicator__content">
-                <span className="streak-indicator__label">Streak</span>
-                <span className="streak-indicator__value">{streak}</span>
+              <div className="app-brand__text">
+                <h1 className="app-brand__title">Date Night</h1>
+                <p className="app-brand__subtitle">Round {roundCount + 1}</p>
               </div>
-              <span className="streak-indicator__best">Best {bestStreak}</span>
             </div>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Open settings"
-              aria-haspopup="dialog"
-              aria-expanded={activeModal === "settings"}
-              onClick={openSettingsModal}
-            >
-              <SettingsIcon />
-            </button>
+            <div className="app-panel__top-actions">
+              <div
+                className={extremeIndicatorClasses}
+                role="status"
+                aria-live="polite"
+                aria-label={`Extreme meter at ${normalizedExtremeMeter}%`}
+              >
+                <svg className="extreme-meter-indicator__svg" viewBox="0 0 60 60">
+                  <circle
+                    className="extreme-meter-indicator__ring"
+                    cx="30"
+                    cy="30"
+                    r={EXTREME_INDICATOR_RADIUS}
+                  />
+                  <circle
+                    className="extreme-meter-indicator__progress"
+                    cx="30"
+                    cy="30"
+                    r={EXTREME_INDICATOR_RADIUS}
+                    style={{
+                      strokeDasharray: EXTREME_INDICATOR_CIRCUMFERENCE,
+                      strokeDashoffset: indicatorDashOffset,
+                    }}
+                  />
+                </svg>
+                <span className="extreme-meter-indicator__value">
+                  {normalizedExtremeMeter}%
+                </span>
+                <span className="extreme-meter-indicator__label">Extreme</span>
+              </div>
+              <button
+                type="button"
+                className="icon-button icon-button--solid"
+                aria-label="Open settings"
+                aria-haspopup="dialog"
+                aria-expanded={activeModal === "settings"}
+                onClick={openSettingsModal}
+              >
+                <SettingsIcon />
+              </button>
+            </div>
           </div>
 
           {lockWarning && (
@@ -1988,16 +1980,6 @@ export default function App() {
               {lockWarning}
             </div>
           )}
-
-          <header className="app-heading">
-            <div className="app-heading__title">
-              <SparklesIcon />
-              Date Night
-            </div>
-            <div className="app-heading__subtitle" aria-live="polite">
-              Round {roundCount + 1}
-            </div>
-          </header>
 
           {activeExtremeLevel > 0 && (
             <div
@@ -2066,111 +2048,194 @@ export default function App() {
         onClose={closeModal}
         labelledBy="settings-modal-title"
       >
-      <div className="settings-header">
-        <h2
-          id="settings-modal-title"
-          className="settings-header__title"
-        >
-          Settings
-        </h2>
-        <button
-          type="button"
-          className="settings-help-button"
-          onClick={openHelpModal}
-          aria-label="View help and instructions"
-        >
-          <span aria-hidden="true">ℹ️</span>
-        </button>
-      </div>
-      <div className="settings-section">
-          <div className="settings-row">
-            <MusicIcon />
-            <input
-              className="settings-slider"
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={musicVolume}
-              onChange={(event) =>
-                setMusicVolume(parseFloat(event.target.value))
-              }
-            />
-          </div>
-          <div
-            className={`settings-row ${
-              isSfxActive ? "settings-row--active" : ""
-            }`}
+        <div className="settings-header">
+          <h2 id="settings-modal-title" className="settings-header__title">
+            Settings
+          </h2>
+          <button
+            type="button"
+            className="settings-help-button"
+            onClick={openHelpModal}
+            aria-label="View help and instructions"
           >
-            <SoundIcon />
-            <input
-              className="settings-slider"
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={sfxVolume}
-              onChange={(event) => setSfxVolume(parseFloat(event.target.value))}
-            />
-          </div>
-          <div className="settings-row justify-between">
-            <div className="flex flex-col gap-1">
-              <span className="text-sm font-semibold text-slate-100">
-                Multiplayer
-              </span>
-              <span className="text-xs text-[color:var(--text-muted)]">
-                {isMultiplayerMode
-                  ? multiplayerAvailable
-                    ? "Sync spins across connected devices"
-                    : "Add Firebase config to enable remote play"
-                  : "Switch to Multiplayer mode to enable sync"}
-              </span>
+            <span aria-hidden="true">ℹ️</span>
+          </button>
+        </div>
+        <div className="settings-section">
+          <section className="settings-group" aria-labelledby="settings-session">
+            <h3 id="settings-session" className="settings-group__title">
+              Session Controls
+            </h3>
+            <div className="settings-tile">
+              <div className="settings-tile__body">
+                <span className="settings-tile__label">Game ID</span>
+                <span className="settings-tile__value">
+                  {isOfflineMode ? "OFFLINE" : gameId}
+                </span>
+                <p className="settings-tile__hint">
+                  {isOfflineMode
+                    ? "Offline mode uses the built-in prompt library."
+                    : "Share this code with your crew to sync spins instantly."}
+                </p>
+              </div>
+              <div className="settings-tile__actions">
+                <button
+                  type="button"
+                  className="settings-chip"
+                  onClick={handleCopyGameIdClick}
+                  disabled={isOfflineMode}
+                >
+                  Copy ID
+                </button>
+                <span className="sr-only" aria-live="polite">
+                  {copySuccess ? "Game ID copied" : ""}
+                </span>
+                {copySuccess && (
+                  <span
+                    className="settings-chip settings-chip--success"
+                    role="status"
+                  >
+                    Copied!
+                  </span>
+                )}
+              </div>
             </div>
-            <label className="relative inline-flex items-center">
-              <input
-                type="checkbox"
-                className="sr-only"
-                checked={multiplayerModeEnabled && multiplayerAvailable}
-                onChange={(event) => {
-                  if (!isMultiplayerMode) {
-                    return;
-                  }
-                  setMultiplayerEnabled(event.target.checked);
-                }}
-                disabled={!multiplayerAvailable || !isMultiplayerMode}
-              />
-              <span
-                className={`ml-3 flex h-6 w-11 items-center rounded-full border border-white/20 bg-slate-800 transition-colors ${
-                  multiplayerModeEnabled && multiplayerAvailable
-                    ? "bg-[color:var(--primary-accent)] border-[color:var(--primary-accent)]"
-                    : "bg-slate-800"
-                }`}
-                aria-hidden="true"
+            <div className="settings-tile">
+              <div className="settings-tile__body">
+                <span className="settings-tile__label">Play Mode</span>
+                <span className="settings-tile__value">{sessionStatus}</span>
+                <p className="settings-tile__hint">
+                  {isMultiplayerMode
+                    ? multiplayerToggleEnabled
+                      ? "Toggle sync for connected players."
+                      : "Enable multiplayer from the start screen to sync across devices."
+                    : "Single device keeps everything on this screen."}
+                </p>
+              </div>
+              <div className="settings-tile__actions">
+                <label
+                  className={`settings-switch ${
+                    multiplayerModeEnabled && multiplayerToggleEnabled
+                      ? "settings-switch--on"
+                      : ""
+                  } ${multiplayerToggleEnabled ? "" : "settings-switch--disabled"}`}
+                >
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={multiplayerModeEnabled && multiplayerToggleEnabled}
+                    aria-label="Toggle multiplayer sync"
+                    onChange={(event) => {
+                      if (!multiplayerToggleEnabled) {
+                        return;
+                      }
+                      setMultiplayerEnabled(event.target.checked);
+                    }}
+                    disabled={!multiplayerToggleEnabled}
+                  />
+                  <span className="settings-switch__track" aria-hidden="true">
+                    <span className="settings-switch__thumb" />
+                  </span>
+                </label>
+              </div>
+            </div>
+            <div className="settings-actions">
+              <button
+                type="button"
+                className="ghost-button settings-actions__button"
+                onClick={handleResetGame}
               >
-                <span
-                  className={`h-5 w-5 rounded-full bg-white transition-transform ${
-                    multiplayerModeEnabled && multiplayerAvailable
-                      ? "translate-x-4"
-                      : "translate-x-1"
-                  }`}
+                Reset Session
+              </button>
+              <button
+                type="button"
+                className="ghost-button settings-actions__button"
+                onClick={handleDownloadReport}
+              >
+                Download Session Report
+              </button>
+            </div>
+          </section>
+
+          <section className="settings-group" aria-labelledby="settings-progress">
+            <h3 id="settings-progress" className="settings-group__title">
+              Progress
+            </h3>
+            <div className="settings-stats">
+              <div
+                className={`settings-stat ${
+                  streakHighlight ? "settings-stat--active" : ""
+                }`}
+              >
+                <span className="settings-stat__label">Current Streak</span>
+                <span className="settings-stat__value">{streak}</span>
+                <span className="settings-stat__meta">Best {bestStreak}</span>
+              </div>
+              <div className="settings-stat">
+                <span className="settings-stat__label">Accepts / Refusals</span>
+                <span className="settings-stat__value">
+                  {playerStreak.accepts} / {playerStreak.refusals}
+                </span>
+                <span className="settings-stat__meta">Personal totals</span>
+              </div>
+              <div className="settings-stat">
+                <span className="settings-stat__label">Extreme Meter</span>
+                <span className="settings-stat__value">
+                  {normalizedExtremeMeter}%
+                </span>
+                <span className="settings-stat__meta">
+                  {indicatorState === "full"
+                    ? "Extreme spin guaranteed"
+                    : indicatorState === "spicy"
+                    ? "Heat is building"
+                    : "Keep spinning to charge it"}
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section className="settings-group" aria-labelledby="settings-audio">
+            <h3 id="settings-audio" className="settings-group__title">
+              Audio & Prompts
+            </h3>
+            <div className="settings-row">
+              <MusicIcon />
+              <input
+                className="settings-slider"
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={musicVolume}
+                onChange={(event) => setMusicVolume(parseFloat(event.target.value))}
               />
-            </span>
-          </label>
-          </div>
-          <button
-            type="button"
-            className="primary-button flex items-center justify-center gap-2"
-            onClick={openEditorModal}
-          >
-            <PencilIcon /> Edit Prompts
-          </button>
-          <button
-            type="button"
-            className="secondary-button mt-3 w-full"
-            onClick={handleDownloadReport}
-          >
-            Download Session Report
-          </button>
+            </div>
+            <div
+              className={`settings-row ${
+                isSfxActive ? "settings-row--active" : ""
+              }`}
+            >
+              <SoundIcon />
+              <input
+                className="settings-slider"
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={sfxVolume}
+                onChange={(event) => setSfxVolume(parseFloat(event.target.value))}
+              />
+            </div>
+            <div className="settings-actions">
+              <button
+                type="button"
+                className="primary-button settings-actions__button"
+                onClick={openEditorModal}
+              >
+                <PencilIcon /> Edit Prompts
+              </button>
+            </div>
+          </section>
         </div>
       </Modal>
 
