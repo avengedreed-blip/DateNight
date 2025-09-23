@@ -39,6 +39,8 @@ const BASE_SPIN_DURATION_MS = 4000;
 const MIN_SWIPE_DISTANCE = 40;
 const MIN_SWIPE_STRENGTH = 0.35;
 const MAX_SWIPE_STRENGTH = 2;
+const MIN_EXTRA_ROTATIONS = 4;
+const MAX_EXTRA_ROTATIONS = 8;
 
 const WHEEL_SEGMENTS = [
   {
@@ -630,9 +632,13 @@ export default function App() {
         ),
         MAX_SWIPE_STRENGTH
       );
+      const effectiveStrength = Math.max(
+        clampedStrength,
+        MIN_SWIPE_STRENGTH
+      );
       const normalizedStrength =
         MAX_SWIPE_STRENGTH > 0
-          ? clampedStrength / MAX_SWIPE_STRENGTH
+          ? effectiveStrength / MAX_SWIPE_STRENGTH
           : 0.5;
       const sliceCount = WHEEL_SEGMENTS.length;
       if (!sliceCount) {
@@ -655,11 +661,14 @@ export default function App() {
       const randomOffset = (Math.random() - 0.5) * sliceAngle * 0.6;
       const targetAngle =
         -(selectedIndex * sliceAngle + sliceAngle / 2) + randomOffset;
-      const minDuration = BASE_SPIN_DURATION_MS * 0.7;
-      const maxDuration = BASE_SPIN_DURATION_MS * 1.35;
+      const minDuration = BASE_SPIN_DURATION_MS * 0.75;
+      const maxDuration = BASE_SPIN_DURATION_MS * 1.85;
       const spinDurationMs =
         minDuration + (maxDuration - minDuration) * normalizedStrength;
-      const extraSpins = (3.5 + 3 * normalizedStrength) * 360;
+      const totalExtraRotations =
+        MIN_EXTRA_ROTATIONS +
+        (MAX_EXTRA_ROTATIONS - MIN_EXTRA_ROTATIONS) * normalizedStrength;
+      const extraSpins = totalExtraRotations * 360;
 
       if (spinTimeoutRef.current) {
         clearTimeout(spinTimeoutRef.current);
@@ -791,19 +800,22 @@ export default function App() {
         return;
       }
 
-      if (totalDistance < MIN_SWIPE_DISTANCE) {
-        return;
-      }
-
-      const normalizedDistance = Math.min(totalDistance / 220, MAX_SWIPE_STRENGTH);
-      const normalizedVelocity = Math.min(peakVelocity / 1.2, MAX_SWIPE_STRENGTH);
+      const normalizedDistance = Math.min(
+        totalDistance / 220,
+        MAX_SWIPE_STRENGTH
+      );
+      const normalizedVelocity = Math.min(
+        peakVelocity / 1.2,
+        MAX_SWIPE_STRENGTH
+      );
       const rawStrength =
         normalizedDistance * 0.55 + normalizedVelocity * 0.85;
-      const strength = Math.min(rawStrength, MAX_SWIPE_STRENGTH);
-
-      if (strength < MIN_SWIPE_STRENGTH) {
-        return;
-      }
+      const strength = Math.max(
+        Math.min(rawStrength, MAX_SWIPE_STRENGTH),
+        totalDistance >= MIN_SWIPE_DISTANCE
+          ? MIN_SWIPE_STRENGTH
+          : MIN_SWIPE_STRENGTH * 0.85
+      );
 
       startSpin(false, strength);
     },
