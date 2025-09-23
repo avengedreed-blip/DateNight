@@ -3,19 +3,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import AnnouncementModal from "./components/modals/AnnouncementModal.jsx";
 import ConsequenceModal from "./components/modals/ConsequenceModal.jsx";
 import EditorModal from "./components/modals/EditorModal.jsx";
-import Modal from "./components/modals/Modal.jsx";
 import PromptModal from "./components/modals/PromptModal.jsx";
+import SettingsModal from "./components/modals/Settings.jsx";
 import Wheel from "./components/Wheel.jsx";
 import LoadingScreen from "./components/screens/LoadingScreen.jsx";
 import StartScreen from "./components/screens/StartScreen.jsx";
-import {
-  MusicIcon,
-  PencilIcon,
-  SettingsIcon,
-  SoundIcon,
-  SparklesIcon,
-  FlameIcon,
-} from "./components/icons/Icons.jsx";
+import { SettingsIcon, SparklesIcon, FlameIcon } from "./components/icons/Icons.jsx";
 import { useBackgroundMusic } from "./hooks/useBackgroundMusic.js";
 import { usePersistentState } from "./hooks/usePersistentState.js";
 import { usePrompts } from "./hooks/usePrompts.js";
@@ -24,6 +17,17 @@ import {
   buildPromptGroups,
   generatePromptSet,
 } from "./utils/promptGenerator.js";
+import {
+  ACTIVE_THEME_STORAGE_KEY,
+  BASE_THEMES,
+  CUSTOM_THEME_STORAGE_KEY,
+  DEFAULT_THEME_ID,
+  createCustomTheme,
+  deserializeCustomThemes,
+  findThemeById,
+  getAvailableThemes,
+  serializeCustomThemes,
+} from "./theme/themes.js";
 
 const STORAGE_KEYS = {
   gameId: "dateNightGameId",
@@ -31,6 +35,8 @@ const STORAGE_KEYS = {
   sfxVolume: "dateNightSfxVol",
   roundCount: "dateNightRoundCount",
   lastPrompts: "dateNightLastPrompts",
+  theme: ACTIVE_THEME_STORAGE_KEY,
+  customThemes: CUSTOM_THEME_STORAGE_KEY,
 };
 
 const EXTREME_ROUND_CHANCE = 0.2;
@@ -156,6 +162,7 @@ export default function App() {
   const pendingSpinRef = useRef(null);
   const copyFeedbackTimeoutRef = useRef(null);
   const soundPulseTimeoutRef = useRef(null);
+  const themeVarKeysRef = useRef(new Set());
   const swipeStateRef = useRef({
     active: false,
     pointerId: null,
@@ -212,6 +219,24 @@ export default function App() {
       },
     }
   );
+  const [customThemes, setCustomThemes] = usePersistentState(
+    STORAGE_KEYS.customThemes,
+    [],
+    {
+      serialize: serializeCustomThemes,
+      deserialize: deserializeCustomThemes,
+      skipNull: false,
+    }
+  );
+  const [activeThemeId, setActiveThemeId] = usePersistentState(
+    STORAGE_KEYS.theme,
+    DEFAULT_THEME_ID,
+    {
+      serialize: (value) => value ?? DEFAULT_THEME_ID,
+      deserialize: (value) => value || DEFAULT_THEME_ID,
+      skipNull: false,
+    }
+  );
 
   const {
     prompts,
@@ -225,6 +250,57 @@ export default function App() {
     () => buildPromptGroups(generatedPrompts),
     [generatedPrompts]
   );
+  const availableThemes = useMemo(
+    () => getAvailableThemes(customThemes),
+    [customThemes]
+  );
+  const activeTheme = useMemo(
+    () => findThemeById(availableThemes, activeThemeId),
+    [activeThemeId, availableThemes]
+  );
+
+  useEffect(() => {
+    if (!availableThemes.some((theme) => theme.id === activeThemeId)) {
+      setActiveThemeId(DEFAULT_THEME_ID);
+    }
+  }, [activeThemeId, availableThemes, setActiveThemeId]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return undefined;
+    }
+
+    const body = document.body;
+    if (!body || !activeTheme) {
+      return undefined;
+    }
+
+    const appliedKeys = themeVarKeysRef.current;
+    appliedKeys.forEach((key) => {
+      body.style.removeProperty(key);
+    });
+    appliedKeys.clear();
+
+    Object.entries(activeTheme.cssVars ?? {}).forEach(([key, value]) => {
+      body.style.setProperty(key, value);
+      appliedKeys.add(key);
+    });
+
+    body.dataset.theme = activeTheme.id;
+
+    return () => {
+      if (!body) {
+        return;
+      }
+      appliedKeys.forEach((key) => {
+        body.style.removeProperty(key);
+      });
+      appliedKeys.clear();
+      if (body.dataset.theme === activeTheme.id) {
+        delete body.dataset.theme;
+      }
+    };
+  }, [activeTheme]);
   const promptGroups = useMemo(
     () => ({
       truth: [
@@ -278,11 +354,14 @@ export default function App() {
     regenerateGeneratedPrompts();
   }, [gameId, regenerateGeneratedPrompts]);
 
+  const fallbackTrackId = BASE_THEMES[0]?.trackId ?? "classicDarkTrack";
+  const activeTrackId = activeTheme?.trackId ?? fallbackTrackId;
   const shouldPlayMusic = Boolean(gameId) && toneReady && musicVolume > 0;
   const { stop: stopMusic } = useBackgroundMusic(
     musicVolume,
     shouldPlayMusic,
-    toneReady
+    toneReady,
+    activeTrackId
   );
   const { play, startLoop, stopLoop } = useSound(sfxVolume, toneReady);
 
@@ -324,6 +403,50 @@ export default function App() {
       soundPulseTimeoutRef.current = null;
     }
   }, [sfxVolume]);
+
+  const handleSelectTheme = useCallback(
+    (nextThemeId) => {
+      if (!nextThemeId) {
+        return;
+      }
+      setActiveThemeId(nextThemeId);
+    },
+    [setActiveThemeId]
+  );
+
+  const handleCreateTheme = useCallback(
+    (themeConfig) => {
+      const theme = createCustomTheme(themeConfig ?? {});
+      setCustomThemes((themes) => {
+        const existing = Array.isArray(themes) ? themes : [];
+        const filtered = existing.filter((item) => item.id !== theme.id);
+        return [...filtered, theme];
+      });
+      setActiveThemeId(theme.id);
+      return theme;
+    },
+    [setActiveThemeId, setCustomThemes]
+  );
+
+  const handleDeleteCustomTheme = useCallback(
+    (themeId) => {
+      if (!themeId) {
+        return;
+      }
+
+      setCustomThemes((themes) => {
+        if (!Array.isArray(themes)) {
+          return [];
+        }
+        return themes.filter((theme) => theme.id !== themeId);
+      });
+
+      if (themeId === activeThemeId) {
+        setActiveThemeId(DEFAULT_THEME_ID);
+      }
+    },
+    [activeThemeId, setActiveThemeId, setCustomThemes]
+  );
 
   const triggerSound = useCallback(
     (soundName) => {
@@ -1175,55 +1298,21 @@ export default function App() {
         </div>
       </main>
 
-      <Modal
+      <SettingsModal
         isOpen={activeModal === "settings"}
         onClose={closeModal}
-        labelledBy="settings-modal-title"
-      >
-        <h2
-          id="settings-modal-title"
-          className="mb-6 text-2xl font-semibold text-slate-100"
-        >
-          Settings
-        </h2>
-        <div className="settings-section">
-          <div className="settings-row">
-            <MusicIcon />
-            <input
-              className="settings-slider"
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={musicVolume}
-              onChange={(event) => setMusicVolume(parseFloat(event.target.value))}
-            />
-          </div>
-          <div
-            className={`settings-row ${
-              isSfxActive ? "settings-row--active" : ""
-            }`}
-          >
-            <SoundIcon />
-            <input
-              className="settings-slider"
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={sfxVolume}
-              onChange={(event) => setSfxVolume(parseFloat(event.target.value))}
-            />
-          </div>
-          <button
-            type="button"
-            className="primary-button flex items-center justify-center gap-2"
-            onClick={openEditorModal}
-          >
-            <PencilIcon /> Edit Prompts
-          </button>
-        </div>
-      </Modal>
+        musicVolume={musicVolume}
+        onMusicVolumeChange={setMusicVolume}
+        sfxVolume={sfxVolume}
+        onSfxVolumeChange={setSfxVolume}
+        isSfxActive={isSfxActive}
+        onOpenEditor={openEditorModal}
+        themes={availableThemes}
+        activeThemeId={activeTheme?.id ?? DEFAULT_THEME_ID}
+        onSelectTheme={handleSelectTheme}
+        onCreateCustomTheme={handleCreateTheme}
+        onDeleteCustomTheme={handleDeleteCustomTheme}
+      />
 
       <PromptModal
         isOpen={activeModal === "prompt"}

@@ -31,29 +31,46 @@ const Wheel = ({
     return `conic-gradient(${stops})`;
   }, [segments]);
 
+  const normalizedRotation = useMemo(() => {
+    if (!Number.isFinite(rotation)) {
+      return 0;
+    }
+    const value = rotation % 360;
+    return Number.isFinite(value) ? value : 0;
+  }, [rotation]);
+
   const labels = useMemo(() => {
     if (!segments?.length) {
       return [];
     }
 
     const sliceAngle = 360 / segments.length;
-    const radiusFactor = 0.5;
+    const radiansOffset = -90 * (Math.PI / 180);
+    const radius = Math.max(30, Math.min(42, 30 + sliceAngle * 0.09));
+    const baseWidth = Math.min(68, Math.max(46, sliceAngle * 0.4));
 
     return segments.map((segment, index) => {
       const id = segment.id ?? segment.label ?? index;
       const label =
         segment.label ?? segment.title ?? segment.id ?? `Segment ${index + 1}`;
       const midpointDeg = index * sliceAngle + sliceAngle / 2;
-      const radians = ((midpointDeg - 90) * Math.PI) / 180;
-      const radius = 50 * radiusFactor;
+      const radians = midpointDeg * (Math.PI / 180) + radiansOffset;
       const x = 50 + radius * Math.cos(radians);
       const y = 50 + radius * Math.sin(radians);
+      const normalizedLength = Math.max(label.replace(/\s+/g, "").length, 4);
+      const lengthScale = Math.min(1.25, Math.max(0.68, 14 / normalizedLength));
+      const angleScale = Math.min(1.4, Math.max(0.75, sliceAngle / 110));
+      const fontSize = Number.parseFloat(
+        (1.05 * angleScale * lengthScale).toFixed(3)
+      );
 
       return {
         id,
         label,
         x,
         y,
+        width: baseWidth,
+        fontSize,
       };
     });
   }, [segments]);
@@ -75,41 +92,33 @@ const Wheel = ({
           background: gradient,
           "--spin-duration": `${spinDuration ?? 4000}ms`,
         }}
-      />
-      <div
-        className={`wheel__labels ${isSpinning ? "wheel__labels--spinning" : ""}`}
-        aria-hidden="true"
       >
-        <svg
-          className="wheel__label-layer"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="xMidYMid meet"
+        <div
+          className={`wheel__labels ${
+            isSpinning ? "wheel__labels--spinning" : ""
+          }`}
+          aria-hidden="true"
         >
-          <defs>
-            <filter id="wheelLabelShadow" x="-50%" y="-50%" width="200%" height="200%">
-              <feDropShadow
-                dx="0"
-                dy="1.2"
-                stdDeviation="1.6"
-                floodColor="rgba(15, 23, 42, 0.7)"
-              />
-            </filter>
-          </defs>
           {labels.map((item) => (
-            <text
+            <div
               key={item.id}
-              x={item.x}
-              y={item.y}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              className="wheel__label-text"
-              filter="url(#wheelLabelShadow)"
-              style={{ whiteSpace: "nowrap" }}
+              className="wheel__label"
+              style={{
+                top: `${item.y}%`,
+                left: `${item.x}%`,
+                width: `${item.width}%`,
+                transform: `translate(-50%, -50%) rotate(${-normalizedRotation}deg)`,
+              }}
             >
-              {item.label}
-            </text>
+              <span
+                className="wheel__label-text"
+                style={{ fontSize: `${item.fontSize}rem` }}
+              >
+                {item.label}
+              </span>
+            </div>
           ))}
-        </svg>
+        </div>
       </div>
       <div
         aria-hidden="true"
