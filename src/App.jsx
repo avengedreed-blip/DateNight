@@ -1182,6 +1182,7 @@ export default function App() {
             onPointerUp={handleWheelPointerEnd}
             onPointerCancel={handleWheelPointerCancel}
             onPointerLeave={handleWheelPointerCancel}
+            extremeMeter={extremeMeter}
           >
             <div className="spin-button">
               <button
