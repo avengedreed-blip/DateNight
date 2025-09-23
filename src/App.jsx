@@ -32,6 +32,7 @@ import {
   generatePromptSet,
 } from "./utils/promptGenerator.js";
 import { useAnalytics } from "./hooks/useAnalytics.js";
+import { useMultiplayer } from "./hooks/useMultiplayer.jsx";
 
 const STORAGE_KEYS = {
   gameId: "dateNightGameId",
@@ -41,6 +42,7 @@ const STORAGE_KEYS = {
   lastPrompts: "dateNightLastPrompts",
   extremeMeter: "dateNightExtremeMeter",
   generatedPrompts: "dateNightGeneratedPrompts",
+  multiplayerEnabled: "dateNightMultiplayerEnabled",
 };
 
 const EXTREME_ROUND_CHANCE = 0.2;
@@ -241,6 +243,14 @@ export default function App() {
     lastTime: 0,
     peakVelocity: 0,
   });
+  const remoteSpinGuardRef = useRef(false);
+  const remotePromptGuardRef = useRef(false);
+  const multiplayerHandlersRef = useRef({
+    onRemoteSpin: null,
+    onRemotePrompt: null,
+  });
+  const lockWarningTimeoutRef = useRef(null);
+  const [lockWarning, setLockWarning] = useState("");
 
   const [gameId, setGameId] = usePersistentState(STORAGE_KEYS.gameId, null, {
     serialize: (value) => value ?? "",
@@ -292,6 +302,14 @@ export default function App() {
           return {};
         }
       },
+    }
+  );
+  const [multiplayerEnabled, setMultiplayerEnabled] = usePersistentState(
+    STORAGE_KEYS.multiplayerEnabled,
+    true,
+    {
+      serialize: (value) => (value ? "1" : "0"),
+      deserialize: (value) => value !== "0",
     }
   );
 
@@ -352,6 +370,25 @@ export default function App() {
     }),
     [customPromptGroups, generatedPromptGroups]
   );
+
+  const {
+    isAvailable: multiplayerAvailable,
+    isActive: multiplayerActive,
+    playerId,
+    connectedCount,
+    playerStreak,
+    publishLocalSpin,
+    publishLocalPrompt,
+    acquireLock: acquireSpinLockRemote,
+    releaseLock: releaseSpinLockRemote,
+  } = useMultiplayer({
+    gameId,
+    enabled: multiplayerEnabled,
+    onRemoteSpin: (payload) =>
+      multiplayerHandlersRef.current.onRemoteSpin?.(payload),
+    onRemotePrompt: (payload) =>
+      multiplayerHandlersRef.current.onRemotePrompt?.(payload),
+  });
   useEffect(() => {
     if (!gameId) {
       return;
@@ -413,8 +450,18 @@ export default function App() {
       if (copyFeedbackTimeoutRef.current) {
         window.clearTimeout(copyFeedbackTimeoutRef.current);
       }
+      if (lockWarningTimeoutRef.current) {
+        window.clearTimeout(lockWarningTimeoutRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (!multiplayerActive) {
+      setLockWarning("");
+      releaseSpinLockRemote();
+    }
+  }, [multiplayerActive, releaseSpinLockRemote, setLockWarning]);
 
   useEffect(() => {
     if (sfxVolume > 0) {
@@ -728,10 +775,11 @@ export default function App() {
   ]);
 
   const handlePromptRefuse = useCallback(
-    (reason = "manual") => {
+    (reason = "manual", override = null) => {
       stopRoundTimer();
       const levels = ["normal", "spicy", "extreme"];
-      const selection = pickRandom(levels);
+      const selection =
+        override?.consequence?.intensity ?? pickRandom(levels);
 
       const keyMap = {
         normal: "consequenceNormal",
@@ -739,19 +787,24 @@ export default function App() {
         extreme: "consequenceExtreme",
       };
       const pool = promptGroups[keyMap[selection]] ?? [];
-      const consequence = pool.length
+      const consequence = override?.consequence?.text
+        ? override.consequence.text
+        : pool.length
         ? pickRandom(pool)
         : "No consequences available. You're safe this time!";
 
-      const sounds = ["refusalBoo"];
-      if (selection === "spicy") {
-        sounds.push("spicyGiggle");
-      }
-      if (selection === "extreme") {
-        sounds.push("extremeWooo");
+      const sounds = override?.sounds ?? ["refusalBoo"];
+      if (!override?.sounds) {
+        if (selection === "spicy") {
+          sounds.push("spicyGiggle");
+        }
+        if (selection === "extreme") {
+          sounds.push("extremeWooo");
+        }
       }
       setPendingConsequenceSounds(sounds);
-      setCurrentConsequence({ text: consequence, intensity: selection });
+      const consequencePayload = { text: consequence, intensity: selection };
+      setCurrentConsequence(consequencePayload);
       setActiveModal("consequence");
 
       const lastSpin = lastSpinDetailsRef.current;
@@ -759,11 +812,12 @@ export default function App() {
       const promptType = currentPrompt.type;
       const promptIntensity = currentPrompt.intensity;
       const result =
-        reason === "timeout"
+        override?.result ??
+        (reason === "timeout"
           ? "auto-refusal"
           : promptType === "trivia"
           ? "incorrect"
-          : "refused";
+          : "refused");
 
       resetStreak({ promptType, reason });
       trackOutcome({
@@ -785,11 +839,34 @@ export default function App() {
         reason,
         trigger: lastSpin?.trigger,
       });
+
+      if (multiplayerActive && !remotePromptGuardRef.current) {
+        publishLocalPrompt({
+          id: lastSpin?.promptId,
+          status: reason,
+          result,
+          prompt: {
+            title: currentPrompt.title,
+            text: currentPrompt.text,
+            type: promptType,
+            intensity: promptIntensity,
+          },
+          consequence: consequencePayload,
+          round,
+          releaseLock: true,
+          reason,
+        });
+      }
     },
     [
       currentPrompt.intensity,
       currentPrompt.type,
+      currentPrompt.text,
+      currentPrompt.title,
+      multiplayerActive,
+      publishLocalPrompt,
       promptGroups,
+      remotePromptGuardRef,
       resetStreak,
       roundCount,
       roundTimer,
@@ -850,29 +927,40 @@ export default function App() {
   );
 
   const concludeSpin = useCallback(
-    (segment, outcomeKey, flags) => {
-      const promptText = choosePrompt(outcomeKey);
+    (segment, outcomeKey, flags, override = null) => {
+      const promptText = override?.promptText ?? choosePrompt(outcomeKey);
       recordPromptHistory(outcomeKey, promptText);
 
-      const intensity = flags.isExtreme
-        ? "extreme"
-        : flags.isSpicy
-        ? "spicy"
-        : "normal";
+      const promptTitle = override?.promptTitle ?? segment.title;
+      const promptType = override?.promptType ?? segment.id;
+      const intensity =
+        override?.promptIntensity ??
+        (flags.isExtreme
+          ? "extreme"
+          : flags.isSpicy
+          ? "spicy"
+          : "normal");
+      const promptId =
+        override?.promptId ??
+        lastSpinDetailsRef.current?.promptId ??
+        `prompt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const spinId = override?.spinId ?? lastSpinDetailsRef.current?.spinId ?? null;
 
       setCurrentPrompt({
-        title: segment.title,
+        title: promptTitle,
         text: promptText,
-        type: segment.id,
+        type: promptType,
         intensity,
       });
       lastSpinDetailsRef.current = {
         ...(lastSpinDetailsRef.current ?? {}),
-        promptTitle: segment.title,
+        promptTitle,
         promptText,
-        promptType: segment.id,
+        promptType,
         intensity,
         outcomeKey,
+        promptId,
+        spinId,
       };
       const sounds = [];
       if (flags.isExtreme) {
@@ -887,6 +975,7 @@ export default function App() {
         flags.isExtreme ? HAPTIC_PATTERNS.heavy : HAPTIC_PATTERNS.light
       );
       setIsExtremeRound(flags.isExtreme);
+      const eventRound = lastSpinDetailsRef.current?.round ?? roundCount + 1;
       setRoundCount((value) => value + 1);
       if (flags.isExtreme) {
         if (meterForcedExtremeRef.current) {
@@ -900,8 +989,8 @@ export default function App() {
             previous,
             next,
             reason: "spin",
-            promptType: segment.id,
-            round: lastSpinDetailsRef.current?.round ?? roundCount + 1,
+            promptType,
+            round: eventRound,
           });
           lastSpinDetailsRef.current = {
             ...(lastSpinDetailsRef.current ?? {}),
@@ -910,10 +999,28 @@ export default function App() {
           return next;
         });
       }
+
+      if (multiplayerActive && !remoteSpinGuardRef.current) {
+        publishLocalPrompt({
+          id: promptId,
+          status: "show",
+          prompt: {
+            title: promptTitle,
+            text: promptText,
+            type: promptType,
+            intensity,
+          },
+          round: eventRound,
+          spinId,
+        });
+      }
     },
     [
       choosePrompt,
+      multiplayerActive,
+      publishLocalPrompt,
       recordPromptHistory,
+      remoteSpinGuardRef,
       roundCount,
       setExtremeMeter,
       setRoundCount,
@@ -956,63 +1063,115 @@ export default function App() {
     }
 
     landingIndex = Math.max(0, Math.min(sliceCount - 1, landingIndex));
-    const segment = WHEEL_SEGMENTS[landingIndex] ?? WHEEL_SEGMENTS[0];
+    let segment = WHEEL_SEGMENTS[landingIndex] ?? WHEEL_SEGMENTS[0];
     const pending = pendingSpinRef.current;
     const forceExtreme = pending?.forceExtreme ?? false;
-    const outcomeInfo =
-      pending && pending.selectedIndex === landingIndex && pending.outcome
-        ? pending.outcome
-        : determineOutcome(segment, forceExtreme);
+    const usingPending =
+      pending && pending.selectedIndex === landingIndex && pending.outcome;
+    if (usingPending) {
+      segment = WHEEL_SEGMENTS[pending.selectedIndex] ?? segment;
+    }
+    const outcomeInfo = usingPending
+      ? pending.outcome
+      : determineOutcome(segment, forceExtreme);
+    const promptOverride = usingPending
+      ? {
+          promptText: pending.promptText,
+          promptIntensity: pending.promptIntensity,
+          promptTitle: pending.promptTitle,
+          promptType: pending.promptType,
+          promptId: pending.promptId,
+          spinId: pending.spinId,
+        }
+      : null;
 
     pendingSpinRef.current = null;
-    concludeSpin(segment, outcomeInfo.outcomeKey, outcomeInfo);
+    concludeSpin(segment, outcomeInfo.outcomeKey, outcomeInfo, promptOverride);
   }, [concludeSpin, determineOutcome, setIsSpinning]);
 
   const startSpin = useCallback(
-    (forceExtreme, swipeStrength = MAX_SWIPE_STRENGTH / 2, context = {}) => {
-      const clampedStrength = Math.min(
-        Math.max(
-          Number.isFinite(swipeStrength)
-            ? swipeStrength
-            : MAX_SWIPE_STRENGTH / 2,
-          0
-        ),
-        MAX_SWIPE_STRENGTH
-      );
-      const effectiveStrength = Math.max(clampedStrength, MIN_SWIPE_STRENGTH);
-      const normalizedStrength =
-        MAX_SWIPE_STRENGTH > 0 ? effectiveStrength / MAX_SWIPE_STRENGTH : 0.5;
+    (
+      forceExtreme,
+      swipeStrength = MAX_SWIPE_STRENGTH / 2,
+      context = {},
+      override = null
+    ) => {
       const sliceCount = WHEEL_SEGMENTS.length;
       if (!sliceCount) {
         return;
       }
+
+      const isRemote = Boolean(override?.isRemote);
+      const normalizedSwipeStrength = Number.isFinite(swipeStrength)
+        ? swipeStrength
+        : MAX_SWIPE_STRENGTH / 2;
+      const clampedStrength = Math.min(
+        Math.max(normalizedSwipeStrength, 0),
+        MAX_SWIPE_STRENGTH
+      );
+      const effectiveStrength = Math.max(clampedStrength, MIN_SWIPE_STRENGTH);
+      const normalizedStrength =
+        override?.spinDuration !== undefined
+          ? null
+          : MAX_SWIPE_STRENGTH > 0
+          ? effectiveStrength / MAX_SWIPE_STRENGTH
+          : 0.5;
 
       pendingSpinContextRef.current = null;
       const availableIndexes = forceExtreme
         ? Array.from({ length: Math.min(sliceCount, 2) }, (_, index) => index)
         : WHEEL_SEGMENTS.map((_, index) => index);
       const selectedIndex =
-        availableIndexes[Math.floor(Math.random() * availableIndexes.length)] ??
-        0;
+        override?.selectedIndex !== undefined
+          ? Math.max(0, Math.min(sliceCount - 1, override.selectedIndex))
+          : availableIndexes[
+              Math.floor(Math.random() * availableIndexes.length)
+            ] ?? 0;
       const sliceAngle = 360 / sliceCount;
-      const selectedSegment = WHEEL_SEGMENTS[selectedIndex];
-      const outcome = determineOutcome(selectedSegment, forceExtreme);
+      const selectedSegment = WHEEL_SEGMENTS[selectedIndex] ?? WHEEL_SEGMENTS[0];
+      const outcome =
+        override?.outcome ?? determineOutcome(selectedSegment, forceExtreme);
+      const spinRound = override?.round ?? roundCount + 1;
       const spinContext = {
-        source: context.source ?? "button",
-        trigger: context.trigger ?? (forceExtreme ? "extreme" : "standard"),
-        swipeStrength: Number.isFinite(swipeStrength) ? swipeStrength : null,
+        source: context.source ?? override?.context?.source ?? "button",
+        trigger:
+          context.trigger ??
+          override?.context?.trigger ??
+          (forceExtreme ? "extreme" : "standard"),
+        swipeStrength: Number.isFinite(swipeStrength)
+          ? swipeStrength
+          : override?.context?.swipeStrength ?? null,
         meterValueBefore:
           context.meterValueBefore !== undefined
             ? context.meterValueBefore
-            : extremeMeter,
-        round: roundCount + 1,
-        forcedByMeter: Boolean(context?.trigger === "meter"),
+            : override?.context?.meterValueBefore ?? extremeMeter,
+        round: spinRound,
+        forcedByMeter:
+          Boolean(context?.trigger === "meter") ||
+          Boolean(override?.context?.forcedByMeter),
       };
+      const promptText = override?.promptText ?? choosePrompt(outcome.outcomeKey);
+      const promptIntensity =
+        override?.promptIntensity ??
+        (outcome.isExtreme ? "extreme" : outcome.isSpicy ? "spicy" : "normal");
+      const promptId =
+        override?.promptId ??
+        `prompt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const spinId =
+        override?.id ??
+        `spin-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
       pendingSpinRef.current = {
-        forceExtreme,
+        forceExtreme: Boolean(forceExtreme),
         selectedIndex,
         outcome,
         context: spinContext,
+        promptText,
+        promptIntensity,
+        promptId,
+        promptTitle: override?.promptTitle ?? selectedSegment.title,
+        promptType: override?.promptType ?? selectedSegment.id,
+        spinId,
       };
       lastSpinDetailsRef.current = {
         segmentId: selectedSegment.id,
@@ -1022,21 +1181,36 @@ export default function App() {
         trigger: spinContext.trigger,
         meterValueBefore: spinContext.meterValueBefore,
         forcedByMeter: spinContext.forcedByMeter,
+        promptId,
+        spinId,
       };
-      const randomOffset = (Math.random() - 0.5) * sliceAngle * 0.6;
-      const targetAngle =
-        -(selectedIndex * sliceAngle + sliceAngle / 2) + randomOffset;
-      const minDuration = BASE_SPIN_DURATION_MS * 0.75;
-      const maxDuration = BASE_SPIN_DURATION_MS * 1.85;
-      const spinDurationMs =
-        minDuration + (maxDuration - minDuration) * normalizedStrength;
-      const totalExtraRotations =
-        MIN_EXTRA_ROTATIONS +
-        (MAX_EXTRA_ROTATIONS - MIN_EXTRA_ROTATIONS) * normalizedStrength;
-      const extraSpins = totalExtraRotations * 360;
 
       if (spinTimeoutRef.current) {
         clearTimeout(spinTimeoutRef.current);
+      }
+
+      let spinDurationMs;
+      let finalRotation;
+      if (override?.finalRotation !== undefined) {
+        spinDurationMs =
+          override.spinDuration ?? BASE_SPIN_DURATION_MS * 1.2;
+        finalRotation = override.finalRotation;
+      } else {
+        const randomOffset = (Math.random() - 0.5) * sliceAngle * 0.6;
+        const targetAngle =
+          -(selectedIndex * sliceAngle + sliceAngle / 2) + randomOffset;
+        const minDuration = BASE_SPIN_DURATION_MS * 0.75;
+        const maxDuration = BASE_SPIN_DURATION_MS * 1.85;
+        const durationRatio = normalizedStrength ?? 0.5;
+        spinDurationMs =
+          minDuration + (maxDuration - minDuration) * durationRatio;
+        const totalExtraRotations =
+          MIN_EXTRA_ROTATIONS +
+          (MAX_EXTRA_ROTATIONS - MIN_EXTRA_ROTATIONS) * durationRatio;
+        const extraSpins = totalExtraRotations * 360;
+        const baseRotation =
+          rotationRef.current - (rotationRef.current % 360);
+        finalRotation = baseRotation + extraSpins + targetAngle;
       }
 
       setIsSpinning(true);
@@ -1047,7 +1221,7 @@ export default function App() {
 
       trackSpin({
         ...spinContext,
-        forceExtreme,
+        forceExtreme: Boolean(forceExtreme),
         isExtreme: outcome.isExtreme,
         isSpicy: outcome.isSpicy,
         outcomeKey: outcome.outcomeKey,
@@ -1056,10 +1230,30 @@ export default function App() {
         gameId,
       });
 
-      const baseRotation = rotationRef.current - (rotationRef.current % 360);
-      const finalRotation = baseRotation + extraSpins + targetAngle;
       rotationRef.current = finalRotation;
       setRotation(finalRotation);
+
+      if (multiplayerActive && !isRemote) {
+        publishLocalSpin({
+          id: spinId,
+          forceExtreme: Boolean(forceExtreme),
+          selectedIndex,
+          segmentId: selectedSegment.id,
+          segmentLabel: selectedSegment.label,
+          finalRotation,
+          spinDuration: spinDurationMs,
+          outcomeKey: outcome.outcomeKey,
+          isExtreme: outcome.isExtreme,
+          isSpicy: outcome.isSpicy,
+          promptText,
+          promptTitle: pendingSpinRef.current.promptTitle,
+          promptType: pendingSpinRef.current.promptType,
+          promptIntensity,
+          promptId,
+          round: spinContext.round,
+          context: spinContext,
+        });
+      }
 
       spinTimeoutRef.current = window.setTimeout(() => {
         stopSoundLoop();
@@ -1068,10 +1262,13 @@ export default function App() {
       }, spinDurationMs);
     },
     [
+      choosePrompt,
       determineOutcome,
       finalizeSpin,
       gameId,
       extremeMeter,
+      multiplayerActive,
+      publishLocalSpin,
       roundCount,
       setSpinDuration,
       startSoundLoop,
@@ -1081,10 +1278,77 @@ export default function App() {
     ]
   );
 
+  const handleRemoteSpin = useCallback(
+    (spinEvent) => {
+      if (!spinEvent) {
+        return;
+      }
+
+      const spinContext = spinEvent.context ?? {};
+      remoteSpinGuardRef.current = true;
+      try {
+        startSpin(
+          Boolean(spinEvent.forceExtreme),
+          spinContext.swipeStrength ?? MAX_SWIPE_STRENGTH / 2,
+          {
+            source: spinContext.source ?? "remote",
+            trigger:
+              spinContext.trigger ??
+              (spinEvent.forceExtreme ? "extreme" : "standard"),
+            meterValueBefore:
+              spinContext.meterValueBefore !== undefined
+                ? spinContext.meterValueBefore
+                : extremeMeter,
+          },
+          {
+            ...spinEvent,
+            isRemote: true,
+            selectedIndex: spinEvent.selectedIndex,
+            outcome: {
+              outcomeKey: spinEvent.outcomeKey,
+              isExtreme: Boolean(spinEvent.isExtreme),
+              isSpicy: Boolean(spinEvent.isSpicy),
+            },
+            promptTitle: spinEvent.promptTitle,
+            promptType: spinEvent.promptType,
+            promptIntensity: spinEvent.promptIntensity,
+            promptText: spinEvent.promptText,
+            promptId: spinEvent.promptId,
+            finalRotation: spinEvent.finalRotation,
+            spinDuration: spinEvent.spinDuration,
+            round: spinEvent.round,
+            context: spinContext,
+          }
+        );
+      } finally {
+        remoteSpinGuardRef.current = false;
+      }
+    },
+    [extremeMeter, startSpin]
+  );
+
   const handleSpin = useCallback(
-    (context = {}) => {
+    async (context = {}) => {
       if (isSpinning) {
         return;
+      }
+
+      if (multiplayerActive && !remoteSpinGuardRef.current) {
+        const allowed = await acquireSpinLockRemote();
+        if (!allowed) {
+          setLockWarning("Wait for your partner's spin");
+          if (typeof window !== "undefined") {
+            if (lockWarningTimeoutRef.current) {
+              window.clearTimeout(lockWarningTimeoutRef.current);
+            }
+            lockWarningTimeoutRef.current = window.setTimeout(() => {
+              setLockWarning("");
+              lockWarningTimeoutRef.current = null;
+            }, 2600);
+          }
+          return;
+        }
+        setLockWarning("");
       }
 
       const baseContext = {
@@ -1127,9 +1391,14 @@ export default function App() {
       startSpin(false, undefined, { ...baseContext, trigger: "standard" });
     },
     [
+      acquireSpinLockRemote,
       extremeMeter,
       isSpinning,
+      lockWarningTimeoutRef,
+      multiplayerActive,
+      remoteSpinGuardRef,
       roundCount,
+      setLockWarning,
       setExtremeMeter,
       startSpin,
       trackExtremeMeter,
@@ -1361,6 +1630,10 @@ export default function App() {
       soundPulseTimeoutRef.current = null;
     }
     setIsExtremeRound(false);
+    if (multiplayerActive) {
+      releaseSpinLockRemote();
+      setLockWarning("");
+    }
     setRotation(0);
     rotationRef.current = 0;
     setGameId(null);
@@ -1373,8 +1646,11 @@ export default function App() {
     regenerateGeneratedPrompts();
   }, [
     regenerateGeneratedPrompts,
+    multiplayerActive,
+    releaseSpinLockRemote,
     setGameId,
     setLastPrompts,
+    setLockWarning,
     setRoundCount,
     stopMusic,
     stopSoundLoop,
@@ -1426,12 +1702,33 @@ export default function App() {
       trigger: lastSpin?.trigger,
     });
 
+    if (multiplayerActive && !remotePromptGuardRef.current) {
+      publishLocalPrompt({
+        id: lastSpin?.promptId,
+        status: result,
+        result,
+        prompt: {
+          title: currentPrompt.title,
+          text: currentPrompt.text,
+          type: promptType,
+          intensity: promptIntensity,
+        },
+        round,
+        releaseLock: true,
+      });
+    }
+
     closeModal();
   }, [
     closeModal,
     currentPrompt.intensity,
     currentPrompt.type,
+    currentPrompt.text,
+    currentPrompt.title,
     incrementStreak,
+    multiplayerActive,
+    publishLocalPrompt,
+    remotePromptGuardRef,
     roundCount,
     roundTimer,
     trackOutcome,
@@ -1457,6 +1754,55 @@ export default function App() {
     playClick();
     handleSpin({ source: "button" });
   }, [handleSpin, playClick]);
+
+  const handleRemotePrompt = useCallback(
+    (event) => {
+      if (!event) {
+        return;
+      }
+
+      if (event.status === "show") {
+        return;
+      }
+
+      remotePromptGuardRef.current = true;
+      try {
+        const result = event.result ?? event.status ?? "";
+        if (result === "accepted" || result === "correct") {
+          handlePromptAccept();
+          return;
+        }
+
+        if (
+          result === "refused" ||
+          result === "auto-refusal" ||
+          result === "incorrect" ||
+          result === "timeout" ||
+          event.status === "timeout"
+        ) {
+          const mappedReason =
+            event.reason ??
+            (result === "auto-refusal" || result === "timeout"
+              ? "timeout"
+              : "manual");
+          handlePromptRefuse(mappedReason, {
+            consequence: event.consequence,
+            result,
+          });
+        }
+      } finally {
+        remotePromptGuardRef.current = false;
+      }
+    },
+    [handlePromptAccept, handlePromptRefuse]
+  );
+
+  useEffect(() => {
+    multiplayerHandlersRef.current = {
+      onRemoteSpin: handleRemoteSpin,
+      onRemotePrompt: handleRemotePrompt,
+    };
+  }, [handleRemotePrompt, handleRemoteSpin]);
 
   if (!gameId) {
     return (
@@ -1544,6 +1890,26 @@ export default function App() {
               >
                 Reset
               </button>
+              <span
+                className="badge-button"
+                role="status"
+                aria-live="polite"
+                title={
+                  multiplayerActive
+                    ? `${connectedCount} players connected`
+                    : "Multiplayer disabled"
+                }
+              >
+                {multiplayerActive ? `Players: ${connectedCount}` : "Local Play"}
+              </span>
+              <span
+                className="badge-button"
+                role="status"
+                aria-live="polite"
+                title={`Your streak — Accepts: ${playerStreak.accepts}, Refusals: ${playerStreak.refusals}`}
+              >
+                You A{playerStreak.accepts} / R{playerStreak.refusals}
+              </span>
             </div>
             <div
               className={`streak-indicator ${
@@ -1572,6 +1938,16 @@ export default function App() {
               <SettingsIcon />
             </button>
           </div>
+
+          {lockWarning && (
+            <div
+              className="rounded-full border border-white/10 bg-slate-950/70 px-3 py-1 text-center text-xs text-amber-200"
+              role="status"
+              aria-live="assertive"
+            >
+              {lockWarning}
+            </div>
+          )}
 
           <header className="app-heading">
             <div className="app-heading__title">
@@ -1686,6 +2062,45 @@ export default function App() {
               value={sfxVolume}
               onChange={(event) => setSfxVolume(parseFloat(event.target.value))}
             />
+          </div>
+          <div className="settings-row justify-between">
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-semibold text-slate-100">
+                Multiplayer
+              </span>
+              <span className="text-xs text-[color:var(--text-muted)]">
+                {multiplayerAvailable
+                  ? "Sync spins across connected devices"
+                  : "Add Firebase config to enable remote play"}
+              </span>
+            </div>
+            <label className="relative inline-flex items-center">
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={multiplayerEnabled && multiplayerAvailable}
+                onChange={(event) =>
+                  setMultiplayerEnabled(event.target.checked)
+                }
+                disabled={!multiplayerAvailable}
+              />
+              <span
+                className={`ml-3 flex h-6 w-11 items-center rounded-full border border-white/20 bg-slate-800 transition-colors ${
+                  multiplayerEnabled && multiplayerAvailable
+                    ? "bg-[color:var(--primary-accent)] border-[color:var(--primary-accent)]"
+                    : "bg-slate-800"
+                }`}
+                aria-hidden="true"
+              >
+                <span
+                  className={`h-5 w-5 rounded-full bg-white transition-transform ${
+                    multiplayerEnabled && multiplayerAvailable
+                      ? "translate-x-4"
+                      : "translate-x-1"
+                  }`}
+                />
+              </span>
+            </label>
           </div>
           <button
             type="button"
