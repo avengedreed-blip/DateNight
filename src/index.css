@@ -546,6 +546,18 @@
     z-index: 2;
   }
 
+  .timer-text {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-align: right;
+    margin-bottom: 0.75rem;
+  }
+
+  .timer-text.urgent {
+    color: #ef4444;
+  }
+
   .prompt-card__title,
   .consequence-card__title,
   .announcement-card__title {

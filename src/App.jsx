@@ -153,6 +153,8 @@ export default function App() {
   const [generatedPrompts, setGeneratedPrompts] = useState(() =>
     generatePromptSet()
   );
+  const [roundTimer, setRoundTimer] = useState(30);
+  const [timerActive, setTimerActive] = useState(false);
   const regenerateGeneratedPrompts = useCallback(() => {
     setGeneratedPrompts(generatePromptSet());
   }, []);
@@ -162,6 +164,8 @@ export default function App() {
   const copyFeedbackTimeoutRef = useRef(null);
   const soundPulseTimeoutRef = useRef(null);
   const meterForcedExtremeRef = useRef(false);
+  const timerRef = useRef(null);
+  const timerExpiredRef = useRef(false);
   const swipeStateRef = useRef({
     active: false,
     pointerId: null,
@@ -299,6 +303,15 @@ export default function App() {
     toneReady
   );
   const { play, startLoop, stopLoop } = useSound(sfxVolume, toneReady);
+
+  const stopRoundTimer = useCallback(() => {
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setTimerActive(false);
+    timerExpiredRef.current = false;
+  }, []);
 
   const flashSoundActivity = useCallback(() => {
     if (sfxVolume <= 0) {
@@ -485,8 +498,9 @@ export default function App() {
       }
       pendingSpinRef.current = null;
       stopSoundLoop();
+      stopRoundTimer();
     };
-  }, [stopSoundLoop]);
+  }, [stopRoundTimer, stopSoundLoop]);
 
   useEffect(() => {
     if (!pendingExtremeSpin) {
@@ -508,6 +522,68 @@ export default function App() {
       window.clearInterval(interval);
     };
   }, [pendingExtremeSpin]);
+
+  useEffect(() => {
+    if (activeModal === "prompt") {
+      setRoundTimer(30);
+      timerExpiredRef.current = false;
+      setTimerActive(true);
+      return;
+    }
+
+    stopRoundTimer();
+    setRoundTimer(30);
+  }, [activeModal, stopRoundTimer]);
+
+  useEffect(() => {
+    if (!timerActive) {
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
+
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+    }
+
+    timerRef.current = window.setInterval(() => {
+      setRoundTimer((previous) => {
+        if (previous <= 1) {
+          if (timerRef.current) {
+            window.clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          timerExpiredRef.current = true;
+          setTimerActive(false);
+          return 0;
+        }
+
+        return previous - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [timerActive]);
+
+  useEffect(() => {
+    if (!timerActive && activeModal === "prompt" && timerExpiredRef.current) {
+      timerExpiredRef.current = false;
+      handleRefuse();
+    }
+  }, [activeModal, handleRefuse, timerActive]);
+
+  useEffect(() => {
+    if (timerActive) {
+      console.log("Round timer:", roundTimer);
+    }
+  }, [roundTimer, timerActive]);
 
   const choosePrompt = useCallback(
     (outcomeKey) => {
@@ -887,6 +963,7 @@ export default function App() {
   }, [pendingExtremeSpin, startSpin]);
 
   const handleRefuse = useCallback(() => {
+    stopRoundTimer();
     const levels = ["normal", "spicy", "extreme"];
     const selection = pickRandom(levels);
 
@@ -910,7 +987,7 @@ export default function App() {
     setPendingConsequenceSounds(sounds);
     setCurrentConsequence({ text: consequence, intensity: selection });
     setActiveModal("consequence");
-  }, [promptGroups]);
+  }, [promptGroups, stopRoundTimer]);
 
   useEffect(() => {
     if (activeModal === "announcement") {
@@ -993,6 +1070,7 @@ export default function App() {
     pendingSpinRef.current = null;
     setIsSpinning(false);
     stopSoundLoop();
+    stopRoundTimer();
     setSoundPulse(false);
     if (copyFeedbackTimeoutRef.current) {
       window.clearTimeout(copyFeedbackTimeoutRef.current);
@@ -1030,11 +1108,12 @@ export default function App() {
   const closeModal = useCallback(() => {
     setActiveModal((previous) => {
       if (previous === "prompt") {
+        stopRoundTimer();
         setIsExtremeRound(false);
       }
       return null;
     });
-  }, []);
+  }, [stopRoundTimer]);
 
   const openSettingsModal = useCallback(() => {
     playClick();
@@ -1276,6 +1355,8 @@ export default function App() {
         onRefuse={handleRefuse}
         onButtonClick={playClick}
         onAccept={closeModal}
+        roundTimer={roundTimer}
+        timerActive={timerActive}
       />
 
       <ConsequenceModal

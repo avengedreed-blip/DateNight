@@ -9,10 +9,13 @@ const PromptModal = ({
   onRefuse,
   onButtonClick: handleButtonClick,
   onAccept,
+  roundTimer = 30,
+  timerActive = false,
 }) => {
   const titleId = "prompt-modal-title";
   const bodyId = "prompt-modal-body";
   const isTrivia = prompt.type === "trivia";
+  const isUrgent = timerActive && roundTimer <= 10;
   const handleRefuse = () => {
     handleButtonClick?.();
     onRefuse?.();
@@ -36,6 +39,12 @@ const PromptModal = ({
           isActive={isOpen}
         />
         <div className="prompt-card__content">
+          <div
+            className={`timer-text ${isUrgent ? "urgent" : ""}`}
+            aria-live="polite"
+          >
+            Time left: {Math.max(roundTimer, 0)}s
+          </div>
           <h2 id={titleId} className="prompt-card__title">
             {prompt.title}
           </h2>
