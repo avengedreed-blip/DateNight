@@ -1144,6 +1144,7 @@ export default function App() {
             segments={WHEEL_SEGMENTS}
             showPulse={isSfxActive}
             spinDuration={spinDuration}
+            isSpinning={isSpinning}
             onPointerDown={handleWheelPointerDown}
             onPointerMove={handleWheelPointerMove}
             onPointerUp={handleWheelPointerEnd}

@@ -18,6 +18,7 @@
     --wheel-truth: #38bdf8;
     --wheel-dare: #a855f7;
     --wheel-trivia: #f472b6;
+    --wheel-label-color: #0f172a;
     --transition-fast: 150ms ease;
   }
 
@@ -211,7 +212,6 @@
   }
 
   .wheel-wrapper {
-    --label-radius: 38%;
     @apply relative mx-auto mb-9 flex h-[300px] w-[300px] items-center justify-center;
     touch-action: none;
   }
@@ -219,6 +219,7 @@
   .wheel {
     @apply relative flex h-full w-full items-center justify-center rounded-full border-[6px] border-white/90 shadow-[0_30px_60px_rgba(15,23,42,0.45),_inset_0_0_25px_rgba(15,23,42,0.45)] transition-[transform] ease-[cubic-bezier(0.25,1,0.5,1.08)];
     transition-duration: var(--spin-duration, 4000ms);
+    z-index: 0;
   }
 
   .wheel--extreme {
@@ -226,17 +227,56 @@
   }
 
   .wheel__labels {
-    @apply pointer-events-none absolute inset-0 flex items-center justify-center font-semibold uppercase tracking-wide text-slate-900;
-    text-shadow: 0 4px 15px rgba(15, 23, 42, 0.45);
+    @apply pointer-events-none absolute inset-0 flex items-center justify-center;
+    z-index: 1;
+    opacity: 1;
+    transform: scale(1);
+    transition: opacity 260ms ease, transform 320ms ease;
   }
 
-  .wheel__label {
-    @apply absolute left-1/2 top-1/2 flex w-24 items-center justify-center text-center text-sm;
-    transform-origin: center;
+  .wheel__labels--spinning {
+    opacity: 0.92;
+    transform: scale(0.985);
+  }
+
+  .wheel__label-layer {
+    width: 100%;
+    height: 100%;
+    transform-origin: 50% 50%;
+    transform-box: fill-box;
+    transition: transform 320ms ease, opacity 320ms ease;
+  }
+
+  .wheel__labels--spinning .wheel__label-layer {
+    opacity: 0.95;
+    transform: scale(1.01);
+  }
+
+  .wheel__label-text {
+    font-family: var(--wheel-label-font, "Poppins", "Inter", "Segoe UI", sans-serif);
+    font-weight: 700;
+    font-size: clamp(0.78rem, 2vw, 1.15rem);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    fill: var(--wheel-label-color);
+    stroke: rgba(248, 250, 252, 0.9);
+    stroke-width: 0.35;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    paint-order: stroke fill;
+    dominant-baseline: middle;
+    text-anchor: middle;
+    transition: opacity 220ms ease;
+    white-space: nowrap;
+  }
+
+  .wheel__labels--spinning .wheel__label-text {
+    opacity: 0.9;
   }
 
   .wheel__pointer {
     @apply absolute -top-7 left-1/2 -translate-x-1/2 text-3xl text-[color:var(--secondary-accent)] drop-shadow-[0_6px_20px_rgba(15,23,42,0.7)];
+    z-index: 2;
   }
 
   .wheel__pointer--extreme {
@@ -249,6 +289,7 @@
 
   .spin-button {
     @apply pointer-events-none absolute inset-0 flex items-center justify-center;
+    z-index: 3;
   }
 
   .spin-button__trigger {
@@ -588,6 +629,11 @@
 
     .wheel-wrapper {
       @apply h-[260px] w-[260px];
+    }
+
+    .wheel__label-text {
+      font-size: clamp(0.68rem, 4vw, 0.95rem);
+      letter-spacing: 0.06em;
     }
 
     .spin-button__trigger {
