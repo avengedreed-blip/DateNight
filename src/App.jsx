@@ -11,6 +11,7 @@ import ConsequenceModal from "./components/modals/ConsequenceModal.jsx";
 import EditorModal from "./components/modals/EditorModal.jsx";
 import Modal from "./components/modals/Modal.jsx";
 import PromptModal from "./components/modals/PromptModal.jsx";
+import RewardModal from "./components/modals/RewardModal.jsx";
 import Wheel from "./components/Wheel.jsx";
 import LoadingScreen from "./components/screens/LoadingScreen.jsx";
 import StartScreen from "./components/screens/StartScreen.jsx";
@@ -30,6 +31,7 @@ import {
   buildPromptGroups,
   generatePromptSet,
 } from "./utils/promptGenerator.js";
+import { useAnalytics } from "./hooks/useAnalytics.js";
 
 const STORAGE_KEYS = {
   gameId: "dateNightGameId",
@@ -120,6 +122,42 @@ const confettiBurst = () => {
   frame();
 };
 
+const rewardBurst = (badge) => {
+  const palettes = {
+    Bronze: ["#fb923c", "#f97316", "#fed7aa", "#fde68a"],
+    Silver: ["#f8fafc", "#cbd5f5", "#94a3b8", "#e2e8f0"],
+    Gold: ["#facc15", "#fbbf24", "#fde68a", "#f97316"],
+    Legendary: ["#c084fc", "#a855f7", "#38bdf8", "#f472b6"],
+  };
+  const colors = palettes[badge] ?? palettes.Legendary;
+  const end = Date.now() + 1400;
+
+  const frame = () => {
+    confetti({
+      particleCount: 8,
+      spread: 70,
+      startVelocity: 42,
+      gravity: 0.8,
+      origin: { x: Math.random() * 0.4 + 0.15, y: 0.2 },
+      colors,
+    });
+    confetti({
+      particleCount: 8,
+      spread: 70,
+      startVelocity: 42,
+      gravity: 0.8,
+      origin: { x: Math.random() * 0.4 + 0.45, y: 0.2 },
+      colors,
+    });
+
+    if (Date.now() < end) {
+      requestAnimationFrame(frame);
+    }
+  };
+
+  frame();
+};
+
 const createRandomGameId = () =>
   Math.random().toString(36).slice(2, 8).toUpperCase();
 
@@ -158,6 +196,7 @@ export default function App() {
   const [soundPulse, setSoundPulse] = useState(false);
   const [isLoopingSound, setIsLoopingSound] = useState(false);
   const [extremePulseLevel, setExtremePulseLevel] = useState(0);
+  const [streakHighlight, setStreakHighlight] = useState(false);
   const [generatedPrompts, setGeneratedPrompts] = usePersistentState(
     STORAGE_KEYS.generatedPrompts,
     generatePromptSet(),
@@ -184,11 +223,13 @@ export default function App() {
   const rotationRef = useRef(0);
   const spinTimeoutRef = useRef(null);
   const pendingSpinRef = useRef(null);
+  const pendingSpinContextRef = useRef(null);
   const copyFeedbackTimeoutRef = useRef(null);
   const soundPulseTimeoutRef = useRef(null);
   const meterForcedExtremeRef = useRef(false);
   const timerRef = useRef(null);
   const timerExpiredRef = useRef(false);
+  const lastSpinDetailsRef = useRef(null);
   const swipeStateRef = useRef({
     active: false,
     pointerId: null,
@@ -326,6 +367,19 @@ export default function App() {
     toneReady
   );
   const { play, startLoop, stopLoop } = useSound(sfxVolume, toneReady);
+  const {
+    streak,
+    bestStreak,
+    pendingReward,
+    incrementStreak,
+    resetStreak,
+    acknowledgeReward,
+    trackSpin,
+    trackOutcome,
+    trackTimer,
+    trackExtremeMeter,
+    downloadReport,
+  } = useAnalytics(gameId);
 
   const stopRoundTimer = useCallback(() => {
     if (timerRef.current) {
@@ -566,6 +620,33 @@ export default function App() {
   }, [pendingExtremeSpin]);
 
   useEffect(() => {
+    if (streak <= 0) {
+      setStreakHighlight(false);
+      return;
+    }
+
+    setStreakHighlight(true);
+    const timeout = window.setTimeout(() => {
+      setStreakHighlight(false);
+    }, 620);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [streak]);
+
+  useEffect(() => {
+    if (!pendingReward) {
+      return;
+    }
+
+    triggerSound("click");
+    triggerSound("fanfare");
+    triggerHapticFeedback(HAPTIC_PATTERNS.medium);
+    rewardBurst(pendingReward.badge);
+  }, [pendingReward, triggerHapticFeedback, triggerSound]);
+
+  useEffect(() => {
     if (activeModal === "prompt") {
       setRoundTimer(30);
       timerExpiredRef.current = false;
@@ -614,6 +695,15 @@ export default function App() {
           }
           timerExpiredRef.current = true;
           setTimerActive(false);
+          const lastSpin = lastSpinDetailsRef.current;
+          trackTimer({
+            status: "timeout",
+            promptType: currentPrompt.type,
+            intensity: currentPrompt.intensity,
+            remaining: 0,
+            round: lastSpin?.round ?? roundCount + 1,
+            trigger: lastSpin?.trigger,
+          });
           return 0;
         }
 
@@ -627,41 +717,98 @@ export default function App() {
         timerRef.current = null;
       }
     };
-  }, [play, timerActive, triggerTimerVibration]);
+  }, [
+    currentPrompt.intensity,
+    currentPrompt.type,
+    play,
+    roundCount,
+    timerActive,
+    trackTimer,
+    triggerTimerVibration,
+  ]);
 
-  const handleRefuse = useCallback(() => {
-    stopRoundTimer();
-    const levels = ["normal", "spicy", "extreme"];
-    const selection = pickRandom(levels);
+  const handlePromptRefuse = useCallback(
+    (reason = "manual") => {
+      stopRoundTimer();
+      const levels = ["normal", "spicy", "extreme"];
+      const selection = pickRandom(levels);
 
-    const keyMap = {
-      normal: "consequenceNormal",
-      spicy: "consequenceSpicy",
-      extreme: "consequenceExtreme",
-    };
-    const pool = promptGroups[keyMap[selection]] ?? [];
-    const consequence = pool.length
-      ? pickRandom(pool)
-      : "No consequences available. You're safe this time!";
+      const keyMap = {
+        normal: "consequenceNormal",
+        spicy: "consequenceSpicy",
+        extreme: "consequenceExtreme",
+      };
+      const pool = promptGroups[keyMap[selection]] ?? [];
+      const consequence = pool.length
+        ? pickRandom(pool)
+        : "No consequences available. You're safe this time!";
 
-    const sounds = ["refusalBoo"];
-    if (selection === "spicy") {
-      sounds.push("spicyGiggle");
-    }
-    if (selection === "extreme") {
-      sounds.push("extremeWooo");
-    }
-    setPendingConsequenceSounds(sounds);
-    setCurrentConsequence({ text: consequence, intensity: selection });
-    setActiveModal("consequence");
-  }, [promptGroups, stopRoundTimer]);
+      const sounds = ["refusalBoo"];
+      if (selection === "spicy") {
+        sounds.push("spicyGiggle");
+      }
+      if (selection === "extreme") {
+        sounds.push("extremeWooo");
+      }
+      setPendingConsequenceSounds(sounds);
+      setCurrentConsequence({ text: consequence, intensity: selection });
+      setActiveModal("consequence");
+
+      const lastSpin = lastSpinDetailsRef.current;
+      const round = lastSpin?.round ?? roundCount + 1;
+      const promptType = currentPrompt.type;
+      const promptIntensity = currentPrompt.intensity;
+      const result =
+        reason === "timeout"
+          ? "auto-refusal"
+          : promptType === "trivia"
+          ? "incorrect"
+          : "refused";
+
+      resetStreak({ promptType, reason });
+      trackOutcome({
+        result,
+        promptType,
+        intensity: promptIntensity,
+        round,
+        reason,
+        source: lastSpin?.source,
+        trigger: lastSpin?.trigger,
+      });
+
+      trackTimer({
+        status: reason === "timeout" ? "auto-refusal" : "cancelled",
+        promptType,
+        intensity: promptIntensity,
+        remaining: roundTimer,
+        round,
+        reason,
+        trigger: lastSpin?.trigger,
+      });
+    },
+    [
+      currentPrompt.intensity,
+      currentPrompt.type,
+      promptGroups,
+      resetStreak,
+      roundCount,
+      roundTimer,
+      stopRoundTimer,
+      trackOutcome,
+      trackTimer,
+    ]
+  );
+
+  const handleManualRefuse = useCallback(() => {
+    handlePromptRefuse("manual");
+  }, [handlePromptRefuse]);
 
   useEffect(() => {
     if (!timerActive && activeModal === "prompt" && timerExpiredRef.current) {
       timerExpiredRef.current = false;
-      handleRefuse();
+      handlePromptRefuse("timeout");
     }
-  }, [activeModal, handleRefuse, timerActive]);
+  }, [activeModal, handlePromptRefuse, timerActive]);
 
   useEffect(() => {
     if (timerActive) {
@@ -719,6 +866,14 @@ export default function App() {
         type: segment.id,
         intensity,
       });
+      lastSpinDetailsRef.current = {
+        ...(lastSpinDetailsRef.current ?? {}),
+        promptTitle: segment.title,
+        promptText,
+        promptType: segment.id,
+        intensity,
+        outcomeKey,
+      };
       const sounds = [];
       if (flags.isExtreme) {
         sounds.push("extremeWooo");
@@ -741,6 +896,17 @@ export default function App() {
         setExtremeMeter((previous) => {
           const next = Math.min(100, previous + 20);
           console.log("Extreme meter:", next);
+          trackExtremeMeter({
+            previous,
+            next,
+            reason: "spin",
+            promptType: segment.id,
+            round: lastSpinDetailsRef.current?.round ?? roundCount + 1,
+          });
+          lastSpinDetailsRef.current = {
+            ...(lastSpinDetailsRef.current ?? {}),
+            meterValueAfter: next,
+          };
           return next;
         });
       }
@@ -748,9 +914,11 @@ export default function App() {
     [
       choosePrompt,
       recordPromptHistory,
+      roundCount,
       setExtremeMeter,
       setRoundCount,
       triggerHapticFeedback,
+      trackExtremeMeter,
     ]
   );
 
@@ -801,7 +969,7 @@ export default function App() {
   }, [concludeSpin, determineOutcome, setIsSpinning]);
 
   const startSpin = useCallback(
-    (forceExtreme, swipeStrength = MAX_SWIPE_STRENGTH / 2) => {
+    (forceExtreme, swipeStrength = MAX_SWIPE_STRENGTH / 2, context = {}) => {
       const clampedStrength = Math.min(
         Math.max(
           Number.isFinite(swipeStrength)
@@ -819,6 +987,7 @@ export default function App() {
         return;
       }
 
+      pendingSpinContextRef.current = null;
       const availableIndexes = forceExtreme
         ? Array.from({ length: Math.min(sliceCount, 2) }, (_, index) => index)
         : WHEEL_SEGMENTS.map((_, index) => index);
@@ -828,10 +997,31 @@ export default function App() {
       const sliceAngle = 360 / sliceCount;
       const selectedSegment = WHEEL_SEGMENTS[selectedIndex];
       const outcome = determineOutcome(selectedSegment, forceExtreme);
+      const spinContext = {
+        source: context.source ?? "button",
+        trigger: context.trigger ?? (forceExtreme ? "extreme" : "standard"),
+        swipeStrength: Number.isFinite(swipeStrength) ? swipeStrength : null,
+        meterValueBefore:
+          context.meterValueBefore !== undefined
+            ? context.meterValueBefore
+            : extremeMeter,
+        round: roundCount + 1,
+        forcedByMeter: Boolean(context?.trigger === "meter"),
+      };
       pendingSpinRef.current = {
         forceExtreme,
         selectedIndex,
         outcome,
+        context: spinContext,
+      };
+      lastSpinDetailsRef.current = {
+        segmentId: selectedSegment.id,
+        segmentLabel: selectedSegment.label,
+        round: spinContext.round,
+        source: spinContext.source,
+        trigger: spinContext.trigger,
+        meterValueBefore: spinContext.meterValueBefore,
+        forcedByMeter: spinContext.forcedByMeter,
       };
       const randomOffset = (Math.random() - 0.5) * sliceAngle * 0.6;
       const targetAngle =
@@ -855,6 +1045,17 @@ export default function App() {
       triggerHapticFeedback(HAPTIC_PATTERNS.medium);
       setSpinDuration(spinDurationMs);
 
+      trackSpin({
+        ...spinContext,
+        forceExtreme,
+        isExtreme: outcome.isExtreme,
+        isSpicy: outcome.isSpicy,
+        outcomeKey: outcome.outcomeKey,
+        segmentId: selectedSegment.id,
+        segmentLabel: selectedSegment.label,
+        gameId,
+      });
+
       const baseRotation = rotationRef.current - (rotationRef.current % 360);
       const finalRotation = baseRotation + extraSpins + targetAngle;
       rotationRef.current = finalRotation;
@@ -869,38 +1070,71 @@ export default function App() {
     [
       determineOutcome,
       finalizeSpin,
+      gameId,
+      extremeMeter,
+      roundCount,
       setSpinDuration,
       startSoundLoop,
       stopSoundLoop,
+      trackSpin,
       triggerHapticFeedback,
     ]
   );
 
-  const handleSpin = useCallback(() => {
-    if (isSpinning) {
-      return;
-    }
+  const handleSpin = useCallback(
+    (context = {}) => {
+      if (isSpinning) {
+        return;
+      }
 
-    if (extremeMeter >= 100) {
-      meterForcedExtremeRef.current = true;
-      setExtremeMeter(() => {
-        console.log("Extreme meter:", 0);
-        return 0;
-      });
-      startSpin(true);
-      return;
-    }
+      const baseContext = {
+        source: context.source ?? "button",
+        meterValueBefore: extremeMeter,
+      };
 
-    const isExtreme = Math.random() < EXTREME_ROUND_CHANCE;
+      if (extremeMeter >= 100) {
+        meterForcedExtremeRef.current = true;
+        setExtremeMeter((previous) => {
+          trackExtremeMeter({
+            previous,
+            next: 0,
+            reason: "forced-extreme",
+            round: roundCount + 1,
+          });
+          console.log("Extreme meter:", 0);
+          lastSpinDetailsRef.current = {
+            ...(lastSpinDetailsRef.current ?? {}),
+            meterValueAfter: 0,
+          };
+          return 0;
+        });
+        startSpin(true, undefined, { ...baseContext, trigger: "meter" });
+        return;
+      }
 
-    if (isExtreme) {
-      setPendingExtremeSpin(true);
-      setActiveModal("announcement");
-      return;
-    }
+      const isExtreme = Math.random() < EXTREME_ROUND_CHANCE;
 
-    startSpin(false);
-  }, [extremeMeter, isSpinning, setExtremeMeter, startSpin]);
+      if (isExtreme) {
+        setPendingExtremeSpin(true);
+        setActiveModal("announcement");
+        pendingSpinContextRef.current = {
+          ...baseContext,
+          trigger: "random-extreme",
+        };
+        return;
+      }
+
+      startSpin(false, undefined, { ...baseContext, trigger: "standard" });
+    },
+    [
+      extremeMeter,
+      isSpinning,
+      roundCount,
+      setExtremeMeter,
+      startSpin,
+      trackExtremeMeter,
+    ]
+  );
 
   const resetSwipeState = useCallback(() => {
     swipeStateRef.current = {
@@ -1001,7 +1235,7 @@ export default function App() {
           : MIN_SWIPE_STRENGTH * 0.85
       );
 
-      startSpin(false, strength);
+      startSpin(false, strength, { source: "swipe", trigger: "standard" });
     },
     [isSpinning, resetSwipeState, startSpin]
   );
@@ -1022,8 +1256,14 @@ export default function App() {
   const handleAnnouncementClose = useCallback(() => {
     setActiveModal(null);
     if (pendingExtremeSpin) {
+      const context =
+        pendingSpinContextRef.current ?? {
+          source: "button",
+          trigger: "random-extreme",
+        };
+      pendingSpinContextRef.current = null;
       setPendingExtremeSpin(false);
-      startSpin(true);
+      startSpin(true, undefined, context);
     }
   }, [pendingExtremeSpin, startSpin]);
 
@@ -1155,6 +1395,49 @@ export default function App() {
     });
   }, [stopRoundTimer]);
 
+  const handlePromptAccept = useCallback(() => {
+    const lastSpin = lastSpinDetailsRef.current;
+    const promptType = currentPrompt.type;
+    const promptIntensity = currentPrompt.intensity;
+    const result = promptType === "trivia" ? "correct" : "accepted";
+    const round = lastSpin?.round ?? roundCount + 1;
+
+    incrementStreak({
+      promptType,
+      intensity: promptIntensity,
+      round,
+      source: lastSpin?.source,
+      trigger: lastSpin?.trigger,
+    });
+    trackOutcome({
+      result,
+      promptType,
+      intensity: promptIntensity,
+      round,
+      source: lastSpin?.source,
+      trigger: lastSpin?.trigger,
+    });
+    trackTimer({
+      status: "completed",
+      promptType,
+      intensity: promptIntensity,
+      remaining: roundTimer,
+      round,
+      trigger: lastSpin?.trigger,
+    });
+
+    closeModal();
+  }, [
+    closeModal,
+    currentPrompt.intensity,
+    currentPrompt.type,
+    incrementStreak,
+    roundCount,
+    roundTimer,
+    trackOutcome,
+    trackTimer,
+  ]);
+
   const openSettingsModal = useCallback(() => {
     playClick();
     setActiveModal("settings");
@@ -1165,9 +1448,14 @@ export default function App() {
     setActiveModal("editor");
   }, [playClick, setActiveModal]);
 
+  const handleDownloadReport = useCallback(() => {
+    playClick();
+    downloadReport();
+  }, [downloadReport, playClick]);
+
   const handleSpinButton = useCallback(() => {
     playClick();
-    handleSpin();
+    handleSpin({ source: "button" });
   }, [handleSpin, playClick]);
 
   if (!gameId) {
@@ -1256,6 +1544,22 @@ export default function App() {
               >
                 Reset
               </button>
+            </div>
+            <div
+              className={`streak-indicator ${
+                streakHighlight ? "streak-indicator--active" : ""
+              }`}
+              role="status"
+              aria-live="polite"
+            >
+              <span className="streak-indicator__icon" aria-hidden="true">
+                🔥
+              </span>
+              <div className="streak-indicator__content">
+                <span className="streak-indicator__label">Streak</span>
+                <span className="streak-indicator__value">{streak}</span>
+              </div>
+              <span className="streak-indicator__best">Best {bestStreak}</span>
             </div>
             <button
               type="button"
@@ -1390,6 +1694,13 @@ export default function App() {
           >
             <PencilIcon /> Edit Prompts
           </button>
+          <button
+            type="button"
+            className="secondary-button mt-3 w-full"
+            onClick={handleDownloadReport}
+          >
+            Download Session Report
+          </button>
         </div>
       </Modal>
 
@@ -1397,9 +1708,9 @@ export default function App() {
         isOpen={activeModal === "prompt"}
         onClose={closeModal}
         prompt={currentPrompt}
-        onRefuse={handleRefuse}
+        onRefuse={handleManualRefuse}
         onButtonClick={playClick}
-        onAccept={closeModal}
+        onAccept={handlePromptAccept}
         roundTimer={roundTimer}
         timerActive={timerActive}
       />
@@ -1428,6 +1739,12 @@ export default function App() {
         onClose={handleAnnouncementClose}
         onButtonClick={playClick}
         onConfirm={handleAnnouncementClose}
+      />
+      <RewardModal
+        isOpen={Boolean(pendingReward)}
+        onClose={acknowledgeReward}
+        onButtonClick={playClick}
+        reward={pendingReward}
       />
     </div>
   );
