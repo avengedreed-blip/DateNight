@@ -107,73 +107,73 @@ export function subscribeToSession(db, gameId, callback) {
 
 export async function acquireSpinLock(db, gameId, playerId) {
   if (!db || !gameId || !playerId) {
-    return true;
+    return false;
   }
 
   const sessionRef = getSessionRef(db, gameId);
 
-  try {
-    await runTransaction(db, async (transaction) => {
-      const snapshot = await transaction.get(sessionRef);
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(sessionRef);
 
-      if (!snapshot.exists()) {
-        transaction.set(sessionRef, {
-          roundCount: 0,
-          lastSpin: null,
-          currentPrompt: null,
-          currentConsequence: null,
-          spinLock: {
-            lockedBy: playerId,
-            timestamp: Date.now(),
-          },
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        return;
-      }
-
-      const data = snapshot.data();
-      const currentLock = data.spinLock ?? null;
-      const now = Date.now();
-      const isLocked =
-        currentLock &&
-        currentLock.lockedBy &&
-        currentLock.lockedBy !== playerId &&
-        now - (currentLock.timestamp ?? 0) < 15000;
-
-      if (isLocked) {
-        throw new Error("locked");
-      }
-
-      transaction.update(sessionRef, {
-        spinLock: {
-          lockedBy: playerId,
-          timestamp: now,
-        },
-        updatedAt: serverTimestamp(),
-      });
-    });
-
-    return true;
-  } catch (error) {
-    if (error?.message === "locked") {
+    if (!snapshot.exists()) {
       return false;
     }
 
-    throw error;
-  }
+    const data = snapshot.data();
+    const currentLock = data.spinLock ?? null;
+    const lockedBy =
+      typeof currentLock === "string" ? currentLock : currentLock?.lockedBy;
+    const lockTimestamp =
+      typeof currentLock === "object" ? currentLock.timestamp : undefined;
+    const now = Date.now();
+    const lockIsFresh =
+      lockTimestamp === undefined || now - lockTimestamp < 15000;
+
+    if (lockedBy && lockedBy !== playerId && lockIsFresh) {
+      return false;
+    }
+
+    transaction.update(sessionRef, {
+      spinLock: {
+        lockedBy: playerId,
+        timestamp: now,
+      },
+      updatedAt: serverTimestamp(),
+    });
+
+    return true;
+  });
 }
 
 export async function releaseSpinLock(db, gameId, playerId) {
   if (!db || !gameId || !playerId) {
-    return;
+    return false;
   }
 
   const sessionRef = getSessionRef(db, gameId);
 
-  await updateDoc(sessionRef, {
-    spinLock: null,
-    updatedAt: serverTimestamp(),
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(sessionRef);
+
+    if (!snapshot.exists()) {
+      return false;
+    }
+
+    const data = snapshot.data();
+    const currentLock = data.spinLock ?? null;
+    const lockedBy =
+      typeof currentLock === "string" ? currentLock : currentLock?.lockedBy;
+
+    if (lockedBy !== playerId) {
+      return false;
+    }
+
+    transaction.update(sessionRef, {
+      spinLock: null,
+      updatedAt: serverTimestamp(),
+    });
+
+    return true;
   });
 }
 
@@ -217,7 +217,9 @@ async function updatePlayerStreak(db, gameId, playerId, result) {
 
     const didAccept = result === "accepted" || result === "correct";
     const didRefuse =
-      result === "refused" || result === "auto-refusal" || result === "incorrect";
+      result === "refused" ||
+      result === "auto-refusal" ||
+      result === "incorrect";
 
     if (didAccept) {
       accepts += 1;
