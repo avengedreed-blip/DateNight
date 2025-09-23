@@ -1,5 +1,23 @@
 import React, { useMemo } from "react";
 
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const responsiveFontSize = (sliceAngle, normalizedLength) => {
+  const base = 0.82 + (sliceAngle / 150) * 0.55;
+  const lengthAdjustment = clamp(1.1 - normalizedLength * 0.04, 0.64, 1.08);
+  const adjusted = base * lengthAdjustment;
+  const minRem = (adjusted * 0.72).toFixed(3);
+  const idealRem = (adjusted * 0.85).toFixed(3);
+  const maxRem = (adjusted * 1.05).toFixed(3);
+  const vwComponent = clamp(sliceAngle * 0.012, 0.28, 1.4).toFixed(3);
+  return `clamp(${minRem}rem, calc(${idealRem}rem + ${vwComponent}vw), ${maxRem}rem)`;
+};
+
+const getLabelColorVar = (segmentId) =>
+  segmentId
+    ? `var(--wheel-${segmentId}-label, var(--wheel-label-default, var(--text-main, #f8fafc)))`
+    : `var(--wheel-label-default, var(--text-main, #f8fafc))`;
+
 const Wheel = ({
   rotation,
   isExtremeRound,
@@ -31,29 +49,47 @@ const Wheel = ({
     return `conic-gradient(${stops})`;
   }, [segments]);
 
+  const normalizedRotation = useMemo(() => {
+    if (!Number.isFinite(rotation)) {
+      return 0;
+    }
+    const value = rotation % 360;
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    return value < 0 ? value + 360 : value;
+  }, [rotation]);
+
   const labels = useMemo(() => {
     if (!segments?.length) {
       return [];
     }
 
     const sliceAngle = 360 / segments.length;
-    const radiusFactor = 0.5;
+    const radiansOffset = -90 * (Math.PI / 180);
+    const radius = clamp(40 + sliceAngle * 0.06, 42, segments.length <= 2 ? 47 : 45);
 
     return segments.map((segment, index) => {
       const id = segment.id ?? segment.label ?? index;
       const label =
         segment.label ?? segment.title ?? segment.id ?? `Segment ${index + 1}`;
       const midpointDeg = index * sliceAngle + sliceAngle / 2;
-      const radians = ((midpointDeg - 90) * Math.PI) / 180;
-      const radius = 50 * radiusFactor;
+      const radians = midpointDeg * (Math.PI / 180) + radiansOffset;
       const x = 50 + radius * Math.cos(radians);
       const y = 50 + radius * Math.sin(radians);
+      const normalizedLength = Math.max(label.replace(/\s+/g, "").length, 4);
+      const fontSize = responsiveFontSize(sliceAngle, normalizedLength);
+      const width = clamp(sliceAngle * 0.42, 30, segments.length <= 2 ? 64 : 58);
+      const color = getLabelColorVar(segment.id);
 
       return {
         id,
         label,
         x,
         y,
+        width,
+        fontSize,
+        color,
       };
     });
   }, [segments]);
@@ -75,41 +111,34 @@ const Wheel = ({
           background: gradient,
           "--spin-duration": `${spinDuration ?? 4000}ms`,
         }}
-      />
-      <div
-        className={`wheel__labels ${isSpinning ? "wheel__labels--spinning" : ""}`}
-        aria-hidden="true"
       >
-        <svg
-          className="wheel__label-layer"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="xMidYMid meet"
+        <div
+          className={`wheel__labels ${
+            isSpinning ? "wheel__labels--spinning" : ""
+          }`}
+          aria-hidden="true"
         >
-          <defs>
-            <filter id="wheelLabelShadow" x="-50%" y="-50%" width="200%" height="200%">
-              <feDropShadow
-                dx="0"
-                dy="1.2"
-                stdDeviation="1.6"
-                floodColor="rgba(15, 23, 42, 0.7)"
-              />
-            </filter>
-          </defs>
           {labels.map((item) => (
-            <text
+            <div
               key={item.id}
-              x={item.x}
-              y={item.y}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              className="wheel__label-text"
-              filter="url(#wheelLabelShadow)"
-              style={{ whiteSpace: "nowrap" }}
+              className="wheel__label"
+              style={{
+                top: `${item.y}%`,
+                left: `${item.x}%`,
+                width: `${item.width}%`,
+                transform: `translate(-50%, -50%) rotate(${-normalizedRotation}deg)`,
+                color: item.color,
+              }}
             >
-              {item.label}
-            </text>
+              <span
+                className="wheel__label-text wheel-label"
+                style={{ fontSize: item.fontSize }}
+              >
+                {item.label}
+              </span>
+            </div>
           ))}
-        </svg>
+        </div>
       </div>
       <div
         aria-hidden="true"
