@@ -1,5 +1,6 @@
 import React from "react";
 import Modal from "./Modal.jsx";
+import ModalParticles from "./ModalParticles.jsx";
 
 const PromptModal = ({
   isOpen,
@@ -29,19 +30,34 @@ const PromptModal = ({
       describedBy={bodyId}
     >
       <div className="prompt-card">
-        <h2 id={titleId} className="prompt-card__title">
-          {prompt.title}
-        </h2>
-        <p id={bodyId} className="prompt-card__body">
-          {prompt.text}
-        </p>
-        <div className="prompt-card__actions">
-          <button type="button" className="secondary-button" onClick={handleRefuse}>
-            {isTrivia ? "Incorrect" : "Refuse"}
-          </button>
-          <button type="button" className="primary-button" onClick={handleAccept}>
-            {isTrivia ? "Correct" : "Accept"}
-          </button>
+        <ModalParticles
+          category={prompt.type}
+          intensity={prompt.intensity}
+          isActive={isOpen}
+        />
+        <div className="prompt-card__content">
+          <h2 id={titleId} className="prompt-card__title">
+            {prompt.title}
+          </h2>
+          <p id={bodyId} className="prompt-card__body">
+            {prompt.text}
+          </p>
+          <div className="prompt-card__actions">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={handleRefuse}
+            >
+              {isTrivia ? "Incorrect" : "Refuse"}
+            </button>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={handleAccept}
+            >
+              {isTrivia ? "Correct" : "Accept"}
+            </button>
+          </div>
         </div>
       </div>
     </Modal>
