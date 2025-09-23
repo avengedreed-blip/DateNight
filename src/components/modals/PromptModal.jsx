@@ -15,7 +15,22 @@ const PromptModal = ({
   const titleId = "prompt-modal-title";
   const bodyId = "prompt-modal-body";
   const isTrivia = prompt.type === "trivia";
-  const isUrgent = timerActive && roundTimer <= 10;
+  const timeLeft = Math.max(roundTimer, 0);
+  const timerStateClass = (() => {
+    if (!timerActive) {
+      return "prompt-timer";
+    }
+
+    if (timeLeft <= 5) {
+      return "prompt-timer prompt-timer--critical";
+    }
+
+    if (timeLeft <= 15) {
+      return "prompt-timer prompt-timer--warning";
+    }
+
+    return "prompt-timer prompt-timer--safe";
+  })();
   const handleRefuse = () => {
     handleButtonClick?.();
     onRefuse?.();
@@ -39,12 +54,14 @@ const PromptModal = ({
           isActive={isOpen}
         />
         <div className="prompt-card__content">
-          <div
-            className={`timer-text ${isUrgent ? "urgent" : ""}`}
-            aria-live="polite"
-          >
-            Time left: {Math.max(roundTimer, 0)}s
-          </div>
+          {timerActive ? (
+            <div className={timerStateClass} aria-live="polite">
+              <span className="prompt-timer__icon" aria-hidden="true">
+                ⏱️
+              </span>{" "}
+              {timeLeft}s
+            </div>
+          ) : null}
           <h2 id={titleId} className="prompt-card__title">
             {prompt.title}
           </h2>
