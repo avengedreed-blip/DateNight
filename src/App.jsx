@@ -31,6 +31,7 @@ const STORAGE_KEYS = {
   sfxVolume: "dateNightSfxVol",
   roundCount: "dateNightRoundCount",
   lastPrompts: "dateNightLastPrompts",
+  extremeMeter: "dateNightExtremeMeter",
 };
 
 const EXTREME_ROUND_CHANCE = 0.2;
@@ -156,6 +157,7 @@ export default function App() {
   const pendingSpinRef = useRef(null);
   const copyFeedbackTimeoutRef = useRef(null);
   const soundPulseTimeoutRef = useRef(null);
+  const meterForcedExtremeRef = useRef(false);
   const swipeStateRef = useRef({
     active: false,
     pointerId: null,
@@ -190,6 +192,14 @@ export default function App() {
   );
   const [roundCount, setRoundCount] = usePersistentState(
     STORAGE_KEYS.roundCount,
+    0,
+    {
+      serialize: (value) => value.toString(),
+      deserialize: (value) => parseInteger(value, 0),
+    }
+  );
+  const [extremeMeter, setExtremeMeter] = usePersistentState(
+    STORAGE_KEYS.extremeMeter,
     0,
     {
       serialize: (value) => value.toString(),
@@ -565,10 +575,22 @@ export default function App() {
       );
       setIsExtremeRound(flags.isExtreme);
       setRoundCount((value) => value + 1);
+      if (flags.isExtreme) {
+        if (meterForcedExtremeRef.current) {
+          meterForcedExtremeRef.current = false;
+        }
+      } else {
+        setExtremeMeter((previous) => {
+          const next = Math.min(100, previous + 20);
+          console.log("Extreme meter:", next);
+          return next;
+        });
+      }
     },
     [
       choosePrompt,
       recordPromptHistory,
+      setExtremeMeter,
       setRoundCount,
       triggerHapticFeedback,
     ]
@@ -706,6 +728,16 @@ export default function App() {
       return;
     }
 
+    if (extremeMeter >= 100) {
+      meterForcedExtremeRef.current = true;
+      setExtremeMeter(() => {
+        console.log("Extreme meter:", 0);
+        return 0;
+      });
+      startSpin(true);
+      return;
+    }
+
     const isExtreme = Math.random() < EXTREME_ROUND_CHANCE;
 
     if (isExtreme) {
@@ -715,7 +747,7 @@ export default function App() {
     }
 
     startSpin(false);
-  }, [isSpinning, startSpin, triggerSound]);
+  }, [extremeMeter, isSpinning, setExtremeMeter, startSpin]);
 
   const resetSwipeState = useCallback(() => {
     swipeStateRef.current = {
