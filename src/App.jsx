@@ -134,8 +134,12 @@ export default function App() {
     title: "",
     text: "",
     type: "",
+    intensity: "normal",
   });
-  const [currentConsequence, setCurrentConsequence] = useState("");
+  const [currentConsequence, setCurrentConsequence] = useState({
+    text: "",
+    intensity: "normal",
+  });
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [spinDuration, setSpinDuration] = useState(BASE_SPIN_DURATION_MS);
@@ -556,10 +560,17 @@ export default function App() {
       const promptText = choosePrompt(outcomeKey);
       recordPromptHistory(outcomeKey, promptText);
 
+      const intensity = flags.isExtreme
+        ? "extreme"
+        : flags.isSpicy
+        ? "spicy"
+        : "normal";
+
       setCurrentPrompt({
         title: segment.title,
         text: promptText,
         type: segment.id,
+        intensity,
       });
       const sounds = [];
       if (flags.isExtreme) {
@@ -897,7 +908,7 @@ export default function App() {
       sounds.push("extremeWooo");
     }
     setPendingConsequenceSounds(sounds);
-    setCurrentConsequence(consequence);
+    setCurrentConsequence({ text: consequence, intensity: selection });
     setActiveModal("consequence");
   }, [promptGroups]);
 
@@ -997,8 +1008,8 @@ export default function App() {
     setGameId(null);
     setRoundCount(0);
     setLastPrompts({});
-    setCurrentPrompt({ title: "", text: "", type: "" });
-    setCurrentConsequence("");
+    setCurrentPrompt({ title: "", text: "", type: "", intensity: "normal" });
+    setCurrentConsequence({ text: "", intensity: "normal" });
     setInputGameId("");
     setCopySuccess(false);
     regenerateGeneratedPrompts();
@@ -1270,7 +1281,7 @@ export default function App() {
       <ConsequenceModal
         isOpen={activeModal === "consequence"}
         onClose={closeModal}
-        text={currentConsequence}
+        consequence={currentConsequence}
         onButtonClick={playClick}
       />
 

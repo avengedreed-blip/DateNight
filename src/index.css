@@ -455,6 +455,14 @@
   .consequence-card,
   .announcement-card {
     @apply rounded-[24px] border border-white/20 bg-slate-950/90 px-8 py-9 text-center shadow-[0_25px_60px_rgba(15,23,42,0.45)];
+    position: relative;
+    overflow: hidden;
+  }
+
+  .prompt-card__content,
+  .consequence-card__content {
+    position: relative;
+    z-index: 2;
   }
 
   .prompt-card__title,
@@ -481,6 +489,55 @@
 
   .announcement-card__title {
     @apply text-[color:var(--warning)];
+  }
+
+  .modal-particles {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+
+  .modal-particle {
+    --particle-x: 0%;
+    --particle-y: 0%;
+    --particle-scale: 1;
+    --particle-rotate: 0deg;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(1.25rem, 3vw, 2.25rem);
+    transform: translate(-50%, -50%);
+    animation-name: modalParticleBurst;
+    animation-fill-mode: forwards;
+    animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+    opacity: 0;
+    filter: drop-shadow(0 12px 20px rgba(15, 23, 42, 0.35));
+  }
+
+  @keyframes modalParticleBurst {
+    0% {
+      transform: translate(-50%, -50%) scale(0.6) rotate(0deg);
+      opacity: 0;
+    }
+    12% {
+      opacity: 1;
+    }
+    65% {
+      opacity: 1;
+    }
+    100% {
+      transform: translate(
+          calc(-50% + var(--particle-x)),
+          calc(-50% + var(--particle-y))
+        )
+        scale(var(--particle-scale))
+        rotate(var(--particle-rotate));
+      opacity: 0;
+    }
   }
 
   .loading-screen,
