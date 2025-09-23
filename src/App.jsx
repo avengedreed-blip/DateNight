@@ -1,14 +1,27 @@
 import confetti from "canvas-confetti";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import AnnouncementModal from "./components/modals/AnnouncementModal.jsx";
 import ConsequenceModal from "./components/modals/ConsequenceModal.jsx";
 import EditorModal from "./components/modals/EditorModal.jsx";
+import Modal from "./components/modals/Modal.jsx";
 import PromptModal from "./components/modals/PromptModal.jsx";
-import SettingsModal from "./components/modals/Settings.jsx";
 import Wheel from "./components/Wheel.jsx";
 import LoadingScreen from "./components/screens/LoadingScreen.jsx";
 import StartScreen from "./components/screens/StartScreen.jsx";
-import { SettingsIcon, SparklesIcon, FlameIcon } from "./components/icons/Icons.jsx";
+import {
+  MusicIcon,
+  PencilIcon,
+  SettingsIcon,
+  SoundIcon,
+  SparklesIcon,
+  FlameIcon,
+} from "./components/icons/Icons.jsx";
 import { useBackgroundMusic } from "./hooks/useBackgroundMusic.js";
 import { usePersistentState } from "./hooks/usePersistentState.js";
 import { usePrompts } from "./hooks/usePrompts.js";
@@ -17,17 +30,6 @@ import {
   buildPromptGroups,
   generatePromptSet,
 } from "./utils/promptGenerator.js";
-import {
-  ACTIVE_THEME_STORAGE_KEY,
-  BASE_THEMES,
-  CUSTOM_THEME_STORAGE_KEY,
-  DEFAULT_THEME_ID,
-  createCustomTheme,
-  deserializeCustomThemes,
-  findThemeById,
-  getAvailableThemes,
-  serializeCustomThemes,
-} from "./theme/themes.js";
 
 const STORAGE_KEYS = {
   gameId: "dateNightGameId",
@@ -35,12 +37,12 @@ const STORAGE_KEYS = {
   sfxVolume: "dateNightSfxVol",
   roundCount: "dateNightRoundCount",
   lastPrompts: "dateNightLastPrompts",
-  theme: ACTIVE_THEME_STORAGE_KEY,
-  customThemes: CUSTOM_THEME_STORAGE_KEY,
+  extremeMeter: "dateNightExtremeMeter",
+  generatedPrompts: "dateNightGeneratedPrompts",
 };
 
 const EXTREME_ROUND_CHANCE = 0.2;
-const MAX_RECENT_PROMPTS = 5;
+const MAX_RECENT_PROMPTS = 25;
 const BASE_SPIN_DURATION_MS = 4000;
 const MIN_SWIPE_DISTANCE = 40;
 const MIN_SWIPE_STRENGTH = 0.35;
@@ -118,7 +120,8 @@ const confettiBurst = () => {
   frame();
 };
 
-const createRandomGameId = () => Math.random().toString(36).slice(2, 8).toUpperCase();
+const createRandomGameId = () =>
+  Math.random().toString(36).slice(2, 8).toUpperCase();
 
 const parseNumber = (value, fallback) => {
   const parsed = Number.parseFloat(value);
@@ -139,8 +142,12 @@ export default function App() {
     title: "",
     text: "",
     type: "",
+    intensity: "normal",
   });
-  const [currentConsequence, setCurrentConsequence] = useState("");
+  const [currentConsequence, setCurrentConsequence] = useState({
+    text: "",
+    intensity: "normal",
+  });
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [spinDuration, setSpinDuration] = useState(BASE_SPIN_DURATION_MS);
@@ -151,18 +158,37 @@ export default function App() {
   const [soundPulse, setSoundPulse] = useState(false);
   const [isLoopingSound, setIsLoopingSound] = useState(false);
   const [extremePulseLevel, setExtremePulseLevel] = useState(0);
-  const [generatedPrompts, setGeneratedPrompts] = useState(() =>
-    generatePromptSet()
+  const [generatedPrompts, setGeneratedPrompts] = usePersistentState(
+    STORAGE_KEYS.generatedPrompts,
+    generatePromptSet(),
+    {
+      serialize: JSON.stringify,
+      deserialize: (value) => {
+        try {
+          const parsed = JSON.parse(value);
+          return parsed && typeof parsed === "object"
+            ? parsed
+            : generatePromptSet();
+        } catch (error) {
+          console.warn("Failed to parse cached generated prompts", error);
+          return generatePromptSet();
+        }
+      },
+    }
   );
+  const [roundTimer, setRoundTimer] = useState(30);
+  const [timerActive, setTimerActive] = useState(false);
   const regenerateGeneratedPrompts = useCallback(() => {
     setGeneratedPrompts(generatePromptSet());
-  }, []);
+  }, [setGeneratedPrompts]);
   const rotationRef = useRef(0);
   const spinTimeoutRef = useRef(null);
   const pendingSpinRef = useRef(null);
   const copyFeedbackTimeoutRef = useRef(null);
   const soundPulseTimeoutRef = useRef(null);
-  const themeVarKeysRef = useRef(new Set());
+  const meterForcedExtremeRef = useRef(false);
+  const timerRef = useRef(null);
+  const timerExpiredRef = useRef(false);
   const swipeStateRef = useRef({
     active: false,
     pointerId: null,
@@ -203,6 +229,14 @@ export default function App() {
       deserialize: (value) => parseInteger(value, 0),
     }
   );
+  const [extremeMeter, setExtremeMeter] = usePersistentState(
+    STORAGE_KEYS.extremeMeter,
+    0,
+    {
+      serialize: (value) => value.toString(),
+      deserialize: (value) => parseInteger(value, 0),
+    }
+  );
   const [lastPrompts, setLastPrompts] = usePersistentState(
     STORAGE_KEYS.lastPrompts,
     {},
@@ -219,24 +253,6 @@ export default function App() {
       },
     }
   );
-  const [customThemes, setCustomThemes] = usePersistentState(
-    STORAGE_KEYS.customThemes,
-    [],
-    {
-      serialize: serializeCustomThemes,
-      deserialize: deserializeCustomThemes,
-      skipNull: false,
-    }
-  );
-  const [activeThemeId, setActiveThemeId] = usePersistentState(
-    STORAGE_KEYS.theme,
-    DEFAULT_THEME_ID,
-    {
-      serialize: (value) => value ?? DEFAULT_THEME_ID,
-      deserialize: (value) => value || DEFAULT_THEME_ID,
-      skipNull: false,
-    }
-  );
 
   const {
     prompts,
@@ -250,57 +266,6 @@ export default function App() {
     () => buildPromptGroups(generatedPrompts),
     [generatedPrompts]
   );
-  const availableThemes = useMemo(
-    () => getAvailableThemes(customThemes),
-    [customThemes]
-  );
-  const activeTheme = useMemo(
-    () => findThemeById(availableThemes, activeThemeId),
-    [activeThemeId, availableThemes]
-  );
-
-  useEffect(() => {
-    if (!availableThemes.some((theme) => theme.id === activeThemeId)) {
-      setActiveThemeId(DEFAULT_THEME_ID);
-    }
-  }, [activeThemeId, availableThemes, setActiveThemeId]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") {
-      return undefined;
-    }
-
-    const body = document.body;
-    if (!body || !activeTheme) {
-      return undefined;
-    }
-
-    const appliedKeys = themeVarKeysRef.current;
-    appliedKeys.forEach((key) => {
-      body.style.removeProperty(key);
-    });
-    appliedKeys.clear();
-
-    Object.entries(activeTheme.cssVars ?? {}).forEach(([key, value]) => {
-      body.style.setProperty(key, value);
-      appliedKeys.add(key);
-    });
-
-    body.dataset.theme = activeTheme.id;
-
-    return () => {
-      if (!body) {
-        return;
-      }
-      appliedKeys.forEach((key) => {
-        body.style.removeProperty(key);
-      });
-      appliedKeys.clear();
-      if (body.dataset.theme === activeTheme.id) {
-        delete body.dataset.theme;
-      }
-    };
-  }, [activeTheme]);
   const promptGroups = useMemo(
     () => ({
       truth: [
@@ -354,16 +319,22 @@ export default function App() {
     regenerateGeneratedPrompts();
   }, [gameId, regenerateGeneratedPrompts]);
 
-  const fallbackTrackId = BASE_THEMES[0]?.trackId ?? "classicDarkTrack";
-  const activeTrackId = activeTheme?.trackId ?? fallbackTrackId;
   const shouldPlayMusic = Boolean(gameId) && toneReady && musicVolume > 0;
   const { stop: stopMusic } = useBackgroundMusic(
     musicVolume,
     shouldPlayMusic,
-    toneReady,
-    activeTrackId
+    toneReady
   );
   const { play, startLoop, stopLoop } = useSound(sfxVolume, toneReady);
+
+  const stopRoundTimer = useCallback(() => {
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setTimerActive(false);
+    timerExpiredRef.current = false;
+  }, []);
 
   const flashSoundActivity = useCallback(() => {
     if (sfxVolume <= 0) {
@@ -404,50 +375,6 @@ export default function App() {
     }
   }, [sfxVolume]);
 
-  const handleSelectTheme = useCallback(
-    (nextThemeId) => {
-      if (!nextThemeId) {
-        return;
-      }
-      setActiveThemeId(nextThemeId);
-    },
-    [setActiveThemeId]
-  );
-
-  const handleCreateTheme = useCallback(
-    (themeConfig) => {
-      const theme = createCustomTheme(themeConfig ?? {});
-      setCustomThemes((themes) => {
-        const existing = Array.isArray(themes) ? themes : [];
-        const filtered = existing.filter((item) => item.id !== theme.id);
-        return [...filtered, theme];
-      });
-      setActiveThemeId(theme.id);
-      return theme;
-    },
-    [setActiveThemeId, setCustomThemes]
-  );
-
-  const handleDeleteCustomTheme = useCallback(
-    (themeId) => {
-      if (!themeId) {
-        return;
-      }
-
-      setCustomThemes((themes) => {
-        if (!Array.isArray(themes)) {
-          return [];
-        }
-        return themes.filter((theme) => theme.id !== themeId);
-      });
-
-      if (themeId === activeThemeId) {
-        setActiveThemeId(DEFAULT_THEME_ID);
-      }
-    },
-    [activeThemeId, setActiveThemeId, setCustomThemes]
-  );
-
   const triggerSound = useCallback(
     (soundName) => {
       flashSoundActivity();
@@ -456,36 +383,55 @@ export default function App() {
     [flashSoundActivity, play]
   );
 
-  const triggerHapticFeedback = useCallback((pattern = HAPTIC_PATTERNS.light) => {
-    if (typeof window === "undefined") {
-      return;
-    }
+  const triggerHapticFeedback = useCallback(
+    (pattern = HAPTIC_PATTERNS.light) => {
+      if (typeof window === "undefined") {
+        return;
+      }
 
-    const prefersCoarsePointer =
-      window.matchMedia?.("(pointer: coarse)")?.matches ||
-      window.matchMedia?.("(any-pointer: coarse)")?.matches;
+      const prefersCoarsePointer =
+        window.matchMedia?.("(pointer: coarse)")?.matches ||
+        window.matchMedia?.("(any-pointer: coarse)")?.matches;
 
-    if (!prefersCoarsePointer) {
-      return;
-    }
+      if (!prefersCoarsePointer) {
+        return;
+      }
 
-    const { navigator } = window;
-    if (!navigator?.vibrate) {
-      return;
-    }
+      const { navigator } = window;
+      if (!navigator?.vibrate) {
+        return;
+      }
 
-    const vibrationPattern = pattern ?? HAPTIC_PATTERNS.light;
-    if (vibrationPattern === null || vibrationPattern === undefined) {
-      return;
-    }
+      const vibrationPattern = pattern ?? HAPTIC_PATTERNS.light;
+      if (vibrationPattern === null || vibrationPattern === undefined) {
+        return;
+      }
 
-    navigator.vibrate(vibrationPattern);
-  }, []);
+      navigator.vibrate(vibrationPattern);
+    },
+    []
+  );
 
   const playClick = useCallback(() => {
     triggerSound("click");
     triggerHapticFeedback(HAPTIC_PATTERNS.light);
   }, [triggerHapticFeedback, triggerSound]);
+
+  const triggerTimerVibration = useCallback((pattern, label) => {
+    if (typeof window === "undefined") {
+      console.log(`Timer vibration fallback (${label}):`, pattern);
+      return;
+    }
+
+    const { navigator } = window;
+
+    if (navigator && "vibrate" in navigator) {
+      navigator.vibrate(pattern);
+      return;
+    }
+
+    console.log(`Timer vibration fallback (${label}):`, pattern);
+  }, []);
 
   const startSoundLoop = useCallback(() => {
     if (sfxVolume > 0) {
@@ -594,8 +540,9 @@ export default function App() {
       }
       pendingSpinRef.current = null;
       stopSoundLoop();
+      stopRoundTimer();
     };
-  }, [stopSoundLoop]);
+  }, [stopRoundTimer, stopSoundLoop]);
 
   useEffect(() => {
     if (!pendingExtremeSpin) {
@@ -618,6 +565,83 @@ export default function App() {
     };
   }, [pendingExtremeSpin]);
 
+  useEffect(() => {
+    if (activeModal === "prompt") {
+      setRoundTimer(30);
+      timerExpiredRef.current = false;
+      setTimerActive(true);
+      return;
+    }
+
+    stopRoundTimer();
+    setRoundTimer(30);
+  }, [activeModal, stopRoundTimer]);
+
+  useEffect(() => {
+    if (!timerActive) {
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
+
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+    }
+
+    timerRef.current = window.setInterval(() => {
+      setRoundTimer((previous) => {
+        if (previous <= 0) {
+          return previous;
+        }
+
+        const nextValue = previous - 1;
+
+        play("timerTick");
+        triggerTimerVibration(50, "tick");
+
+        if (nextValue <= 5) {
+          play("timerWarning");
+        }
+
+        if (nextValue <= 0) {
+          play("timerEnd");
+          triggerTimerVibration([100, 50, 100], "final");
+          if (timerRef.current) {
+            window.clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          timerExpiredRef.current = true;
+          setTimerActive(false);
+          return 0;
+        }
+
+        return nextValue;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [play, timerActive, triggerTimerVibration]);
+
+  useEffect(() => {
+    if (!timerActive && activeModal === "prompt" && timerExpiredRef.current) {
+      timerExpiredRef.current = false;
+      handleRefuse();
+    }
+  }, [activeModal, handleRefuse, timerActive]);
+
+  useEffect(() => {
+    if (timerActive) {
+      console.log("Round timer:", roundTimer);
+    }
+  }, [roundTimer, timerActive]);
+
   const choosePrompt = useCallback(
     (outcomeKey) => {
       const pool = promptGroups[outcomeKey] ?? [];
@@ -625,28 +649,15 @@ export default function App() {
         return "No prompts available for this category.";
       }
 
-      const recentPrompts = new Set(
-        (lastPrompts?.[outcomeKey] ?? []).slice(-MAX_RECENT_PROMPTS)
+      const recentHistory = (lastPrompts?.[outcomeKey] ?? []).slice(
+        -MAX_RECENT_PROMPTS
       );
-      const weightedPool = pool.map((prompt) => ({
-        prompt,
-        weight: recentPrompts.has(prompt) ? 0.2 : 1,
-      }));
+      const recentSet = new Set(recentHistory);
+      const freshOptions = pool.filter((prompt) => !recentSet.has(prompt));
+      const selectionPool = freshOptions.length > 0 ? freshOptions : pool;
 
-      const totalWeight = weightedPool.reduce(
-        (total, item) => total + item.weight,
-        0
-      );
-      let threshold = Math.random() * totalWeight;
-
-      for (const item of weightedPool) {
-        threshold -= item.weight;
-        if (threshold <= 0) {
-          return item.prompt;
-        }
-      }
-
-      return weightedPool.at(-1)?.prompt ?? pool[0];
+      const index = Math.floor(Math.random() * selectionPool.length);
+      return selectionPool[index] ?? pool[0];
     },
     [lastPrompts, promptGroups]
   );
@@ -669,10 +680,17 @@ export default function App() {
       const promptText = choosePrompt(outcomeKey);
       recordPromptHistory(outcomeKey, promptText);
 
+      const intensity = flags.isExtreme
+        ? "extreme"
+        : flags.isSpicy
+        ? "spicy"
+        : "normal";
+
       setCurrentPrompt({
         title: segment.title,
         text: promptText,
         type: segment.id,
+        intensity,
       });
       const sounds = [];
       if (flags.isExtreme) {
@@ -688,10 +706,22 @@ export default function App() {
       );
       setIsExtremeRound(flags.isExtreme);
       setRoundCount((value) => value + 1);
+      if (flags.isExtreme) {
+        if (meterForcedExtremeRef.current) {
+          meterForcedExtremeRef.current = false;
+        }
+      } else {
+        setExtremeMeter((previous) => {
+          const next = Math.min(100, previous + 20);
+          console.log("Extreme meter:", next);
+          return next;
+        });
+      }
     },
     [
       choosePrompt,
       recordPromptHistory,
+      setExtremeMeter,
       setRoundCount,
       triggerHapticFeedback,
     ]
@@ -722,8 +752,7 @@ export default function App() {
     }
 
     const sliceAngle = 360 / sliceCount;
-    const normalizedRotation =
-      ((rotationRef.current % 360) + 360) % 360;
+    const normalizedRotation = ((rotationRef.current % 360) + 360) % 360;
     const landingAngle = (360 - normalizedRotation) % 360;
     let landingIndex = Math.floor(landingAngle / sliceAngle);
 
@@ -755,14 +784,9 @@ export default function App() {
         ),
         MAX_SWIPE_STRENGTH
       );
-      const effectiveStrength = Math.max(
-        clampedStrength,
-        MIN_SWIPE_STRENGTH
-      );
+      const effectiveStrength = Math.max(clampedStrength, MIN_SWIPE_STRENGTH);
       const normalizedStrength =
-        MAX_SWIPE_STRENGTH > 0
-          ? effectiveStrength / MAX_SWIPE_STRENGTH
-          : 0.5;
+        MAX_SWIPE_STRENGTH > 0 ? effectiveStrength / MAX_SWIPE_STRENGTH : 0.5;
       const sliceCount = WHEEL_SEGMENTS.length;
       if (!sliceCount) {
         return;
@@ -772,7 +796,8 @@ export default function App() {
         ? Array.from({ length: Math.min(sliceCount, 2) }, (_, index) => index)
         : WHEEL_SEGMENTS.map((_, index) => index);
       const selectedIndex =
-        availableIndexes[Math.floor(Math.random() * availableIndexes.length)] ?? 0;
+        availableIndexes[Math.floor(Math.random() * availableIndexes.length)] ??
+        0;
       const sliceAngle = 360 / sliceCount;
       const selectedSegment = WHEEL_SEGMENTS[selectedIndex];
       const outcome = determineOutcome(selectedSegment, forceExtreme);
@@ -829,6 +854,16 @@ export default function App() {
       return;
     }
 
+    if (extremeMeter >= 100) {
+      meterForcedExtremeRef.current = true;
+      setExtremeMeter(() => {
+        console.log("Extreme meter:", 0);
+        return 0;
+      });
+      startSpin(true);
+      return;
+    }
+
     const isExtreme = Math.random() < EXTREME_ROUND_CHANCE;
 
     if (isExtreme) {
@@ -838,7 +873,7 @@ export default function App() {
     }
 
     startSpin(false);
-  }, [isSpinning, startSpin, triggerSound]);
+  }, [extremeMeter, isSpinning, setExtremeMeter, startSpin]);
 
   const resetSwipeState = useCallback(() => {
     swipeStateRef.current = {
@@ -931,8 +966,7 @@ export default function App() {
         peakVelocity / 1.2,
         MAX_SWIPE_STRENGTH
       );
-      const rawStrength =
-        normalizedDistance * 0.55 + normalizedVelocity * 0.85;
+      const rawStrength = normalizedDistance * 0.55 + normalizedVelocity * 0.85;
       const strength = Math.max(
         Math.min(rawStrength, MAX_SWIPE_STRENGTH),
         totalDistance >= MIN_SWIPE_DISTANCE
@@ -967,6 +1001,7 @@ export default function App() {
   }, [pendingExtremeSpin, startSpin]);
 
   const handleRefuse = useCallback(() => {
+    stopRoundTimer();
     const levels = ["normal", "spicy", "extreme"];
     const selection = pickRandom(levels);
 
@@ -988,9 +1023,9 @@ export default function App() {
       sounds.push("extremeWooo");
     }
     setPendingConsequenceSounds(sounds);
-    setCurrentConsequence(consequence);
+    setCurrentConsequence({ text: consequence, intensity: selection });
     setActiveModal("consequence");
-  }, [promptGroups]);
+  }, [promptGroups, stopRoundTimer]);
 
   useEffect(() => {
     if (activeModal === "announcement") {
@@ -1073,6 +1108,7 @@ export default function App() {
     pendingSpinRef.current = null;
     setIsSpinning(false);
     stopSoundLoop();
+    stopRoundTimer();
     setSoundPulse(false);
     if (copyFeedbackTimeoutRef.current) {
       window.clearTimeout(copyFeedbackTimeoutRef.current);
@@ -1088,8 +1124,8 @@ export default function App() {
     setGameId(null);
     setRoundCount(0);
     setLastPrompts({});
-    setCurrentPrompt({ title: "", text: "", type: "" });
-    setCurrentConsequence("");
+    setCurrentPrompt({ title: "", text: "", type: "", intensity: "normal" });
+    setCurrentConsequence({ text: "", intensity: "normal" });
     setInputGameId("");
     setCopySuccess(false);
     regenerateGeneratedPrompts();
@@ -1110,11 +1146,12 @@ export default function App() {
   const closeModal = useCallback(() => {
     setActiveModal((previous) => {
       if (previous === "prompt") {
+        stopRoundTimer();
         setIsExtremeRound(false);
       }
       return null;
     });
-  }, []);
+  }, [stopRoundTimer]);
 
   const openSettingsModal = useCallback(() => {
     playClick();
@@ -1130,7 +1167,6 @@ export default function App() {
     playClick();
     handleSpin();
   }, [handleSpin, playClick]);
-
 
   if (!gameId) {
     return (
@@ -1166,7 +1202,9 @@ export default function App() {
   }
 
   if (!prompts) {
-    return <LoadingScreen message="Preparing the wheel" onButtonClick={playClick} />;
+    return (
+      <LoadingScreen message="Preparing the wheel" onButtonClick={playClick} />
+    );
   }
 
   const isSfxActive = soundPulse || isLoopingSound;
@@ -1174,8 +1212,8 @@ export default function App() {
   const activeExtremeLevel = pendingExtremeSpin
     ? Math.min(Math.max(extremePulseLevel, 1), 4)
     : extremeSpinActive
-      ? 4
-      : 0;
+    ? 4
+    : 0;
 
   return (
     <div className="app-shell">
@@ -1185,7 +1223,9 @@ export default function App() {
             <div className="app-panel__badge-group">
               <button
                 type="button"
-                className={`badge-button ${copySuccess ? "badge-button--success" : ""}`}
+                className={`badge-button ${
+                  copySuccess ? "badge-button--success" : ""
+                }`}
                 onClick={handleCopyGameIdClick}
                 aria-live="polite"
                 aria-label={
@@ -1273,6 +1313,7 @@ export default function App() {
             onPointerUp={handleWheelPointerEnd}
             onPointerCancel={handleWheelPointerCancel}
             onPointerLeave={handleWheelPointerCancel}
+            extremeMeter={extremeMeter}
           >
             <div className="spin-button">
               <button
@@ -1298,21 +1339,57 @@ export default function App() {
         </div>
       </main>
 
-      <SettingsModal
+      <Modal
         isOpen={activeModal === "settings"}
         onClose={closeModal}
-        musicVolume={musicVolume}
-        onMusicVolumeChange={setMusicVolume}
-        sfxVolume={sfxVolume}
-        onSfxVolumeChange={setSfxVolume}
-        isSfxActive={isSfxActive}
-        onOpenEditor={openEditorModal}
-        themes={availableThemes}
-        activeThemeId={activeTheme?.id ?? DEFAULT_THEME_ID}
-        onSelectTheme={handleSelectTheme}
-        onCreateCustomTheme={handleCreateTheme}
-        onDeleteCustomTheme={handleDeleteCustomTheme}
-      />
+        labelledBy="settings-modal-title"
+      >
+        <h2
+          id="settings-modal-title"
+          className="mb-6 text-2xl font-semibold text-slate-100"
+        >
+          Settings
+        </h2>
+        <div className="settings-section">
+          <div className="settings-row">
+            <MusicIcon />
+            <input
+              className="settings-slider"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={musicVolume}
+              onChange={(event) =>
+                setMusicVolume(parseFloat(event.target.value))
+              }
+            />
+          </div>
+          <div
+            className={`settings-row ${
+              isSfxActive ? "settings-row--active" : ""
+            }`}
+          >
+            <SoundIcon />
+            <input
+              className="settings-slider"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={sfxVolume}
+              onChange={(event) => setSfxVolume(parseFloat(event.target.value))}
+            />
+          </div>
+          <button
+            type="button"
+            className="primary-button flex items-center justify-center gap-2"
+            onClick={openEditorModal}
+          >
+            <PencilIcon /> Edit Prompts
+          </button>
+        </div>
+      </Modal>
 
       <PromptModal
         isOpen={activeModal === "prompt"}
@@ -1321,12 +1398,14 @@ export default function App() {
         onRefuse={handleRefuse}
         onButtonClick={playClick}
         onAccept={closeModal}
+        roundTimer={roundTimer}
+        timerActive={timerActive}
       />
 
       <ConsequenceModal
         isOpen={activeModal === "consequence"}
         onClose={closeModal}
-        text={currentConsequence}
+        consequence={currentConsequence}
         onButtonClick={playClick}
       />
 
