@@ -1,5 +1,11 @@
 import confetti from "canvas-confetti";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import AnnouncementModal from "./components/modals/AnnouncementModal.jsx";
 import ConsequenceModal from "./components/modals/ConsequenceModal.jsx";
 import EditorModal from "./components/modals/EditorModal.jsx";
@@ -113,7 +119,8 @@ const confettiBurst = () => {
   frame();
 };
 
-const createRandomGameId = () => Math.random().toString(36).slice(2, 8).toUpperCase();
+const createRandomGameId = () =>
+  Math.random().toString(36).slice(2, 8).toUpperCase();
 
 const parseNumber = (value, fallback) => {
   const parsed = Number.parseFloat(value);
@@ -360,36 +367,55 @@ export default function App() {
     [flashSoundActivity, play]
   );
 
-  const triggerHapticFeedback = useCallback((pattern = HAPTIC_PATTERNS.light) => {
-    if (typeof window === "undefined") {
-      return;
-    }
+  const triggerHapticFeedback = useCallback(
+    (pattern = HAPTIC_PATTERNS.light) => {
+      if (typeof window === "undefined") {
+        return;
+      }
 
-    const prefersCoarsePointer =
-      window.matchMedia?.("(pointer: coarse)")?.matches ||
-      window.matchMedia?.("(any-pointer: coarse)")?.matches;
+      const prefersCoarsePointer =
+        window.matchMedia?.("(pointer: coarse)")?.matches ||
+        window.matchMedia?.("(any-pointer: coarse)")?.matches;
 
-    if (!prefersCoarsePointer) {
-      return;
-    }
+      if (!prefersCoarsePointer) {
+        return;
+      }
 
-    const { navigator } = window;
-    if (!navigator?.vibrate) {
-      return;
-    }
+      const { navigator } = window;
+      if (!navigator?.vibrate) {
+        return;
+      }
 
-    const vibrationPattern = pattern ?? HAPTIC_PATTERNS.light;
-    if (vibrationPattern === null || vibrationPattern === undefined) {
-      return;
-    }
+      const vibrationPattern = pattern ?? HAPTIC_PATTERNS.light;
+      if (vibrationPattern === null || vibrationPattern === undefined) {
+        return;
+      }
 
-    navigator.vibrate(vibrationPattern);
-  }, []);
+      navigator.vibrate(vibrationPattern);
+    },
+    []
+  );
 
   const playClick = useCallback(() => {
     triggerSound("click");
     triggerHapticFeedback(HAPTIC_PATTERNS.light);
   }, [triggerHapticFeedback, triggerSound]);
+
+  const triggerTimerVibration = useCallback((pattern, label) => {
+    if (typeof window === "undefined") {
+      console.log(`Timer vibration fallback (${label}):`, pattern);
+      return;
+    }
+
+    const { navigator } = window;
+
+    if (navigator && "vibrate" in navigator) {
+      navigator.vibrate(pattern);
+      return;
+    }
+
+    console.log(`Timer vibration fallback (${label}):`, pattern);
+  }, []);
 
   const startSoundLoop = useCallback(() => {
     if (sfxVolume > 0) {
@@ -550,7 +576,22 @@ export default function App() {
 
     timerRef.current = window.setInterval(() => {
       setRoundTimer((previous) => {
-        if (previous <= 1) {
+        if (previous <= 0) {
+          return previous;
+        }
+
+        const nextValue = previous - 1;
+
+        play("timerTick");
+        triggerTimerVibration(50, "tick");
+
+        if (nextValue <= 5) {
+          play("timerWarning");
+        }
+
+        if (nextValue <= 0) {
+          play("timerEnd");
+          triggerTimerVibration([100, 50, 100], "final");
           if (timerRef.current) {
             window.clearInterval(timerRef.current);
             timerRef.current = null;
@@ -560,7 +601,7 @@ export default function App() {
           return 0;
         }
 
-        return previous - 1;
+        return nextValue;
       });
     }, 1000);
 
@@ -570,7 +611,7 @@ export default function App() {
         timerRef.current = null;
       }
     };
-  }, [timerActive]);
+  }, [play, timerActive, triggerTimerVibration]);
 
   useEffect(() => {
     if (!timerActive && activeModal === "prompt" && timerExpiredRef.current) {
@@ -708,8 +749,7 @@ export default function App() {
     }
 
     const sliceAngle = 360 / sliceCount;
-    const normalizedRotation =
-      ((rotationRef.current % 360) + 360) % 360;
+    const normalizedRotation = ((rotationRef.current % 360) + 360) % 360;
     const landingAngle = (360 - normalizedRotation) % 360;
     let landingIndex = Math.floor(landingAngle / sliceAngle);
 
@@ -741,14 +781,9 @@ export default function App() {
         ),
         MAX_SWIPE_STRENGTH
       );
-      const effectiveStrength = Math.max(
-        clampedStrength,
-        MIN_SWIPE_STRENGTH
-      );
+      const effectiveStrength = Math.max(clampedStrength, MIN_SWIPE_STRENGTH);
       const normalizedStrength =
-        MAX_SWIPE_STRENGTH > 0
-          ? effectiveStrength / MAX_SWIPE_STRENGTH
-          : 0.5;
+        MAX_SWIPE_STRENGTH > 0 ? effectiveStrength / MAX_SWIPE_STRENGTH : 0.5;
       const sliceCount = WHEEL_SEGMENTS.length;
       if (!sliceCount) {
         return;
@@ -758,7 +793,8 @@ export default function App() {
         ? Array.from({ length: Math.min(sliceCount, 2) }, (_, index) => index)
         : WHEEL_SEGMENTS.map((_, index) => index);
       const selectedIndex =
-        availableIndexes[Math.floor(Math.random() * availableIndexes.length)] ?? 0;
+        availableIndexes[Math.floor(Math.random() * availableIndexes.length)] ??
+        0;
       const sliceAngle = 360 / sliceCount;
       const selectedSegment = WHEEL_SEGMENTS[selectedIndex];
       const outcome = determineOutcome(selectedSegment, forceExtreme);
@@ -927,8 +963,7 @@ export default function App() {
         peakVelocity / 1.2,
         MAX_SWIPE_STRENGTH
       );
-      const rawStrength =
-        normalizedDistance * 0.55 + normalizedVelocity * 0.85;
+      const rawStrength = normalizedDistance * 0.55 + normalizedVelocity * 0.85;
       const strength = Math.max(
         Math.min(rawStrength, MAX_SWIPE_STRENGTH),
         totalDistance >= MIN_SWIPE_DISTANCE
@@ -1130,7 +1165,6 @@ export default function App() {
     handleSpin();
   }, [handleSpin, playClick]);
 
-
   if (!gameId) {
     return (
       <StartScreen
@@ -1165,7 +1199,9 @@ export default function App() {
   }
 
   if (!prompts) {
-    return <LoadingScreen message="Preparing the wheel" onButtonClick={playClick} />;
+    return (
+      <LoadingScreen message="Preparing the wheel" onButtonClick={playClick} />
+    );
   }
 
   const isSfxActive = soundPulse || isLoopingSound;
@@ -1173,8 +1209,8 @@ export default function App() {
   const activeExtremeLevel = pendingExtremeSpin
     ? Math.min(Math.max(extremePulseLevel, 1), 4)
     : extremeSpinActive
-      ? 4
-      : 0;
+    ? 4
+    : 0;
 
   return (
     <div className="app-shell">
@@ -1184,7 +1220,9 @@ export default function App() {
             <div className="app-panel__badge-group">
               <button
                 type="button"
-                className={`badge-button ${copySuccess ? "badge-button--success" : ""}`}
+                className={`badge-button ${
+                  copySuccess ? "badge-button--success" : ""
+                }`}
                 onClick={handleCopyGameIdClick}
                 aria-live="polite"
                 aria-label={
@@ -1319,7 +1357,9 @@ export default function App() {
               max="1"
               step="0.05"
               value={musicVolume}
-              onChange={(event) => setMusicVolume(parseFloat(event.target.value))}
+              onChange={(event) =>
+                setMusicVolume(parseFloat(event.target.value))
+              }
             />
           </div>
           <div
