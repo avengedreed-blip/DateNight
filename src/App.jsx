@@ -734,6 +734,10 @@ export default function App() {
 
     if (extremeMeter >= 100) {
       meterForcedExtremeRef.current = true;
+      setExtremeMeter(() => {
+        console.log("Extreme meter:", 0);
+        return 0;
+      });
       startSpin(true);
       return;
     }
@@ -747,7 +751,7 @@ export default function App() {
     }
 
     startSpin(false);
-  }, [extremeMeter, isSpinning, startSpin]);
+  }, [extremeMeter, isSpinning, setExtremeMeter, startSpin]);
 
   const resetSwipeState = useCallback(() => {
     swipeStateRef.current = {
@@ -849,9 +853,19 @@ export default function App() {
           : MIN_SWIPE_STRENGTH * 0.85
       );
 
+      if (extremeMeter >= 100) {
+        meterForcedExtremeRef.current = true;
+        setExtremeMeter(() => {
+          console.log("Extreme meter:", 0);
+          return 0;
+        });
+        startSpin(true);
+        return;
+      }
+
       startSpin(false, strength);
     },
-    [isSpinning, resetSwipeState, startSpin]
+    [extremeMeter, isSpinning, resetSwipeState, setExtremeMeter, startSpin]
   );
 
   const handleWheelPointerCancel = useCallback(
