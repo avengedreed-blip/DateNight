@@ -3,13 +3,90 @@ import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "../config/firebase.js";
 import { defaultPrompts } from "../config/prompts.js";
 
+const PROMPT_CACHE_VERSION = 1;
+const PROMPT_CACHE_KEY = `dateNightPromptCache::v${PROMPT_CACHE_VERSION}`;
+
 const clonePrompts = (source) => JSON.parse(JSON.stringify(source));
 
+const isBrowser = () =>
+  typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+
+const readCachedPrompts = () => {
+  if (!isBrowser()) {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(PROMPT_CACHE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      parsed.version !== PROMPT_CACHE_VERSION ||
+      !parsed.prompts
+    ) {
+      return null;
+    }
+
+    return parsed.prompts;
+  } catch (error) {
+    console.warn("Failed to read cached prompts", error);
+    return null;
+  }
+};
+
+const persistPromptCache = (prompts) => {
+  if (!isBrowser()) {
+    return;
+  }
+
+  try {
+    const payload = {
+      version: PROMPT_CACHE_VERSION,
+      updatedAt: Date.now(),
+      prompts,
+    };
+    window.localStorage.setItem(PROMPT_CACHE_KEY, JSON.stringify(payload));
+  } catch (error) {
+    console.warn("Failed to cache prompts locally", error);
+  }
+};
+
 export function usePrompts(gameId) {
-  const [prompts, setPrompts] = useState(() => clonePrompts(defaultPrompts));
+  const [prompts, setPrompts] = useState(() => {
+    const cached = readCachedPrompts();
+    if (cached) {
+      return clonePrompts(cached);
+    }
+
+    return clonePrompts(defaultPrompts);
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
+
+  const applyPrompts = useCallback((nextPrompts, { persist = true } = {}) => {
+    const safePrompts = clonePrompts(nextPrompts ?? defaultPrompts);
+    setPrompts(safePrompts);
+
+    if (persist) {
+      persistPromptCache(safePrompts);
+    }
+  }, []);
+
+  const hydrateFromCache = useCallback(() => {
+    const cached = readCachedPrompts();
+    if (!cached) {
+      return false;
+    }
+
+    applyPrompts(cached, { persist: false });
+    return true;
+  }, [applyPrompts]);
 
   useEffect(() => {
     let unsubscribe = null;
@@ -21,7 +98,10 @@ export function usePrompts(gameId) {
     const loadPrompts = async () => {
       if (!gameId || !db) {
         if (isActive) {
-          setPrompts(clonePrompts(defaultPrompts));
+          const hydrated = hydrateFromCache();
+          if (!hydrated) {
+            applyPrompts(defaultPrompts);
+          }
           setIsLoading(false);
         }
         return;
@@ -34,10 +114,10 @@ export function usePrompts(gameId) {
         if (!snapshot.exists()) {
           await setDoc(promptsRef, defaultPrompts);
           if (isActive) {
-            setPrompts(clonePrompts(defaultPrompts));
+            applyPrompts(defaultPrompts);
           }
         } else if (isActive) {
-          setPrompts(snapshot.data());
+          applyPrompts(snapshot.data());
         }
 
         unsubscribe = onSnapshot(
@@ -48,13 +128,16 @@ export function usePrompts(gameId) {
             }
 
             if (docSnapshot.exists()) {
-              setPrompts(docSnapshot.data());
+              applyPrompts(docSnapshot.data());
             }
           },
           (snapshotError) => {
             console.error("Error with Firestore snapshot listener:", snapshotError);
             if (isActive) {
-              setPrompts(clonePrompts(defaultPrompts));
+              const hydrated = hydrateFromCache();
+              if (!hydrated) {
+                applyPrompts(defaultPrompts);
+              }
               setError(
                 "We couldn't stay in sync with the server. Using the local prompts for now."
               );
@@ -64,7 +147,10 @@ export function usePrompts(gameId) {
       } catch (loadError) {
         console.error("Failed to load prompts from Firestore", loadError);
         if (isActive) {
-          setPrompts(clonePrompts(defaultPrompts));
+          const hydrated = hydrateFromCache();
+          if (!hydrated) {
+            applyPrompts(defaultPrompts);
+          }
           setError("We couldn't load your shared prompts. Try again in a moment.");
         }
       } finally {
@@ -82,11 +168,11 @@ export function usePrompts(gameId) {
         unsubscribe();
       }
     };
-  }, [gameId, reloadToken]);
+  }, [applyPrompts, gameId, hydrateFromCache, reloadToken]);
 
   const savePrompts = useCallback(
     (nextPrompts) => {
-      setPrompts(nextPrompts);
+      applyPrompts(nextPrompts);
 
       if (!gameId || !db) {
         return;
@@ -97,7 +183,7 @@ export function usePrompts(gameId) {
         console.error("Failed to persist prompts to Firestore", persistError);
       });
     },
-    [gameId]
+    [applyPrompts, gameId]
   );
 
   const retry = useCallback(() => {
