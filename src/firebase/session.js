@@ -217,7 +217,9 @@ async function updatePlayerStreak(db, gameId, playerId, result) {
 
     const didAccept = result === "accepted" || result === "correct";
     const didRefuse =
-      result === "refused" || result === "auto-refusal" || result === "incorrect";
+      result === "refused" ||
+      result === "auto-refusal" ||
+      result === "incorrect";
 
     if (didAccept) {
       accepts += 1;
