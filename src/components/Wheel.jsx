@@ -42,34 +42,6 @@ const deriveLabelTypography = (sliceAngle, label) => {
   };
 };
 
-const getLabelColorVar = (segmentId, tone) => {
-  const fallback = tone === "light"
-    ? "var(--wheel-label-light, var(--text-main, #f8fafc))"
-    : tone === "dark"
-    ? "var(--wheel-label-dark, rgba(15, 23, 42, 0.92))"
-    : "var(--wheel-label-default, var(--text-main, #f8fafc))";
-
-  if (!segmentId) {
-    return fallback;
-  }
-
-  return `var(--wheel-${segmentId}-label, ${fallback})`;
-};
-
-const getLabelSurfaceVar = (segmentId, tone) => {
-  const fallback = tone === "light"
-    ? "var(--wheel-label-surface-light, rgba(15, 23, 42, 0.55))"
-    : tone === "dark"
-    ? "var(--wheel-label-surface-dark, rgba(248, 250, 252, 0.32))"
-    : "var(--wheel-label-surface, rgba(15, 23, 42, 0.45))";
-
-  if (!segmentId) {
-    return fallback;
-  }
-
-  return `var(--wheel-${segmentId}-label-surface, ${fallback})`;
-};
-
 const Wheel = ({
   rotation,
   isExtremeRound,
@@ -147,14 +119,7 @@ const Wheel = ({
         24,
         segments.length <= 2 ? 70 : 58,
       );
-      const toneOverrides = {
-        truth: "dark",
-        dare: "light",
-        trivia: "dark",
-      };
-      const tone = segment.labelTone ?? toneOverrides[segment.id] ?? undefined;
-      const color = getLabelColorVar(segment.id, tone);
-      const surface = getLabelSurfaceVar(segment.id, tone);
+      const color = "#FFFFFF";
 
       return {
         id,
@@ -163,7 +128,6 @@ const Wheel = ({
         y,
         width,
         color,
-        surface,
         fontSize: typography.fontSize,
         lineClamp: typography.lineClamp,
         letterSpacing: typography.letterSpacing,
@@ -252,7 +216,6 @@ const Wheel = ({
                 width: `${item.width}%`,
                 transform: `translate(-50%, -50%) rotate(${-normalizedRotation}deg)`,
                 color: item.color,
-                background: item.surface,
               }}
             >
                 <span

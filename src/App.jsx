@@ -1882,182 +1882,201 @@ export default function App() {
     <div className="app-shell">
       <main className="app-panel">
         <div className="app-panel__body">
-          <div className="app-panel__top-bar">
-            <div className="app-panel__badge-group">
-              <button
-                type="button"
-                className={`badge-button ${
-                  copySuccess ? "badge-button--success" : ""
-                }`}
-                onClick={handleCopyGameIdClick}
-                aria-live="polite"
-                aria-label={
-                  isOfflineMode
-                    ? "Offline mode active"
-                    : copySuccess
-                    ? `Game ID ${gameId} copied to clipboard`
-                    : `Copy game ID ${gameId} to clipboard`
-                }
-                disabled={isOfflineMode}
-              >
-                <span aria-hidden="true">
-                  {isOfflineMode ? "Offline Mode" : `ID: ${gameId}`}
-                </span>
-                {copySuccess && (
-                  <span className="badge-button__status" aria-hidden="true">
-                    Copied
+          <div className="app-panel__content">
+            <div className="app-panel__top">
+              <div className="app-panel__top-bar">
+                <div className="app-panel__badge-group">
+                  <button
+                    type="button"
+                    className={`badge-button ${
+                      copySuccess ? "badge-button--success" : ""
+                    }`}
+                    onClick={handleCopyGameIdClick}
+                    aria-live="polite"
+                    aria-label={
+                      isOfflineMode
+                        ? "Offline mode active"
+                        : copySuccess
+                        ? `Game ID ${gameId} copied to clipboard`
+                        : `Copy game ID ${gameId} to clipboard`
+                    }
+                    disabled={isOfflineMode}
+                  >
+                    <span aria-hidden="true">
+                      {isOfflineMode ? "Offline Mode" : `ID: ${gameId}`}
+                    </span>
+                    {copySuccess && (
+                      <span className="badge-button__status" aria-hidden="true">
+                        Copied
+                      </span>
+                    )}
+                    <span className="sr-only">
+                      {isOfflineMode
+                        ? "Offline mode uses local prompts"
+                        : copySuccess
+                        ? "Copied game ID to clipboard"
+                        : "Tap to copy the game ID"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="badge-button"
+                    onClick={handleResetGame}
+                    aria-label="Reset game session"
+                  >
+                    Reset
+                  </button>
+                  <span
+                    className="badge-button"
+                    role="status"
+                    aria-live="polite"
+                    title={
+                      isMultiplayerMode
+                        ? multiplayerActive
+                          ? `${connectedCount} players connected`
+                          : "Multiplayer disabled"
+                        : "Single Device mode uses one shared screen"
+                    }
+                  >
+                    {isOfflineMode
+                      ? "Offline Mode"
+                      : multiplayerActive
+                      ? `Players: ${connectedCount}`
+                      : "Local Play"}
                   </span>
+                  <span
+                    className="badge-button"
+                    role="status"
+                    aria-live="polite"
+                    title={`Your streak — Accepts: ${playerStreak.accepts}, Refusals: ${playerStreak.refusals}`}
+                  >
+                    You A{playerStreak.accepts} / R{playerStreak.refusals}
+                  </span>
+                </div>
+                <header className="app-heading app-heading--top-bar">
+                  <div className="app-heading__title">
+                    <SparklesIcon />
+                    Date Night
+                  </div>
+                  <div className="app-heading__subtitle" aria-live="polite">
+                    Round {roundCount + 1}
+                  </div>
+                </header>
+                <div className="app-panel__top-actions">
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="View help and instructions"
+                    onClick={openHelpModal}
+                  >
+                    <span aria-hidden="true">ℹ️</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Open settings"
+                    aria-haspopup="dialog"
+                    aria-expanded={activeModal === "settings"}
+                    onClick={openSettingsModal}
+                  >
+                    <SettingsIcon />
+                  </button>
+                </div>
+              </div>
+
+              {lockWarning && (
+                <div
+                  className="rounded-full border border-white/10 bg-slate-950/70 px-3 py-1 text-center text-xs text-amber-200"
+                  role="status"
+                  aria-live="assertive"
+                >
+                  {lockWarning}
+                </div>
+              )}
+            </div>
+
+            <div className="app-panel__center">
+              <Wheel
+                rotation={rotation}
+                isExtremeRound={isExtremeRound}
+                segments={WHEEL_SEGMENTS}
+                showPulse={isSfxActive}
+                spinDuration={spinDuration}
+                isSpinning={isSpinning}
+                onPointerDown={handleWheelPointerDown}
+                onPointerMove={handleWheelPointerMove}
+                onPointerUp={handleWheelPointerEnd}
+                onPointerCancel={handleWheelPointerCancel}
+                onPointerLeave={handleWheelPointerCancel}
+                extremeMeter={extremeMeter}
+              >
+                <div className="spin-button">
+                  <button
+                    type="button"
+                    className={`spin-button__trigger ${
+                      isSfxActive ? "spin-button__trigger--active" : ""
+                    }`}
+                    onClick={handleSpinButton}
+                    disabled={isSpinning}
+                    aria-pressed={isSpinning}
+                    aria-live="polite"
+                  >
+                    <span aria-hidden="true">{isSpinning ? "…" : "Spin"}</span>
+                    <span className="sr-only">
+                      {isSpinning ? "Wheel spinning" : "Spin the wheel"}
+                    </span>
+                  </button>
+                </div>
+              </Wheel>
+              <span className="sr-only" aria-live="polite">
+                {isSfxActive ? "Sound effects playing" : "Sound effects idle"}
+              </span>
+            </div>
+
+            <div className="app-panel__footer">
+              <div className="app-panel__footer-status">
+                <div
+                  className={`streak-indicator ${
+                    streakHighlight ? "streak-indicator--active" : ""
+                  }`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span className="streak-indicator__icon" aria-hidden="true">
+                    🔥
+                  </span>
+                  <div className="streak-indicator__content">
+                    <span className="streak-indicator__label">Streak</span>
+                    <span className="streak-indicator__value">{streak}</span>
+                  </div>
+                  <span className="streak-indicator__best">Best {bestStreak}</span>
+                </div>
+                {activeExtremeLevel > 0 && (
+                  <div
+                    className={`extreme-meter extreme-meter--level-${activeExtremeLevel}`}
+                    role="status"
+                    aria-live="assertive"
+                  >
+                    <div className="extreme-meter__pulse" aria-hidden="true" />
+                    <div className="extreme-meter__icon" aria-hidden="true">
+                      <FlameIcon />
+                    </div>
+                    <div className="extreme-meter__content">
+                      <span className="extreme-meter__label">Extreme Meter</span>
+                      <span className="extreme-meter__status">
+                        {activeExtremeLevel >= 4
+                          ? "Extreme spin imminent!"
+                          : "Extreme round incoming"}
+                      </span>
+                    </div>
+                    <span className="sr-only">
+                      Extreme round incoming. Meter level {activeExtremeLevel}.
+                    </span>
+                  </div>
                 )}
-                <span className="sr-only">
-                  {isOfflineMode
-                    ? "Offline mode uses local prompts"
-                    : copySuccess
-                    ? "Copied game ID to clipboard"
-                    : "Tap to copy the game ID"}
-                </span>
-              </button>
-              <button
-                type="button"
-                className="badge-button"
-                onClick={handleResetGame}
-                aria-label="Reset game session"
-              >
-                Reset
-              </button>
-              <span
-                className="badge-button"
-                role="status"
-                aria-live="polite"
-                title={
-                  isMultiplayerMode
-                    ? multiplayerActive
-                      ? `${connectedCount} players connected`
-                      : "Multiplayer disabled"
-                    : "Single Device mode uses one shared screen"
-                }
-              >
-                {isOfflineMode
-                  ? "Offline Mode"
-                  : multiplayerActive
-                  ? `Players: ${connectedCount}`
-                  : "Local Play"}
-              </span>
-              <span
-                className="badge-button"
-                role="status"
-                aria-live="polite"
-                title={`Your streak — Accepts: ${playerStreak.accepts}, Refusals: ${playerStreak.refusals}`}
-              >
-                You A{playerStreak.accepts} / R{playerStreak.refusals}
-              </span>
-            </div>
-            <div
-              className={`streak-indicator ${
-                streakHighlight ? "streak-indicator--active" : ""
-              }`}
-              role="status"
-              aria-live="polite"
-            >
-              <span className="streak-indicator__icon" aria-hidden="true">
-                🔥
-              </span>
-              <div className="streak-indicator__content">
-                <span className="streak-indicator__label">Streak</span>
-                <span className="streak-indicator__value">{streak}</span>
               </div>
-              <span className="streak-indicator__best">Best {bestStreak}</span>
             </div>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Open settings"
-              aria-haspopup="dialog"
-              aria-expanded={activeModal === "settings"}
-              onClick={openSettingsModal}
-            >
-              <SettingsIcon />
-            </button>
           </div>
-
-          {lockWarning && (
-            <div
-              className="rounded-full border border-white/10 bg-slate-950/70 px-3 py-1 text-center text-xs text-amber-200"
-              role="status"
-              aria-live="assertive"
-            >
-              {lockWarning}
-            </div>
-          )}
-
-          <header className="app-heading">
-            <div className="app-heading__title">
-              <SparklesIcon />
-              Date Night
-            </div>
-            <div className="app-heading__subtitle" aria-live="polite">
-              Round {roundCount + 1}
-            </div>
-          </header>
-
-          {activeExtremeLevel > 0 && (
-            <div
-              className={`extreme-meter extreme-meter--level-${activeExtremeLevel}`}
-              role="status"
-              aria-live="assertive"
-            >
-              <div className="extreme-meter__pulse" aria-hidden="true" />
-              <div className="extreme-meter__icon" aria-hidden="true">
-                <FlameIcon />
-              </div>
-              <div className="extreme-meter__content">
-                <span className="extreme-meter__label">Extreme Meter</span>
-                <span className="extreme-meter__status">
-                  {activeExtremeLevel >= 4
-                    ? "Extreme spin imminent!"
-                    : "Extreme round incoming"}
-                </span>
-              </div>
-              <span className="sr-only">
-                Extreme round incoming. Meter level {activeExtremeLevel}.
-              </span>
-            </div>
-          )}
-
-          <Wheel
-            rotation={rotation}
-            isExtremeRound={isExtremeRound}
-            segments={WHEEL_SEGMENTS}
-            showPulse={isSfxActive}
-            spinDuration={spinDuration}
-            isSpinning={isSpinning}
-            onPointerDown={handleWheelPointerDown}
-            onPointerMove={handleWheelPointerMove}
-            onPointerUp={handleWheelPointerEnd}
-            onPointerCancel={handleWheelPointerCancel}
-            onPointerLeave={handleWheelPointerCancel}
-            extremeMeter={extremeMeter}
-          >
-            <div className="spin-button">
-              <button
-                type="button"
-                className={`spin-button__trigger ${
-                  isSfxActive ? "spin-button__trigger--active" : ""
-                }`}
-                onClick={handleSpinButton}
-                disabled={isSpinning}
-                aria-pressed={isSpinning}
-                aria-live="polite"
-              >
-                <span aria-hidden="true">{isSpinning ? "…" : "Spin"}</span>
-                <span className="sr-only">
-                  {isSpinning ? "Wheel spinning" : "Spin the wheel"}
-                </span>
-              </button>
-            </div>
-          </Wheel>
-          <span className="sr-only" aria-live="polite">
-            {isSfxActive ? "Sound effects playing" : "Sound effects idle"}
-          </span>
         </div>
       </main>
 
