@@ -9,6 +9,21 @@ import {
 } from "firebase/firestore";
 
 const SESSION_COLLECTION = "sessions";
+const MODE_STORAGE_KEY = "dateNightMode";
+
+const readStoredMode = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const stored = window.localStorage?.getItem(MODE_STORAGE_KEY);
+    return stored ?? null;
+  } catch (error) {
+    console.warn("Failed to read stored mode", error);
+    return null;
+  }
+};
 
 const ensureTimestampedPayload = (payload = {}) => ({
   ...payload,
@@ -21,12 +36,22 @@ const getSessionRef = (db, gameId) =>
 const getPlayerRef = (db, gameId, playerId) =>
   doc(collection(getSessionRef(db, gameId), "players"), playerId);
 
-export async function createOrJoinSession(db, gameId, playerId) {
+export async function createOrJoinSession(
+  db,
+  gameId,
+  playerId,
+  options = {}
+) {
   if (!db || !gameId || !playerId) {
     return null;
   }
 
   const sessionRef = getSessionRef(db, gameId);
+  const providedMode =
+    typeof options?.mode === "string" && options.mode
+      ? options.mode
+      : null;
+  const resolvedMode = providedMode ?? readStoredMode();
 
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(sessionRef);
@@ -38,15 +63,23 @@ export async function createOrJoinSession(db, gameId, playerId) {
         currentPrompt: null,
         currentConsequence: null,
         spinLock: null,
+        mode: resolvedMode ?? null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
       return;
     }
 
-    transaction.update(sessionRef, {
+    const updates = {
       updatedAt: serverTimestamp(),
-    });
+    };
+
+    const currentData = snapshot.data() ?? {};
+    if (resolvedMode && currentData.mode !== resolvedMode) {
+      updates.mode = resolvedMode;
+    }
+
+    transaction.update(sessionRef, updates);
   });
 
   const playerRef = getPlayerRef(db, gameId, playerId);
@@ -103,6 +136,43 @@ export function subscribeToSession(db, gameId, callback) {
     unsubscribeSession();
     unsubscribePlayers();
   };
+}
+
+export function subscribeToSessionMode(db, gameId, callback) {
+  if (!db || !gameId || typeof callback !== "function") {
+    return () => {};
+  }
+
+  const sessionRef = getSessionRef(db, gameId);
+
+  return onSnapshot(
+    sessionRef,
+    (snapshot) => {
+      const data = snapshot.exists() ? snapshot.data() : null;
+      callback(data?.mode ?? null);
+    },
+    (error) => {
+      console.warn("Failed to subscribe to session mode", error);
+      callback(null);
+    }
+  );
+}
+
+export async function setSessionMode(db, gameId, mode) {
+  if (!db || !gameId) {
+    return;
+  }
+
+  const sessionRef = getSessionRef(db, gameId);
+
+  try {
+    await updateDoc(sessionRef, {
+      mode: mode ?? null,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.warn("Failed to update session mode", error);
+  }
 }
 
 export async function acquireSpinLock(db, gameId, playerId) {
