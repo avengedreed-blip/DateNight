@@ -9,18 +9,13 @@ import React, {
 import AnnouncementModal from "./components/modals/AnnouncementModal.jsx";
 import ConsequenceModal from "./components/modals/ConsequenceModal.jsx";
 import EditorModal from "./components/modals/EditorModal.jsx";
-import HelpModal from "./components/modals/HelpModal.jsx";
-import Modal from "./components/modals/Modal.jsx";
 import PromptModal from "./components/modals/PromptModal.jsx";
-import RewardModal from "./components/modals/RewardModal.jsx";
+import SettingsModal from "./components/modals/Settings.jsx";
 import Wheel from "./components/Wheel.jsx";
 import LoadingScreen from "./components/screens/LoadingScreen.jsx";
 import StartScreen from "./components/screens/StartScreen.jsx";
 import {
-  MusicIcon,
-  PencilIcon,
   SettingsIcon,
-  SoundIcon,
   SparklesIcon,
   FlameIcon,
 } from "./components/icons/Icons.jsx";
@@ -32,8 +27,17 @@ import {
   buildPromptGroups,
   generatePromptSet,
 } from "./utils/promptGenerator.js";
-import { useAnalytics } from "./hooks/useAnalytics.js";
-import { useMultiplayer } from "./hooks/useMultiplayer.jsx";
+import {
+  ACTIVE_THEME_STORAGE_KEY,
+  BASE_THEMES,
+  CUSTOM_THEME_STORAGE_KEY,
+  DEFAULT_THEME_ID,
+  createCustomTheme,
+  deserializeCustomThemes,
+  findThemeById,
+  getAvailableThemes,
+  serializeCustomThemes,
+} from "./theme/themes.js";
 
 const STORAGE_KEYS = {
   gameId: "dateNightGameId",
@@ -41,13 +45,12 @@ const STORAGE_KEYS = {
   sfxVolume: "dateNightSfxVol",
   roundCount: "dateNightRoundCount",
   lastPrompts: "dateNightLastPrompts",
-  extremeMeter: "dateNightExtremeMeter",
-  generatedPrompts: "dateNightGeneratedPrompts",
-  multiplayerEnabled: "dateNightMultiplayerEnabled",
+  theme: ACTIVE_THEME_STORAGE_KEY,
+  customThemes: CUSTOM_THEME_STORAGE_KEY,
 };
 
 const EXTREME_ROUND_CHANCE = 0.2;
-const MAX_RECENT_PROMPTS = 25;
+const MAX_RECENT_PROMPTS = 5;
 const BASE_SPIN_DURATION_MS = 4000;
 const MIN_SWIPE_DISTANCE = 40;
 const MIN_SWIPE_STRENGTH = 0.35;
@@ -125,42 +128,6 @@ const confettiBurst = () => {
   frame();
 };
 
-const rewardBurst = (badge) => {
-  const palettes = {
-    Bronze: ["#fb923c", "#f97316", "#fed7aa", "#fde68a"],
-    Silver: ["#f8fafc", "#cbd5f5", "#94a3b8", "#e2e8f0"],
-    Gold: ["#facc15", "#fbbf24", "#fde68a", "#f97316"],
-    Legendary: ["#c084fc", "#a855f7", "#38bdf8", "#f472b6"],
-  };
-  const colors = palettes[badge] ?? palettes.Legendary;
-  const end = Date.now() + 1400;
-
-  const frame = () => {
-    confetti({
-      particleCount: 8,
-      spread: 70,
-      startVelocity: 42,
-      gravity: 0.8,
-      origin: { x: Math.random() * 0.4 + 0.15, y: 0.2 },
-      colors,
-    });
-    confetti({
-      particleCount: 8,
-      spread: 70,
-      startVelocity: 42,
-      gravity: 0.8,
-      origin: { x: Math.random() * 0.4 + 0.45, y: 0.2 },
-      colors,
-    });
-
-    if (Date.now() < end) {
-      requestAnimationFrame(frame);
-    }
-  };
-
-  frame();
-};
-
 const createRandomGameId = () =>
   Math.random().toString(36).slice(2, 8).toUpperCase();
 
@@ -177,19 +144,14 @@ const parseInteger = (value, fallback) => {
 export default function App() {
   const [toneReady, setToneReady] = useState(false);
   const [inputGameId, setInputGameId] = useState("");
-  const [gameMode, setGameMode] = useState("single");
   const [activeModal, setActiveModal] = useState(null);
   const [pendingExtremeSpin, setPendingExtremeSpin] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState({
     title: "",
     text: "",
     type: "",
-    intensity: "normal",
   });
-  const [currentConsequence, setCurrentConsequence] = useState({
-    text: "",
-    intensity: "normal",
-  });
+  const [currentConsequence, setCurrentConsequence] = useState("");
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [spinDuration, setSpinDuration] = useState(BASE_SPIN_DURATION_MS);
@@ -200,40 +162,18 @@ export default function App() {
   const [soundPulse, setSoundPulse] = useState(false);
   const [isLoopingSound, setIsLoopingSound] = useState(false);
   const [extremePulseLevel, setExtremePulseLevel] = useState(0);
-  const [streakHighlight, setStreakHighlight] = useState(false);
-  const [generatedPrompts, setGeneratedPrompts] = usePersistentState(
-    STORAGE_KEYS.generatedPrompts,
-    generatePromptSet(),
-    {
-      serialize: JSON.stringify,
-      deserialize: (value) => {
-        try {
-          const parsed = JSON.parse(value);
-          return parsed && typeof parsed === "object"
-            ? parsed
-            : generatePromptSet();
-        } catch (error) {
-          console.warn("Failed to parse cached generated prompts", error);
-          return generatePromptSet();
-        }
-      },
-    }
+  const [generatedPrompts, setGeneratedPrompts] = useState(() =>
+    generatePromptSet()
   );
-  const [roundTimer, setRoundTimer] = useState(30);
-  const [timerActive, setTimerActive] = useState(false);
   const regenerateGeneratedPrompts = useCallback(() => {
     setGeneratedPrompts(generatePromptSet());
-  }, [setGeneratedPrompts]);
+  }, []);
   const rotationRef = useRef(0);
   const spinTimeoutRef = useRef(null);
   const pendingSpinRef = useRef(null);
-  const pendingSpinContextRef = useRef(null);
   const copyFeedbackTimeoutRef = useRef(null);
   const soundPulseTimeoutRef = useRef(null);
-  const meterForcedExtremeRef = useRef(false);
-  const timerRef = useRef(null);
-  const timerExpiredRef = useRef(false);
-  const lastSpinDetailsRef = useRef(null);
+  const themeVarKeysRef = useRef(new Set());
   const swipeStateRef = useRef({
     active: false,
     pointerId: null,
@@ -245,21 +185,11 @@ export default function App() {
     lastTime: 0,
     peakVelocity: 0,
   });
-  const remoteSpinGuardRef = useRef(false);
-  const remotePromptGuardRef = useRef(false);
-  const multiplayerHandlersRef = useRef({
-    onRemoteSpin: null,
-    onRemotePrompt: null,
-  });
-  const lockWarningTimeoutRef = useRef(null);
-  const [lockWarning, setLockWarning] = useState("");
 
   const [gameId, setGameId] = usePersistentState(STORAGE_KEYS.gameId, null, {
     serialize: (value) => value ?? "",
     deserialize: (value) => (value ? value : null),
   });
-  const isOfflineMode = gameMode === "offline";
-  const remoteGameId = isOfflineMode ? null : gameId;
   const [musicVolume, setMusicVolume] = usePersistentState(
     STORAGE_KEYS.musicVolume,
     0.2,
@@ -284,14 +214,6 @@ export default function App() {
       deserialize: (value) => parseInteger(value, 0),
     }
   );
-  const [extremeMeter, setExtremeMeter] = usePersistentState(
-    STORAGE_KEYS.extremeMeter,
-    0,
-    {
-      serialize: (value) => value.toString(),
-      deserialize: (value) => parseInteger(value, 0),
-    }
-  );
   const [lastPrompts, setLastPrompts] = usePersistentState(
     STORAGE_KEYS.lastPrompts,
     {},
@@ -308,20 +230,24 @@ export default function App() {
       },
     }
   );
-  const [multiplayerEnabled, setMultiplayerEnabled] = usePersistentState(
-    STORAGE_KEYS.multiplayerEnabled,
-    true,
+  const [customThemes, setCustomThemes] = usePersistentState(
+    STORAGE_KEYS.customThemes,
+    [],
     {
-      serialize: (value) => (value ? "1" : "0"),
-      deserialize: (value) => value !== "0",
+      serialize: serializeCustomThemes,
+      deserialize: deserializeCustomThemes,
+      skipNull: false,
     }
   );
-
-  useEffect(() => {
-    if (isOfflineMode && multiplayerEnabled) {
-      setMultiplayerEnabled(false);
+  const [activeThemeId, setActiveThemeId] = usePersistentState(
+    STORAGE_KEYS.theme,
+    DEFAULT_THEME_ID,
+    {
+      serialize: (value) => value ?? DEFAULT_THEME_ID,
+      deserialize: (value) => value || DEFAULT_THEME_ID,
+      skipNull: false,
     }
-  }, [isOfflineMode, multiplayerEnabled, setMultiplayerEnabled]);
+  );
 
   const {
     prompts,
@@ -330,11 +256,62 @@ export default function App() {
     isLoading: promptsLoading,
     error: promptsError,
     retry: retryPrompts,
-  } = usePrompts(remoteGameId);
+  } = usePrompts(gameId);
   const generatedPromptGroups = useMemo(
     () => buildPromptGroups(generatedPrompts),
     [generatedPrompts]
   );
+  const availableThemes = useMemo(
+    () => getAvailableThemes(customThemes),
+    [customThemes]
+  );
+  const activeTheme = useMemo(
+    () => findThemeById(availableThemes, activeThemeId),
+    [activeThemeId, availableThemes]
+  );
+
+  useEffect(() => {
+    if (!availableThemes.some((theme) => theme.id === activeThemeId)) {
+      setActiveThemeId(DEFAULT_THEME_ID);
+    }
+  }, [activeThemeId, availableThemes, setActiveThemeId]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return undefined;
+    }
+
+    const body = document.body;
+    if (!body || !activeTheme) {
+      return undefined;
+    }
+
+    const appliedKeys = themeVarKeysRef.current;
+    appliedKeys.forEach((key) => {
+      body.style.removeProperty(key);
+    });
+    appliedKeys.clear();
+
+    Object.entries(activeTheme.cssVars ?? {}).forEach(([key, value]) => {
+      body.style.setProperty(key, value);
+      appliedKeys.add(key);
+    });
+
+    body.dataset.theme = activeTheme.id;
+
+    return () => {
+      if (!body) {
+        return;
+      }
+      appliedKeys.forEach((key) => {
+        body.style.removeProperty(key);
+      });
+      appliedKeys.clear();
+      if (body.dataset.theme === activeTheme.id) {
+        delete body.dataset.theme;
+      }
+    };
+  }, [activeTheme]);
   const promptGroups = useMemo(
     () => ({
       truth: [
@@ -380,28 +357,6 @@ export default function App() {
     }),
     [customPromptGroups, generatedPromptGroups]
   );
-
-  const isMultiplayerMode = gameMode === "multiplayer";
-  const multiplayerModeEnabled = multiplayerEnabled && isMultiplayerMode;
-
-  const {
-    isAvailable: multiplayerAvailable,
-    isActive: multiplayerActive,
-    playerId,
-    connectedCount,
-    playerStreak,
-    publishLocalSpin,
-    publishLocalPrompt,
-    acquireLock: acquireSpinLockRemote,
-    releaseLock: releaseSpinLockRemote,
-  } = useMultiplayer({
-    gameId,
-    enabled: multiplayerModeEnabled,
-    onRemoteSpin: (payload) =>
-      multiplayerHandlersRef.current.onRemoteSpin?.(payload),
-    onRemotePrompt: (payload) =>
-      multiplayerHandlersRef.current.onRemotePrompt?.(payload),
-  });
   useEffect(() => {
     if (!gameId) {
       return;
@@ -410,35 +365,16 @@ export default function App() {
     regenerateGeneratedPrompts();
   }, [gameId, regenerateGeneratedPrompts]);
 
+  const fallbackTrackId = BASE_THEMES[0]?.trackId ?? "classicDarkTrack";
+  const activeTrackId = activeTheme?.trackId ?? fallbackTrackId;
   const shouldPlayMusic = Boolean(gameId) && toneReady && musicVolume > 0;
   const { stop: stopMusic } = useBackgroundMusic(
     musicVolume,
     shouldPlayMusic,
-    toneReady
+    toneReady,
+    activeTrackId
   );
   const { play, startLoop, stopLoop } = useSound(sfxVolume, toneReady);
-  const {
-    streak,
-    bestStreak,
-    pendingReward,
-    incrementStreak,
-    resetStreak,
-    acknowledgeReward,
-    trackSpin,
-    trackOutcome,
-    trackTimer,
-    trackExtremeMeter,
-    downloadReport,
-  } = useAnalytics(gameId);
-
-  const stopRoundTimer = useCallback(() => {
-    if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    setTimerActive(false);
-    timerExpiredRef.current = false;
-  }, []);
 
   const flashSoundActivity = useCallback(() => {
     if (sfxVolume <= 0) {
@@ -463,18 +399,8 @@ export default function App() {
       if (copyFeedbackTimeoutRef.current) {
         window.clearTimeout(copyFeedbackTimeoutRef.current);
       }
-      if (lockWarningTimeoutRef.current) {
-        window.clearTimeout(lockWarningTimeoutRef.current);
-      }
     };
   }, []);
-
-  useEffect(() => {
-    if (!multiplayerActive) {
-      setLockWarning("");
-      releaseSpinLockRemote();
-    }
-  }, [multiplayerActive, releaseSpinLockRemote, setLockWarning]);
 
   useEffect(() => {
     if (sfxVolume > 0) {
@@ -488,6 +414,50 @@ export default function App() {
       soundPulseTimeoutRef.current = null;
     }
   }, [sfxVolume]);
+
+  const handleSelectTheme = useCallback(
+    (nextThemeId) => {
+      if (!nextThemeId) {
+        return;
+      }
+      setActiveThemeId(nextThemeId);
+    },
+    [setActiveThemeId]
+  );
+
+  const handleCreateTheme = useCallback(
+    (themeConfig) => {
+      const theme = createCustomTheme(themeConfig ?? {});
+      setCustomThemes((themes) => {
+        const existing = Array.isArray(themes) ? themes : [];
+        const filtered = existing.filter((item) => item.id !== theme.id);
+        return [...filtered, theme];
+      });
+      setActiveThemeId(theme.id);
+      return theme;
+    },
+    [setActiveThemeId, setCustomThemes]
+  );
+
+  const handleDeleteCustomTheme = useCallback(
+    (themeId) => {
+      if (!themeId) {
+        return;
+      }
+
+      setCustomThemes((themes) => {
+        if (!Array.isArray(themes)) {
+          return [];
+        }
+        return themes.filter((theme) => theme.id !== themeId);
+      });
+
+      if (themeId === activeThemeId) {
+        setActiveThemeId(DEFAULT_THEME_ID);
+      }
+    },
+    [activeThemeId, setActiveThemeId, setCustomThemes]
+  );
 
   const triggerSound = useCallback(
     (soundName) => {
@@ -530,22 +500,6 @@ export default function App() {
     triggerSound("click");
     triggerHapticFeedback(HAPTIC_PATTERNS.light);
   }, [triggerHapticFeedback, triggerSound]);
-
-  const triggerTimerVibration = useCallback((pattern, label) => {
-    if (typeof window === "undefined") {
-      console.log(`Timer vibration fallback (${label}):`, pattern);
-      return;
-    }
-
-    const { navigator } = window;
-
-    if (navigator && "vibrate" in navigator) {
-      navigator.vibrate(pattern);
-      return;
-    }
-
-    console.log(`Timer vibration fallback (${label}):`, pattern);
-  }, []);
 
   const startSoundLoop = useCallback(() => {
     if (sfxVolume > 0) {
@@ -654,9 +608,8 @@ export default function App() {
       }
       pendingSpinRef.current = null;
       stopSoundLoop();
-      stopRoundTimer();
     };
-  }, [stopRoundTimer, stopSoundLoop]);
+  }, [stopSoundLoop]);
 
   useEffect(() => {
     if (!pendingExtremeSpin) {
@@ -679,233 +632,6 @@ export default function App() {
     };
   }, [pendingExtremeSpin]);
 
-  useEffect(() => {
-    if (streak <= 0) {
-      setStreakHighlight(false);
-      return;
-    }
-
-    setStreakHighlight(true);
-    const timeout = window.setTimeout(() => {
-      setStreakHighlight(false);
-    }, 620);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [streak]);
-
-  useEffect(() => {
-    if (!pendingReward) {
-      return;
-    }
-
-    triggerSound("click");
-    triggerSound("fanfare");
-    triggerHapticFeedback(HAPTIC_PATTERNS.medium);
-    rewardBurst(pendingReward.badge);
-  }, [pendingReward, triggerHapticFeedback, triggerSound]);
-
-  useEffect(() => {
-    if (activeModal === "prompt") {
-      setRoundTimer(30);
-      timerExpiredRef.current = false;
-      setTimerActive(true);
-      return;
-    }
-
-    stopRoundTimer();
-    setRoundTimer(30);
-  }, [activeModal, stopRoundTimer]);
-
-  useEffect(() => {
-    if (!timerActive) {
-      if (timerRef.current) {
-        window.clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      return;
-    }
-
-    if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-    }
-
-    timerRef.current = window.setInterval(() => {
-      setRoundTimer((previous) => {
-        if (previous <= 0) {
-          return previous;
-        }
-
-        const nextValue = previous - 1;
-
-        play("timerTick");
-        triggerTimerVibration(50, "tick");
-
-        if (nextValue <= 5) {
-          play("timerWarning");
-        }
-
-        if (nextValue <= 0) {
-          play("timerEnd");
-          triggerTimerVibration([100, 50, 100], "final");
-          if (timerRef.current) {
-            window.clearInterval(timerRef.current);
-            timerRef.current = null;
-          }
-          timerExpiredRef.current = true;
-          setTimerActive(false);
-          const lastSpin = lastSpinDetailsRef.current;
-          trackTimer({
-            status: "timeout",
-            promptType: currentPrompt.type,
-            intensity: currentPrompt.intensity,
-            remaining: 0,
-            round: lastSpin?.round ?? roundCount + 1,
-            trigger: lastSpin?.trigger,
-          });
-          return 0;
-        }
-
-        return nextValue;
-      });
-    }, 1000);
-
-    return () => {
-      if (timerRef.current) {
-        window.clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [
-    currentPrompt.intensity,
-    currentPrompt.type,
-    play,
-    roundCount,
-    timerActive,
-    trackTimer,
-    triggerTimerVibration,
-  ]);
-
-  const handlePromptRefuse = useCallback(
-    (reason = "manual", override = null) => {
-      stopRoundTimer();
-      const levels = ["normal", "spicy", "extreme"];
-      const selection =
-        override?.consequence?.intensity ?? pickRandom(levels);
-
-      const keyMap = {
-        normal: "consequenceNormal",
-        spicy: "consequenceSpicy",
-        extreme: "consequenceExtreme",
-      };
-      const pool = promptGroups[keyMap[selection]] ?? [];
-      const consequence = override?.consequence?.text
-        ? override.consequence.text
-        : pool.length
-        ? pickRandom(pool)
-        : "No consequences available. You're safe this time!";
-
-      const sounds = override?.sounds ?? ["refusalBoo"];
-      if (!override?.sounds) {
-        if (selection === "spicy") {
-          sounds.push("spicyGiggle");
-        }
-        if (selection === "extreme") {
-          sounds.push("extremeWooo");
-        }
-      }
-      setPendingConsequenceSounds(sounds);
-      const consequencePayload = { text: consequence, intensity: selection };
-      setCurrentConsequence(consequencePayload);
-      setActiveModal("consequence");
-
-      const lastSpin = lastSpinDetailsRef.current;
-      const round = lastSpin?.round ?? roundCount + 1;
-      const promptType = currentPrompt.type;
-      const promptIntensity = currentPrompt.intensity;
-      const result =
-        override?.result ??
-        (reason === "timeout"
-          ? "auto-refusal"
-          : promptType === "trivia"
-          ? "incorrect"
-          : "refused");
-
-      resetStreak({ promptType, reason });
-      trackOutcome({
-        result,
-        promptType,
-        intensity: promptIntensity,
-        round,
-        reason,
-        source: lastSpin?.source,
-        trigger: lastSpin?.trigger,
-      });
-
-      trackTimer({
-        status: reason === "timeout" ? "auto-refusal" : "cancelled",
-        promptType,
-        intensity: promptIntensity,
-        remaining: roundTimer,
-        round,
-        reason,
-        trigger: lastSpin?.trigger,
-      });
-
-      if (multiplayerActive && !remotePromptGuardRef.current) {
-        publishLocalPrompt({
-          id: lastSpin?.promptId,
-          status: reason,
-          result,
-          prompt: {
-            title: currentPrompt.title,
-            text: currentPrompt.text,
-            type: promptType,
-            intensity: promptIntensity,
-          },
-          consequence: consequencePayload,
-          round,
-          releaseLock: true,
-          reason,
-        });
-      }
-    },
-    [
-      currentPrompt.intensity,
-      currentPrompt.type,
-      currentPrompt.text,
-      currentPrompt.title,
-      multiplayerActive,
-      publishLocalPrompt,
-      promptGroups,
-      remotePromptGuardRef,
-      resetStreak,
-      roundCount,
-      roundTimer,
-      stopRoundTimer,
-      trackOutcome,
-      trackTimer,
-    ]
-  );
-
-  const handleManualRefuse = useCallback(() => {
-    handlePromptRefuse("manual");
-  }, [handlePromptRefuse]);
-
-  useEffect(() => {
-    if (!timerActive && activeModal === "prompt" && timerExpiredRef.current) {
-      timerExpiredRef.current = false;
-      handlePromptRefuse("timeout");
-    }
-  }, [activeModal, handlePromptRefuse, timerActive]);
-
-  useEffect(() => {
-    if (timerActive) {
-      console.log("Round timer:", roundTimer);
-    }
-  }, [roundTimer, timerActive]);
-
   const choosePrompt = useCallback(
     (outcomeKey) => {
       const pool = promptGroups[outcomeKey] ?? [];
@@ -913,15 +639,28 @@ export default function App() {
         return "No prompts available for this category.";
       }
 
-      const recentHistory = (lastPrompts?.[outcomeKey] ?? []).slice(
-        -MAX_RECENT_PROMPTS
+      const recentPrompts = new Set(
+        (lastPrompts?.[outcomeKey] ?? []).slice(-MAX_RECENT_PROMPTS)
       );
-      const recentSet = new Set(recentHistory);
-      const freshOptions = pool.filter((prompt) => !recentSet.has(prompt));
-      const selectionPool = freshOptions.length > 0 ? freshOptions : pool;
+      const weightedPool = pool.map((prompt) => ({
+        prompt,
+        weight: recentPrompts.has(prompt) ? 0.2 : 1,
+      }));
 
-      const index = Math.floor(Math.random() * selectionPool.length);
-      return selectionPool[index] ?? pool[0];
+      const totalWeight = weightedPool.reduce(
+        (total, item) => total + item.weight,
+        0
+      );
+      let threshold = Math.random() * totalWeight;
+
+      for (const item of weightedPool) {
+        threshold -= item.weight;
+        if (threshold <= 0) {
+          return item.prompt;
+        }
+      }
+
+      return weightedPool.at(-1)?.prompt ?? pool[0];
     },
     [lastPrompts, promptGroups]
   );
@@ -940,41 +679,15 @@ export default function App() {
   );
 
   const concludeSpin = useCallback(
-    (segment, outcomeKey, flags, override = null) => {
-      const promptText = override?.promptText ?? choosePrompt(outcomeKey);
+    (segment, outcomeKey, flags) => {
+      const promptText = choosePrompt(outcomeKey);
       recordPromptHistory(outcomeKey, promptText);
 
-      const promptTitle = override?.promptTitle ?? segment.title;
-      const promptType = override?.promptType ?? segment.id;
-      const intensity =
-        override?.promptIntensity ??
-        (flags.isExtreme
-          ? "extreme"
-          : flags.isSpicy
-          ? "spicy"
-          : "normal");
-      const promptId =
-        override?.promptId ??
-        lastSpinDetailsRef.current?.promptId ??
-        `prompt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      const spinId = override?.spinId ?? lastSpinDetailsRef.current?.spinId ?? null;
-
       setCurrentPrompt({
-        title: promptTitle,
+        title: segment.title,
         text: promptText,
-        type: promptType,
-        intensity,
+        type: segment.id,
       });
-      lastSpinDetailsRef.current = {
-        ...(lastSpinDetailsRef.current ?? {}),
-        promptTitle,
-        promptText,
-        promptType,
-        intensity,
-        outcomeKey,
-        promptId,
-        spinId,
-      };
       const sounds = [];
       if (flags.isExtreme) {
         sounds.push("extremeWooo");
@@ -988,58 +701,9 @@ export default function App() {
         flags.isExtreme ? HAPTIC_PATTERNS.heavy : HAPTIC_PATTERNS.light
       );
       setIsExtremeRound(flags.isExtreme);
-      const eventRound = lastSpinDetailsRef.current?.round ?? roundCount + 1;
       setRoundCount((value) => value + 1);
-      if (flags.isExtreme) {
-        if (meterForcedExtremeRef.current) {
-          meterForcedExtremeRef.current = false;
-        }
-      } else {
-        setExtremeMeter((previous) => {
-          const next = Math.min(100, previous + 20);
-          console.log("Extreme meter:", next);
-          trackExtremeMeter({
-            previous,
-            next,
-            reason: "spin",
-            promptType,
-            round: eventRound,
-          });
-          lastSpinDetailsRef.current = {
-            ...(lastSpinDetailsRef.current ?? {}),
-            meterValueAfter: next,
-          };
-          return next;
-        });
-      }
-
-      if (multiplayerActive && !remoteSpinGuardRef.current) {
-        publishLocalPrompt({
-          id: promptId,
-          status: "show",
-          prompt: {
-            title: promptTitle,
-            text: promptText,
-            type: promptType,
-            intensity,
-          },
-          round: eventRound,
-          spinId,
-        });
-      }
     },
-    [
-      choosePrompt,
-      multiplayerActive,
-      publishLocalPrompt,
-      recordPromptHistory,
-      remoteSpinGuardRef,
-      roundCount,
-      setExtremeMeter,
-      setRoundCount,
-      triggerHapticFeedback,
-      trackExtremeMeter,
-    ]
+    [choosePrompt, recordPromptHistory, setRoundCount, triggerHapticFeedback]
   );
 
   const determineOutcome = useCallback((segment, forceExtreme) => {
@@ -1076,154 +740,65 @@ export default function App() {
     }
 
     landingIndex = Math.max(0, Math.min(sliceCount - 1, landingIndex));
-    let segment = WHEEL_SEGMENTS[landingIndex] ?? WHEEL_SEGMENTS[0];
+    const segment = WHEEL_SEGMENTS[landingIndex] ?? WHEEL_SEGMENTS[0];
     const pending = pendingSpinRef.current;
     const forceExtreme = pending?.forceExtreme ?? false;
-    const usingPending =
-      pending && pending.selectedIndex === landingIndex && pending.outcome;
-    if (usingPending) {
-      segment = WHEEL_SEGMENTS[pending.selectedIndex] ?? segment;
-    }
-    const outcomeInfo = usingPending
-      ? pending.outcome
-      : determineOutcome(segment, forceExtreme);
-    const promptOverride = usingPending
-      ? {
-          promptText: pending.promptText,
-          promptIntensity: pending.promptIntensity,
-          promptTitle: pending.promptTitle,
-          promptType: pending.promptType,
-          promptId: pending.promptId,
-          spinId: pending.spinId,
-        }
-      : null;
+    const outcomeInfo =
+      pending && pending.selectedIndex === landingIndex && pending.outcome
+        ? pending.outcome
+        : determineOutcome(segment, forceExtreme);
 
     pendingSpinRef.current = null;
-    concludeSpin(segment, outcomeInfo.outcomeKey, outcomeInfo, promptOverride);
+    concludeSpin(segment, outcomeInfo.outcomeKey, outcomeInfo);
   }, [concludeSpin, determineOutcome, setIsSpinning]);
 
   const startSpin = useCallback(
-    (
-      forceExtreme,
-      swipeStrength = MAX_SWIPE_STRENGTH / 2,
-      context = {},
-      override = null
-    ) => {
+    (forceExtreme, swipeStrength = MAX_SWIPE_STRENGTH / 2) => {
+      const clampedStrength = Math.min(
+        Math.max(
+          Number.isFinite(swipeStrength)
+            ? swipeStrength
+            : MAX_SWIPE_STRENGTH / 2,
+          0
+        ),
+        MAX_SWIPE_STRENGTH
+      );
+      const effectiveStrength = Math.max(clampedStrength, MIN_SWIPE_STRENGTH);
+      const normalizedStrength =
+        MAX_SWIPE_STRENGTH > 0 ? effectiveStrength / MAX_SWIPE_STRENGTH : 0.5;
       const sliceCount = WHEEL_SEGMENTS.length;
       if (!sliceCount) {
         return;
       }
 
-      const isRemote = Boolean(override?.isRemote);
-      const normalizedSwipeStrength = Number.isFinite(swipeStrength)
-        ? swipeStrength
-        : MAX_SWIPE_STRENGTH / 2;
-      const clampedStrength = Math.min(
-        Math.max(normalizedSwipeStrength, 0),
-        MAX_SWIPE_STRENGTH
-      );
-      const effectiveStrength = Math.max(clampedStrength, MIN_SWIPE_STRENGTH);
-      const normalizedStrength =
-        override?.spinDuration !== undefined
-          ? null
-          : MAX_SWIPE_STRENGTH > 0
-          ? effectiveStrength / MAX_SWIPE_STRENGTH
-          : 0.5;
-
-      pendingSpinContextRef.current = null;
       const availableIndexes = forceExtreme
         ? Array.from({ length: Math.min(sliceCount, 2) }, (_, index) => index)
         : WHEEL_SEGMENTS.map((_, index) => index);
       const selectedIndex =
-        override?.selectedIndex !== undefined
-          ? Math.max(0, Math.min(sliceCount - 1, override.selectedIndex))
-          : availableIndexes[
-              Math.floor(Math.random() * availableIndexes.length)
-            ] ?? 0;
+        availableIndexes[Math.floor(Math.random() * availableIndexes.length)] ??
+        0;
       const sliceAngle = 360 / sliceCount;
-      const selectedSegment = WHEEL_SEGMENTS[selectedIndex] ?? WHEEL_SEGMENTS[0];
-      const outcome =
-        override?.outcome ?? determineOutcome(selectedSegment, forceExtreme);
-      const spinRound = override?.round ?? roundCount + 1;
-      const spinContext = {
-        source: context.source ?? override?.context?.source ?? "button",
-        trigger:
-          context.trigger ??
-          override?.context?.trigger ??
-          (forceExtreme ? "extreme" : "standard"),
-        swipeStrength: Number.isFinite(swipeStrength)
-          ? swipeStrength
-          : override?.context?.swipeStrength ?? null,
-        meterValueBefore:
-          context.meterValueBefore !== undefined
-            ? context.meterValueBefore
-            : override?.context?.meterValueBefore ?? extremeMeter,
-        round: spinRound,
-        forcedByMeter:
-          Boolean(context?.trigger === "meter") ||
-          Boolean(override?.context?.forcedByMeter),
-      };
-      const promptText = override?.promptText ?? choosePrompt(outcome.outcomeKey);
-      const promptIntensity =
-        override?.promptIntensity ??
-        (outcome.isExtreme ? "extreme" : outcome.isSpicy ? "spicy" : "normal");
-      const promptId =
-        override?.promptId ??
-        `prompt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      const spinId =
-        override?.id ??
-        `spin-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-
+      const selectedSegment = WHEEL_SEGMENTS[selectedIndex];
+      const outcome = determineOutcome(selectedSegment, forceExtreme);
       pendingSpinRef.current = {
-        forceExtreme: Boolean(forceExtreme),
+        forceExtreme,
         selectedIndex,
         outcome,
-        context: spinContext,
-        promptText,
-        promptIntensity,
-        promptId,
-        promptTitle: override?.promptTitle ?? selectedSegment.title,
-        promptType: override?.promptType ?? selectedSegment.id,
-        spinId,
       };
-      lastSpinDetailsRef.current = {
-        segmentId: selectedSegment.id,
-        segmentLabel: selectedSegment.label,
-        round: spinContext.round,
-        source: spinContext.source,
-        trigger: spinContext.trigger,
-        meterValueBefore: spinContext.meterValueBefore,
-        forcedByMeter: spinContext.forcedByMeter,
-        promptId,
-        spinId,
-      };
+      const randomOffset = (Math.random() - 0.5) * sliceAngle * 0.6;
+      const targetAngle =
+        -(selectedIndex * sliceAngle + sliceAngle / 2) + randomOffset;
+      const minDuration = BASE_SPIN_DURATION_MS * 0.75;
+      const maxDuration = BASE_SPIN_DURATION_MS * 1.85;
+      const spinDurationMs =
+        minDuration + (maxDuration - minDuration) * normalizedStrength;
+      const totalExtraRotations =
+        MIN_EXTRA_ROTATIONS +
+        (MAX_EXTRA_ROTATIONS - MIN_EXTRA_ROTATIONS) * normalizedStrength;
+      const extraSpins = totalExtraRotations * 360;
 
       if (spinTimeoutRef.current) {
         clearTimeout(spinTimeoutRef.current);
-      }
-
-      let spinDurationMs;
-      let finalRotation;
-      if (override?.finalRotation !== undefined) {
-        spinDurationMs =
-          override.spinDuration ?? BASE_SPIN_DURATION_MS * 1.2;
-        finalRotation = override.finalRotation;
-      } else {
-        const randomOffset = (Math.random() - 0.5) * sliceAngle * 0.6;
-        const targetAngle =
-          -(selectedIndex * sliceAngle + sliceAngle / 2) + randomOffset;
-        const minDuration = BASE_SPIN_DURATION_MS * 0.75;
-        const maxDuration = BASE_SPIN_DURATION_MS * 1.85;
-        const durationRatio = normalizedStrength ?? 0.5;
-        spinDurationMs =
-          minDuration + (maxDuration - minDuration) * durationRatio;
-        const totalExtraRotations =
-          MIN_EXTRA_ROTATIONS +
-          (MAX_EXTRA_ROTATIONS - MIN_EXTRA_ROTATIONS) * durationRatio;
-        const extraSpins = totalExtraRotations * 360;
-        const baseRotation =
-          rotationRef.current - (rotationRef.current % 360);
-        finalRotation = baseRotation + extraSpins + targetAngle;
       }
 
       setIsSpinning(true);
@@ -1232,41 +807,10 @@ export default function App() {
       triggerHapticFeedback(HAPTIC_PATTERNS.medium);
       setSpinDuration(spinDurationMs);
 
-      trackSpin({
-        ...spinContext,
-        forceExtreme: Boolean(forceExtreme),
-        isExtreme: outcome.isExtreme,
-        isSpicy: outcome.isSpicy,
-        outcomeKey: outcome.outcomeKey,
-        segmentId: selectedSegment.id,
-        segmentLabel: selectedSegment.label,
-        gameId,
-      });
-
+      const baseRotation = rotationRef.current - (rotationRef.current % 360);
+      const finalRotation = baseRotation + extraSpins + targetAngle;
       rotationRef.current = finalRotation;
       setRotation(finalRotation);
-
-      if (multiplayerActive && !isRemote) {
-        publishLocalSpin({
-          id: spinId,
-          forceExtreme: Boolean(forceExtreme),
-          selectedIndex,
-          segmentId: selectedSegment.id,
-          segmentLabel: selectedSegment.label,
-          finalRotation,
-          spinDuration: spinDurationMs,
-          outcomeKey: outcome.outcomeKey,
-          isExtreme: outcome.isExtreme,
-          isSpicy: outcome.isSpicy,
-          promptText,
-          promptTitle: pendingSpinRef.current.promptTitle,
-          promptType: pendingSpinRef.current.promptType,
-          promptIntensity,
-          promptId,
-          round: spinContext.round,
-          context: spinContext,
-        });
-      }
 
       spinTimeoutRef.current = window.setTimeout(() => {
         stopSoundLoop();
@@ -1275,148 +819,30 @@ export default function App() {
       }, spinDurationMs);
     },
     [
-      choosePrompt,
       determineOutcome,
       finalizeSpin,
-      gameId,
-      extremeMeter,
-      multiplayerActive,
-      publishLocalSpin,
-      roundCount,
       setSpinDuration,
       startSoundLoop,
       stopSoundLoop,
-      trackSpin,
       triggerHapticFeedback,
     ]
   );
 
-  const handleRemoteSpin = useCallback(
-    (spinEvent) => {
-      if (!spinEvent) {
-        return;
-      }
+  const handleSpin = useCallback(() => {
+    if (isSpinning) {
+      return;
+    }
 
-      const spinContext = spinEvent.context ?? {};
-      remoteSpinGuardRef.current = true;
-      try {
-        startSpin(
-          Boolean(spinEvent.forceExtreme),
-          spinContext.swipeStrength ?? MAX_SWIPE_STRENGTH / 2,
-          {
-            source: spinContext.source ?? "remote",
-            trigger:
-              spinContext.trigger ??
-              (spinEvent.forceExtreme ? "extreme" : "standard"),
-            meterValueBefore:
-              spinContext.meterValueBefore !== undefined
-                ? spinContext.meterValueBefore
-                : extremeMeter,
-          },
-          {
-            ...spinEvent,
-            isRemote: true,
-            selectedIndex: spinEvent.selectedIndex,
-            outcome: {
-              outcomeKey: spinEvent.outcomeKey,
-              isExtreme: Boolean(spinEvent.isExtreme),
-              isSpicy: Boolean(spinEvent.isSpicy),
-            },
-            promptTitle: spinEvent.promptTitle,
-            promptType: spinEvent.promptType,
-            promptIntensity: spinEvent.promptIntensity,
-            promptText: spinEvent.promptText,
-            promptId: spinEvent.promptId,
-            finalRotation: spinEvent.finalRotation,
-            spinDuration: spinEvent.spinDuration,
-            round: spinEvent.round,
-            context: spinContext,
-          }
-        );
-      } finally {
-        remoteSpinGuardRef.current = false;
-      }
-    },
-    [extremeMeter, startSpin]
-  );
+    const isExtreme = Math.random() < EXTREME_ROUND_CHANCE;
 
-  const handleSpin = useCallback(
-    async (context = {}) => {
-      if (isSpinning) {
-        return;
-      }
+    if (isExtreme) {
+      setPendingExtremeSpin(true);
+      setActiveModal("announcement");
+      return;
+    }
 
-      if (multiplayerActive && !remoteSpinGuardRef.current) {
-        const allowed = await acquireSpinLockRemote();
-        if (!allowed) {
-          setLockWarning("Wait for your partner's spin");
-          if (typeof window !== "undefined") {
-            if (lockWarningTimeoutRef.current) {
-              window.clearTimeout(lockWarningTimeoutRef.current);
-            }
-            lockWarningTimeoutRef.current = window.setTimeout(() => {
-              setLockWarning("");
-              lockWarningTimeoutRef.current = null;
-            }, 2600);
-          }
-          return;
-        }
-        setLockWarning("");
-      }
-
-      const baseContext = {
-        source: context.source ?? "button",
-        meterValueBefore: extremeMeter,
-      };
-
-      if (extremeMeter >= 100) {
-        meterForcedExtremeRef.current = true;
-        setExtremeMeter((previous) => {
-          trackExtremeMeter({
-            previous,
-            next: 0,
-            reason: "forced-extreme",
-            round: roundCount + 1,
-          });
-          console.log("Extreme meter:", 0);
-          lastSpinDetailsRef.current = {
-            ...(lastSpinDetailsRef.current ?? {}),
-            meterValueAfter: 0,
-          };
-          return 0;
-        });
-        startSpin(true, undefined, { ...baseContext, trigger: "meter" });
-        return;
-      }
-
-      const isExtreme = Math.random() < EXTREME_ROUND_CHANCE;
-
-      if (isExtreme) {
-        setPendingExtremeSpin(true);
-        setActiveModal("announcement");
-        pendingSpinContextRef.current = {
-          ...baseContext,
-          trigger: "random-extreme",
-        };
-        return;
-      }
-
-      startSpin(false, undefined, { ...baseContext, trigger: "standard" });
-    },
-    [
-      acquireSpinLockRemote,
-      extremeMeter,
-      isSpinning,
-      lockWarningTimeoutRef,
-      multiplayerActive,
-      remoteSpinGuardRef,
-      roundCount,
-      setLockWarning,
-      setExtremeMeter,
-      startSpin,
-      trackExtremeMeter,
-    ]
-  );
+    startSpin(false);
+  }, [isSpinning, startSpin, triggerSound]);
 
   const resetSwipeState = useCallback(() => {
     swipeStateRef.current = {
@@ -1517,7 +943,7 @@ export default function App() {
           : MIN_SWIPE_STRENGTH * 0.85
       );
 
-      startSpin(false, strength, { source: "swipe", trigger: "standard" });
+      startSpin(false, strength);
     },
     [isSpinning, resetSwipeState, startSpin]
   );
@@ -1538,18 +964,36 @@ export default function App() {
   const handleAnnouncementClose = useCallback(() => {
     setActiveModal(null);
     if (pendingExtremeSpin) {
-      const context =
-        pendingSpinContextRef.current ?? {
-          source: "button",
-          trigger: "random-extreme",
-        };
-      pendingSpinContextRef.current = null;
       setPendingExtremeSpin(false);
-      startSpin(true, undefined, context);
+      startSpin(true);
     }
   }, [pendingExtremeSpin, startSpin]);
 
-  
+  const handleRefuse = useCallback(() => {
+    const levels = ["normal", "spicy", "extreme"];
+    const selection = pickRandom(levels);
+
+    const keyMap = {
+      normal: "consequenceNormal",
+      spicy: "consequenceSpicy",
+      extreme: "consequenceExtreme",
+    };
+    const pool = promptGroups[keyMap[selection]] ?? [];
+    const consequence = pool.length
+      ? pickRandom(pool)
+      : "No consequences available. You're safe this time!";
+
+    const sounds = ["refusalBoo"];
+    if (selection === "spicy") {
+      sounds.push("spicyGiggle");
+    }
+    if (selection === "extreme") {
+      sounds.push("extremeWooo");
+    }
+    setPendingConsequenceSounds(sounds);
+    setCurrentConsequence(consequence);
+    setActiveModal("consequence");
+  }, [promptGroups]);
 
   useEffect(() => {
     if (activeModal === "announcement") {
@@ -1573,11 +1017,11 @@ export default function App() {
   }, [activeModal, pendingConsequenceSounds, triggerSound]);
 
   const createNewGame = useCallback(() => {
-    const newId = isOfflineMode ? "OFFLINE" : createRandomGameId();
+    const newId = createRandomGameId();
     setGameId(newId);
     setRoundCount(0);
     setLastPrompts({});
-  }, [isOfflineMode, setGameId, setLastPrompts, setRoundCount]);
+  }, [setGameId, setLastPrompts, setRoundCount]);
 
   const joinGame = useCallback(
     (event) => {
@@ -1586,15 +1030,11 @@ export default function App() {
       if (!trimmed) {
         return;
       }
-      if (isOfflineMode) {
-        setGameId("OFFLINE");
-      } else {
-        setGameId(trimmed);
-      }
+      setGameId(trimmed);
       setRoundCount(0);
       setLastPrompts({});
     },
-    [inputGameId, isOfflineMode, setGameId, setLastPrompts, setRoundCount]
+    [inputGameId, setGameId, setLastPrompts, setRoundCount]
   );
 
   const resetInputGameId = useCallback(() => {
@@ -1602,7 +1042,7 @@ export default function App() {
   }, [setInputGameId]);
 
   const copyGameId = useCallback(async () => {
-    if (isOfflineMode || !gameId || !navigator.clipboard) {
+    if (!gameId || !navigator.clipboard) {
       return;
     }
 
@@ -1620,7 +1060,7 @@ export default function App() {
       console.warn("Failed to copy game id", error);
       setCopySuccess(false);
     }
-  }, [gameId, isOfflineMode]);
+  }, [gameId]);
 
   const handleCopyGameIdClick = useCallback(() => {
     playClick();
@@ -1636,7 +1076,6 @@ export default function App() {
     pendingSpinRef.current = null;
     setIsSpinning(false);
     stopSoundLoop();
-    stopRoundTimer();
     setSoundPulse(false);
     if (copyFeedbackTimeoutRef.current) {
       window.clearTimeout(copyFeedbackTimeoutRef.current);
@@ -1647,27 +1086,20 @@ export default function App() {
       soundPulseTimeoutRef.current = null;
     }
     setIsExtremeRound(false);
-    if (multiplayerActive) {
-      releaseSpinLockRemote();
-      setLockWarning("");
-    }
     setRotation(0);
     rotationRef.current = 0;
     setGameId(null);
     setRoundCount(0);
     setLastPrompts({});
-    setCurrentPrompt({ title: "", text: "", type: "", intensity: "normal" });
-    setCurrentConsequence({ text: "", intensity: "normal" });
+    setCurrentPrompt({ title: "", text: "", type: "" });
+    setCurrentConsequence("");
     setInputGameId("");
     setCopySuccess(false);
     regenerateGeneratedPrompts();
   }, [
     regenerateGeneratedPrompts,
-    multiplayerActive,
-    releaseSpinLockRemote,
     setGameId,
     setLastPrompts,
-    setLockWarning,
     setRoundCount,
     stopMusic,
     stopSoundLoop,
@@ -1681,150 +1113,26 @@ export default function App() {
   const closeModal = useCallback(() => {
     setActiveModal((previous) => {
       if (previous === "prompt") {
-        stopRoundTimer();
         setIsExtremeRound(false);
       }
       return null;
     });
-  }, [stopRoundTimer]);
-
-  const handlePromptAccept = useCallback(() => {
-    const lastSpin = lastSpinDetailsRef.current;
-    const promptType = currentPrompt.type;
-    const promptIntensity = currentPrompt.intensity;
-    const result = promptType === "trivia" ? "correct" : "accepted";
-    const round = lastSpin?.round ?? roundCount + 1;
-
-    incrementStreak({
-      promptType,
-      intensity: promptIntensity,
-      round,
-      source: lastSpin?.source,
-      trigger: lastSpin?.trigger,
-    });
-    trackOutcome({
-      result,
-      promptType,
-      intensity: promptIntensity,
-      round,
-      source: lastSpin?.source,
-      trigger: lastSpin?.trigger,
-    });
-    trackTimer({
-      status: "completed",
-      promptType,
-      intensity: promptIntensity,
-      remaining: roundTimer,
-      round,
-      trigger: lastSpin?.trigger,
-    });
-
-    if (multiplayerActive && !remotePromptGuardRef.current) {
-      publishLocalPrompt({
-        id: lastSpin?.promptId,
-        status: result,
-        result,
-        prompt: {
-          title: currentPrompt.title,
-          text: currentPrompt.text,
-          type: promptType,
-          intensity: promptIntensity,
-        },
-        round,
-        releaseLock: true,
-      });
-    }
-
-    closeModal();
-  }, [
-    closeModal,
-    currentPrompt.intensity,
-    currentPrompt.type,
-    currentPrompt.text,
-    currentPrompt.title,
-    incrementStreak,
-    multiplayerActive,
-    publishLocalPrompt,
-    remotePromptGuardRef,
-    roundCount,
-    roundTimer,
-    trackOutcome,
-    trackTimer,
-  ]);
+  }, []);
 
   const openSettingsModal = useCallback(() => {
     playClick();
     setActiveModal("settings");
   }, [playClick, setActiveModal]);
 
-  const openHelpModal = useCallback(() => {
-    playClick();
-    setActiveModal("help");
-  }, [playClick]);
-
   const openEditorModal = useCallback(() => {
     playClick();
     setActiveModal("editor");
   }, [playClick, setActiveModal]);
 
-  const handleDownloadReport = useCallback(() => {
-    playClick();
-    downloadReport();
-  }, [downloadReport, playClick]);
-
   const handleSpinButton = useCallback(() => {
     playClick();
-    handleSpin({ source: "button" });
+    handleSpin();
   }, [handleSpin, playClick]);
-
-  const handleRemotePrompt = useCallback(
-    (event) => {
-      if (!event) {
-        return;
-      }
-
-      if (event.status === "show") {
-        return;
-      }
-
-      remotePromptGuardRef.current = true;
-      try {
-        const result = event.result ?? event.status ?? "";
-        if (result === "accepted" || result === "correct") {
-          handlePromptAccept();
-          return;
-        }
-
-        if (
-          result === "refused" ||
-          result === "auto-refusal" ||
-          result === "incorrect" ||
-          result === "timeout" ||
-          event.status === "timeout"
-        ) {
-          const mappedReason =
-            event.reason ??
-            (result === "auto-refusal" || result === "timeout"
-              ? "timeout"
-              : "manual");
-          handlePromptRefuse(mappedReason, {
-            consequence: event.consequence,
-            result,
-          });
-        }
-      } finally {
-        remotePromptGuardRef.current = false;
-      }
-    },
-    [handlePromptAccept, handlePromptRefuse]
-  );
-
-  useEffect(() => {
-    multiplayerHandlersRef.current = {
-      onRemoteSpin: handleRemoteSpin,
-      onRemotePrompt: handleRemotePrompt,
-    };
-  }, [handleRemotePrompt, handleRemoteSpin]);
 
   if (!gameId) {
     return (
@@ -1834,8 +1142,6 @@ export default function App() {
         inputGameId={inputGameId}
         setInputGameId={setInputGameId}
         resetInputGameId={resetInputGameId}
-        gameMode={gameMode}
-        onSelectMode={setGameMode}
         onButtonClick={playClick}
       />
     );
@@ -1844,9 +1150,7 @@ export default function App() {
   if (promptsLoading) {
     return (
       <LoadingScreen
-        message={
-          isOfflineMode ? "Loading offline prompts" : "Loading your shared prompts"
-        }
+        message="Loading your shared prompts"
         onButtonClick={playClick}
       />
     );
@@ -1876,338 +1180,159 @@ export default function App() {
     : extremeSpinActive
     ? 4
     : 0;
-  const multiplayerAllowed = multiplayerAvailable && !isOfflineMode;
 
   return (
     <div className="app-shell">
       <main className="app-panel">
         <div className="app-panel__body">
-          <div className="app-panel__content">
-            <div className="app-panel__top">
-              <div className="app-panel__top-bar">
-                <div className="app-panel__badge-group">
-                  <button
-                    type="button"
-                    className={`badge-button ${
-                      copySuccess ? "badge-button--success" : ""
-                    }`}
-                    onClick={handleCopyGameIdClick}
-                    aria-live="polite"
-                    aria-label={
-                      isOfflineMode
-                        ? "Offline mode active"
-                        : copySuccess
-                        ? `Game ID ${gameId} copied to clipboard`
-                        : `Copy game ID ${gameId} to clipboard`
-                    }
-                    disabled={isOfflineMode}
-                  >
-                    <span aria-hidden="true">
-                      {isOfflineMode ? "Offline Mode" : `ID: ${gameId}`}
-                    </span>
-                    {copySuccess && (
-                      <span className="badge-button__status" aria-hidden="true">
-                        Copied
-                      </span>
-                    )}
-                    <span className="sr-only">
-                      {isOfflineMode
-                        ? "Offline mode uses local prompts"
-                        : copySuccess
-                        ? "Copied game ID to clipboard"
-                        : "Tap to copy the game ID"}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="badge-button"
-                    onClick={handleResetGame}
-                    aria-label="Reset game session"
-                  >
-                    Reset
-                  </button>
-                  <span
-                    className="badge-button"
-                    role="status"
-                    aria-live="polite"
-                    title={
-                      isMultiplayerMode
-                        ? multiplayerActive
-                          ? `${connectedCount} players connected`
-                          : "Multiplayer disabled"
-                        : "Single Device mode uses one shared screen"
-                    }
-                  >
-                    {isOfflineMode
-                      ? "Offline Mode"
-                      : multiplayerActive
-                      ? `Players: ${connectedCount}`
-                      : "Local Play"}
-                  </span>
-                  <span
-                    className="badge-button"
-                    role="status"
-                    aria-live="polite"
-                    title={`Your streak — Accepts: ${playerStreak.accepts}, Refusals: ${playerStreak.refusals}`}
-                  >
-                    You A{playerStreak.accepts} / R{playerStreak.refusals}
-                  </span>
-                </div>
-                <header className="app-heading app-heading--top-bar">
-                  <div className="app-heading__title">
-                    <SparklesIcon />
-                    Date Night
-                  </div>
-                  <div className="app-heading__subtitle" aria-live="polite">
-                    Round {roundCount + 1}
-                  </div>
-                </header>
-                <div className="app-panel__top-actions">
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label="View help and instructions"
-                    onClick={openHelpModal}
-                  >
-                    <span aria-hidden="true">ℹ️</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label="Open settings"
-                    aria-haspopup="dialog"
-                    aria-expanded={activeModal === "settings"}
-                    onClick={openSettingsModal}
-                  >
-                    <SettingsIcon />
-                  </button>
-                </div>
-              </div>
-
-              {lockWarning && (
-                <div
-                  className="rounded-full border border-white/10 bg-slate-950/70 px-3 py-1 text-center text-xs text-amber-200"
-                  role="status"
-                  aria-live="assertive"
-                >
-                  {lockWarning}
-                </div>
-              )}
-            </div>
-
-            <div className="app-panel__center">
-              <Wheel
-                rotation={rotation}
-                isExtremeRound={isExtremeRound}
-                segments={WHEEL_SEGMENTS}
-                showPulse={isSfxActive}
-                spinDuration={spinDuration}
-                isSpinning={isSpinning}
-                onPointerDown={handleWheelPointerDown}
-                onPointerMove={handleWheelPointerMove}
-                onPointerUp={handleWheelPointerEnd}
-                onPointerCancel={handleWheelPointerCancel}
-                onPointerLeave={handleWheelPointerCancel}
-                extremeMeter={extremeMeter}
+          <div className="app-panel__top-bar">
+            <div className="app-panel__badge-group">
+              <button
+                type="button"
+                className={`badge-button ${
+                  copySuccess ? "badge-button--success" : ""
+                }`}
+                onClick={handleCopyGameIdClick}
+                aria-live="polite"
+                aria-label={
+                  copySuccess
+                    ? `Game ID ${gameId} copied to clipboard`
+                    : `Copy game ID ${gameId} to clipboard`
+                }
               >
-                <div className="spin-button">
-                  <button
-                    type="button"
-                    className={`spin-button__trigger ${
-                      isSfxActive ? "spin-button__trigger--active" : ""
-                    }`}
-                    onClick={handleSpinButton}
-                    disabled={isSpinning}
-                    aria-pressed={isSpinning}
-                    aria-live="polite"
-                  >
-                    <span aria-hidden="true">{isSpinning ? "…" : "Spin"}</span>
-                    <span className="sr-only">
-                      {isSpinning ? "Wheel spinning" : "Spin the wheel"}
-                    </span>
-                  </button>
-                </div>
-              </Wheel>
-              <span className="sr-only" aria-live="polite">
-                {isSfxActive ? "Sound effects playing" : "Sound effects idle"}
+                <span aria-hidden="true">ID: {gameId}</span>
+                {copySuccess && (
+                  <span className="badge-button__status" aria-hidden="true">
+                    Copied
+                  </span>
+                )}
+                <span className="sr-only">
+                  {copySuccess
+                    ? "Copied game ID to clipboard"
+                    : "Tap to copy the game ID"}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="badge-button"
+                onClick={handleResetGame}
+                aria-label="Reset game session"
+              >
+                Reset
+              </button>
+            </div>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Open settings"
+              aria-haspopup="dialog"
+              aria-expanded={activeModal === "settings"}
+              onClick={openSettingsModal}
+            >
+              <SettingsIcon />
+            </button>
+          </div>
+
+          <header className="app-heading">
+            <div className="app-heading__title">
+              <SparklesIcon />
+              Date Night
+            </div>
+            <div className="app-heading__subtitle" aria-live="polite">
+              Round {roundCount + 1}
+            </div>
+          </header>
+
+          {activeExtremeLevel > 0 && (
+            <div
+              className={`extreme-meter extreme-meter--level-${activeExtremeLevel}`}
+              role="status"
+              aria-live="assertive"
+            >
+              <div className="extreme-meter__pulse" aria-hidden="true" />
+              <div className="extreme-meter__icon" aria-hidden="true">
+                <FlameIcon />
+              </div>
+              <div className="extreme-meter__content">
+                <span className="extreme-meter__label">Extreme Meter</span>
+                <span className="extreme-meter__status">
+                  {activeExtremeLevel >= 4
+                    ? "Extreme spin imminent!"
+                    : "Extreme round incoming"}
+                </span>
+              </div>
+              <span className="sr-only">
+                Extreme round incoming. Meter level {activeExtremeLevel}.
               </span>
             </div>
+          )}
 
-            <div className="app-panel__footer">
-              <div className="app-panel__footer-status">
-                <div
-                  className={`streak-indicator ${
-                    streakHighlight ? "streak-indicator--active" : ""
-                  }`}
-                  role="status"
-                  aria-live="polite"
-                >
-                  <span className="streak-indicator__icon" aria-hidden="true">
-                    🔥
-                  </span>
-                  <div className="streak-indicator__content">
-                    <span className="streak-indicator__label">Streak</span>
-                    <span className="streak-indicator__value">{streak}</span>
-                  </div>
-                  <span className="streak-indicator__best">Best {bestStreak}</span>
-                </div>
-                {activeExtremeLevel > 0 && (
-                  <div
-                    className={`extreme-meter extreme-meter--level-${activeExtremeLevel}`}
-                    role="status"
-                    aria-live="assertive"
-                  >
-                    <div className="extreme-meter__pulse" aria-hidden="true" />
-                    <div className="extreme-meter__icon" aria-hidden="true">
-                      <FlameIcon />
-                    </div>
-                    <div className="extreme-meter__content">
-                      <span className="extreme-meter__label">Extreme Meter</span>
-                      <span className="extreme-meter__status">
-                        {activeExtremeLevel >= 4
-                          ? "Extreme spin imminent!"
-                          : "Extreme round incoming"}
-                      </span>
-                    </div>
-                    <span className="sr-only">
-                      Extreme round incoming. Meter level {activeExtremeLevel}.
-                    </span>
-                  </div>
-                )}
-              </div>
+          <Wheel
+            rotation={rotation}
+            isExtremeRound={isExtremeRound}
+            segments={WHEEL_SEGMENTS}
+            showPulse={isSfxActive}
+            spinDuration={spinDuration}
+            isSpinning={isSpinning}
+            onPointerDown={handleWheelPointerDown}
+            onPointerMove={handleWheelPointerMove}
+            onPointerUp={handleWheelPointerEnd}
+            onPointerCancel={handleWheelPointerCancel}
+            onPointerLeave={handleWheelPointerCancel}
+          >
+            <div className="spin-button">
+              <button
+                type="button"
+                className={`spin-button__trigger ${
+                  isSfxActive ? "spin-button__trigger--active" : ""
+                }`}
+                onClick={handleSpinButton}
+                disabled={isSpinning}
+                aria-pressed={isSpinning}
+                aria-live="polite"
+              >
+                <span aria-hidden="true">{isSpinning ? "…" : "Spin"}</span>
+                <span className="sr-only">
+                  {isSpinning ? "Wheel spinning" : "Spin the wheel"}
+                </span>
+              </button>
             </div>
-          </div>
+          </Wheel>
+          <span className="sr-only" aria-live="polite">
+            {isSfxActive ? "Sound effects playing" : "Sound effects idle"}
+          </span>
         </div>
       </main>
 
-      <Modal
+      <SettingsModal
         isOpen={activeModal === "settings"}
         onClose={closeModal}
-        labelledBy="settings-modal-title"
-      >
-      <div className="settings-header">
-        <h2
-          id="settings-modal-title"
-          className="settings-header__title"
-        >
-          Settings
-        </h2>
-        <button
-          type="button"
-          className="settings-help-button"
-          onClick={openHelpModal}
-          aria-label="View help and instructions"
-        >
-          <span aria-hidden="true">ℹ️</span>
-        </button>
-      </div>
-      <div className="settings-section">
-          <div className="settings-row">
-            <MusicIcon />
-            <input
-              className="settings-slider"
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={musicVolume}
-              onChange={(event) =>
-                setMusicVolume(parseFloat(event.target.value))
-              }
-            />
-          </div>
-          <div
-            className={`settings-row ${
-              isSfxActive ? "settings-row--active" : ""
-            }`}
-          >
-            <SoundIcon />
-            <input
-              className="settings-slider"
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={sfxVolume}
-              onChange={(event) => setSfxVolume(parseFloat(event.target.value))}
-            />
-          </div>
-          <div className="settings-row justify-between">
-            <div className="flex flex-col gap-1">
-              <span className="text-sm font-semibold text-slate-100">
-                Multiplayer
-              </span>
-              <span className="text-xs text-[color:var(--text-muted)]">
-                {isMultiplayerMode
-                  ? multiplayerAvailable
-                    ? "Sync spins across connected devices"
-                    : "Add Firebase config to enable remote play"
-                  : "Switch to Multiplayer mode to enable sync"}
-              </span>
-            </div>
-            <label className="relative inline-flex items-center">
-              <input
-                type="checkbox"
-                className="sr-only"
-                checked={multiplayerModeEnabled && multiplayerAvailable}
-                onChange={(event) => {
-                  if (!isMultiplayerMode) {
-                    return;
-                  }
-                  setMultiplayerEnabled(event.target.checked);
-                }}
-                disabled={!multiplayerAvailable || !isMultiplayerMode}
-              />
-              <span
-                className={`ml-3 flex h-6 w-11 items-center rounded-full border border-white/20 bg-slate-800 transition-colors ${
-                  multiplayerModeEnabled && multiplayerAvailable
-                    ? "bg-[color:var(--primary-accent)] border-[color:var(--primary-accent)]"
-                    : "bg-slate-800"
-                }`}
-                aria-hidden="true"
-              >
-                <span
-                  className={`h-5 w-5 rounded-full bg-white transition-transform ${
-                    multiplayerModeEnabled && multiplayerAvailable
-                      ? "translate-x-4"
-                      : "translate-x-1"
-                  }`}
-              />
-            </span>
-          </label>
-          </div>
-          <button
-            type="button"
-            className="primary-button flex items-center justify-center gap-2"
-            onClick={openEditorModal}
-          >
-            <PencilIcon /> Edit Prompts
-          </button>
-          <button
-            type="button"
-            className="secondary-button mt-3 w-full"
-            onClick={handleDownloadReport}
-          >
-            Download Session Report
-          </button>
-        </div>
-      </Modal>
+        musicVolume={musicVolume}
+        onMusicVolumeChange={setMusicVolume}
+        sfxVolume={sfxVolume}
+        onSfxVolumeChange={setSfxVolume}
+        isSfxActive={isSfxActive}
+        onOpenEditor={openEditorModal}
+        themes={availableThemes}
+        activeThemeId={activeTheme?.id ?? DEFAULT_THEME_ID}
+        onSelectTheme={handleSelectTheme}
+        onCreateCustomTheme={handleCreateTheme}
+        onDeleteCustomTheme={handleDeleteCustomTheme}
+      />
 
       <PromptModal
         isOpen={activeModal === "prompt"}
         onClose={closeModal}
         prompt={currentPrompt}
-        onRefuse={handleManualRefuse}
+        onRefuse={handleRefuse}
         onButtonClick={playClick}
-        onAccept={handlePromptAccept}
-        roundTimer={roundTimer}
-        timerActive={timerActive}
+        onAccept={closeModal}
       />
 
       <ConsequenceModal
         isOpen={activeModal === "consequence"}
         onClose={closeModal}
-        consequence={currentConsequence}
+        text={currentConsequence}
         onButtonClick={playClick}
       />
 
@@ -2229,13 +1354,6 @@ export default function App() {
         onButtonClick={playClick}
         onConfirm={handleAnnouncementClose}
       />
-      <RewardModal
-        isOpen={Boolean(pendingReward)}
-        onClose={acknowledgeReward}
-        onButtonClick={playClick}
-        reward={pendingReward}
-      />
-      <HelpModal isOpen={activeModal === "help"} onClose={closeModal} />
     </div>
   );
 }

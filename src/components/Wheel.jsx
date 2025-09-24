@@ -42,10 +42,6 @@ const deriveLabelTypography = (sliceAngle, label) => {
   };
 };
 
-const PURE_WHITE = "#FFFFFF";
-
-const getLabelColor = () => PURE_WHITE;
-
 const Wheel = ({
   rotation,
   isExtremeRound,
@@ -123,7 +119,14 @@ const Wheel = ({
         24,
         segments.length <= 2 ? 70 : 58,
       );
-      const color = getLabelColor();
+      const toneOverrides = {
+        truth: "dark",
+        dare: "light",
+        trivia: "dark",
+      };
+      const tone = segment.labelTone ?? toneOverrides[segment.id] ?? undefined;
+      const color = getLabelColorVar(segment.id, tone);
+      const surface = getLabelSurfaceVar(segment.id, tone);
 
       return {
         id,
