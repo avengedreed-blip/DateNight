@@ -26,6 +26,8 @@ import { useBackgroundMusic } from "./hooks/useBackgroundMusic.js";
 import { usePersistentState } from "./hooks/usePersistentState.js";
 import { usePrompts } from "./hooks/usePrompts.js";
 import { useSound } from "./hooks/useSound.js";
+import { db } from "./config/firebase.js";
+import { setSessionMode, subscribeToSessionMode } from "./firebase/session.js";
 import {
   buildPromptGroups,
   generatePromptSet,
@@ -39,6 +41,7 @@ const STORAGE_KEYS = {
   lastPrompts: "dateNightLastPrompts",
   extremeMeter: "dateNightExtremeMeter",
   generatedPrompts: "dateNightGeneratedPrompts",
+  mode: "dateNightMode",
 };
 
 const EXTREME_ROUND_CHANCE = 0.2;
@@ -136,7 +139,19 @@ const parseInteger = (value, fallback) => {
 export default function App() {
   const [toneReady, setToneReady] = useState(false);
   const [inputGameId, setInputGameId] = useState("");
-  const [mode, setMode] = useState(null);
+  const [mode, setMode] = useState(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    try {
+      const stored = window.localStorage?.getItem(STORAGE_KEYS.mode);
+      return stored ?? null;
+    } catch (error) {
+      console.warn("Failed to restore stored mode", error);
+      return null;
+    }
+  });
   const [activeModal, setActiveModal] = useState(null);
   const [pendingExtremeSpin, setPendingExtremeSpin] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState({
@@ -201,6 +216,7 @@ export default function App() {
     lastTime: 0,
     peakVelocity: 0,
   });
+  const remoteModeRef = useRef(null);
 
   const [gameId, setGameId] = usePersistentState(STORAGE_KEYS.gameId, null, {
     serialize: (value) => value ?? "",
@@ -312,6 +328,50 @@ export default function App() {
     }),
     [customPromptGroups, generatedPromptGroups]
   );
+  useEffect(() => {
+    if (typeof window === "undefined" || !mode) {
+      return;
+    }
+
+    try {
+      window.localStorage?.setItem(STORAGE_KEYS.mode, mode);
+    } catch (error) {
+      console.warn("Failed to persist mode selection", error);
+    }
+  }, [mode]);
+  useEffect(() => {
+    if (!db || !gameId) {
+      remoteModeRef.current = null;
+      return;
+    }
+
+    const unsubscribe = subscribeToSessionMode(db, gameId, (nextMode) => {
+      remoteModeRef.current = nextMode ?? null;
+      if (!nextMode) {
+        return;
+      }
+
+      setMode((currentMode) =>
+        currentMode === nextMode ? currentMode : nextMode
+      );
+    });
+
+    return () => {
+      remoteModeRef.current = null;
+      unsubscribe();
+    };
+  }, [db, gameId]);
+  useEffect(() => {
+    if (!db || !gameId || !mode) {
+      return;
+    }
+
+    if (remoteModeRef.current === mode) {
+      return;
+    }
+
+    setSessionMode(db, gameId, mode).catch(() => {});
+  }, [db, gameId, mode]);
   useEffect(() => {
     if (!gameId) {
       return;
