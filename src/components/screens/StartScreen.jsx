@@ -46,12 +46,17 @@ const StartScreen = ({
       handleButtonClick();
     }
 
+    const label = MODE_LABELS[mode] ?? mode;
+
+    if (label === MODE_LABELS.single) {
+      console.info("Single Device mode selected (placeholder)");
+    } else {
+      console.info(`Selected mode: ${label}`);
+    }
+
     if (onSelectMode) {
       onSelectMode(mode);
     }
-
-    const label = MODE_LABELS[mode] ?? mode;
-    console.log(`Selected mode: ${label}`);
   };
 
   const selectedModeLabel = MODE_LABELS[gameMode] ?? MODE_OPTIONS[0].label;
