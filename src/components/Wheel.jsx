@@ -2,10 +2,18 @@ import React, { useMemo } from "react";
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
-const responsiveFontSize = (sliceAngle, normalizedLength, longestWordLength) => {
+const responsiveFontSize = (
+  sliceAngle,
+  normalizedLength,
+  longestWordLength
+) => {
   const angleFactor = clamp(0.92 + (sliceAngle / 160) * 0.58, 0.74, 1.28);
   const lengthPenalty = clamp(1.18 - normalizedLength * 0.036, 0.6, 1.02);
-  const longWordPenalty = clamp(1.08 - Math.max(0, longestWordLength - 7) * 0.038, 0.7, 1);
+  const longWordPenalty = clamp(
+    1.08 - Math.max(0, longestWordLength - 7) * 0.038,
+    0.7,
+    1
+  );
   const adjusted = angleFactor * lengthPenalty * longWordPenalty;
   const minRem = (adjusted * 0.7).toFixed(3);
   const idealRem = (adjusted * 0.84).toFixed(3);
@@ -16,20 +24,31 @@ const responsiveFontSize = (sliceAngle, normalizedLength, longestWordLength) => 
 
 const deriveLabelTypography = (sliceAngle, label) => {
   const sanitizedLabel = `${label ?? ""}`.replace(/\s+/g, " ").trim();
-  const normalizedLength = Math.max(sanitizedLabel.replace(/\s+/g, "").length, 4);
+  const normalizedLength = Math.max(
+    sanitizedLabel.replace(/\s+/g, "").length,
+    4
+  );
   const words = sanitizedLabel.length ? sanitizedLabel.split(" ") : [];
   const longestWordLength = words.reduce(
     (max, word) => Math.max(max, word.length),
-    0,
+    0
   );
-  const fontSize = responsiveFontSize(sliceAngle, normalizedLength, longestWordLength);
-  const allowMultiLine = normalizedLength > 10 || longestWordLength > 8 || words.length >= 3;
-  const allowThreeLines = normalizedLength > 18 || words.length >= 4 || longestWordLength > 11;
+  const fontSize = responsiveFontSize(
+    sliceAngle,
+    normalizedLength,
+    longestWordLength
+  );
+  const allowMultiLine =
+    normalizedLength > 10 || longestWordLength > 8 || words.length >= 3;
+  const allowThreeLines =
+    normalizedLength > 18 || words.length >= 4 || longestWordLength > 11;
   const lineClamp = allowThreeLines ? 3 : allowMultiLine ? 2 : 1;
   const baseLetterSpacing = clamp(0.16 - normalizedLength * 0.0028, 0.05, 0.14);
   const letterSpacing = `${baseLetterSpacing.toFixed(3)}em`;
   const lineHeight = Number(
-    ((allowMultiLine ? 1.16 : 1.08) - (longestWordLength > 12 ? 0.02 : 0)).toFixed(2),
+    (
+      (allowMultiLine ? 1.16 : 1.08) - (longestWordLength > 12 ? 0.02 : 0)
+    ).toFixed(2)
   );
 
   return {
@@ -93,9 +112,10 @@ const Wheel = ({
     const sliceAngle = 360 / segments.length;
     const radiansOffset = -90 * (Math.PI / 180);
     const sliceAngleRadians = (sliceAngle * Math.PI) / 180;
-    const radiusRatioBase = segments.length <= 2
-      ? 0.68
-      : clamp(0.57 + (sliceAngle / 360) * 0.22, 0.55, 0.68);
+    const radiusRatioBase =
+      segments.length <= 2
+        ? 0.68
+        : clamp(0.57 + (sliceAngle / 360) * 0.22, 0.55, 0.68);
     const baseRadius = 50 * radiusRatioBase;
 
     return segments.map((segment, index) => {
@@ -108,7 +128,7 @@ const Wheel = ({
       const radiusAdjustment = clamp(
         1 - Math.max(0, typography.normalizedLength - 6) * 0.008,
         0.84,
-        0.97,
+        0.97
       );
       const radius = baseRadius * radiusAdjustment;
       const x = 50 + radius * Math.cos(radians);
@@ -117,16 +137,9 @@ const Wheel = ({
       const width = clamp(
         arcWidth * (typography.lineClamp > 1 ? 0.96 : 0.9),
         24,
-        segments.length <= 2 ? 70 : 58,
+        segments.length <= 2 ? 70 : 58
       );
-      const toneOverrides = {
-        truth: "dark",
-        dare: "light",
-        trivia: "dark",
-      };
-      const tone = segment.labelTone ?? toneOverrides[segment.id] ?? undefined;
-      const color = getLabelColorVar(segment.id, tone);
-      const surface = getLabelSurfaceVar(segment.id, tone);
+      const color = "#FFFFFF";
 
       return {
         id,
@@ -175,10 +188,7 @@ const Wheel = ({
       onPointerCancel={onPointerCancel}
       onPointerLeave={onPointerLeave}
     >
-      <div
-        className={`wheel-meter ${meterStateClass}`}
-        aria-hidden="true"
-      >
+      <div className={`wheel-meter ${meterStateClass}`} aria-hidden="true">
         <svg className="wheel-meter__svg" viewBox="0 0 120 120">
           <circle className="wheel-meter__ring" cx="60" cy="60" r="54" />
           <circle
@@ -189,8 +199,7 @@ const Wheel = ({
             style={{
               strokeDasharray: meterCircumference,
               strokeDashoffset:
-                meterCircumference -
-                (meterCircumference * meterProgress) / 100,
+                meterCircumference - (meterCircumference * meterProgress) / 100,
             }}
           />
         </svg>
@@ -225,8 +234,8 @@ const Wheel = ({
                 color: item.color,
               }}
             >
-                <span
-                  className="wheel__label-text wheel-label"
+              <span
+                className="wheel__label-text wheel-label"
                 style={{
                   fontSize: item.fontSize,
                   letterSpacing: item.letterSpacing,
