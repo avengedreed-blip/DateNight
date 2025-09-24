@@ -15,11 +15,19 @@ const responsiveFontSize = (
     1
   );
   const adjusted = angleFactor * lengthPenalty * longWordPenalty;
-  const minRem = (adjusted * 0.7).toFixed(3);
-  const idealRem = (adjusted * 0.84).toFixed(3);
-  const maxRem = (adjusted * 1.02).toFixed(3);
+
+  const minRem = adjusted * 0.7;
+  const idealRem = adjusted * 0.84;
+  const maxRem = adjusted * 1.02;
+  const minPx = Math.max(14, Math.round(minRem * 16 * 100) / 100);
+  const idealPx = Math.min(28, Math.max(14, Math.round(idealRem * 16 * 100) / 100));
+  const maxPx = Math.max(minPx, Math.round(Math.min(28, maxRem * 16) * 100) / 100);
   const vwComponent = clamp(sliceAngle * 0.012, 0.3, 1.32).toFixed(3);
-  return `clamp(${minRem}rem, calc(${idealRem}rem + ${vwComponent}vw), ${maxRem}rem)`;
+
+  return `clamp(${minPx.toFixed(2)}px, calc(${idealPx.toFixed(2)}px + ${vwComponent}vw), ${Math.max(
+    maxPx,
+    14,
+  ).toFixed(2)}px)`;
 };
 
 const deriveLabelTypography = (sliceAngle, label) => {

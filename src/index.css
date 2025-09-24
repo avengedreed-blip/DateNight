@@ -479,8 +479,8 @@
     flex-direction: column;
     align-items: center;
     width: var(--wheel-size);
-    height: var(--wheel-size);
-    margin: 0 auto clamp(2.5rem, 6vw, 3.75rem);
+    margin: 0 auto;
+    gap: clamp(1.5rem, 4vw, 2rem);
     touch-action: none;
   }
 
