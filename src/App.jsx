@@ -152,6 +152,7 @@ export default function App() {
       return null;
     }
   });
+  const [modeInitialized, setModeInitialized] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
   const [pendingExtremeSpin, setPendingExtremeSpin] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState({
@@ -329,7 +330,7 @@ export default function App() {
     [customPromptGroups, generatedPromptGroups]
   );
   useEffect(() => {
-    if (typeof window === "undefined" || !mode) {
+    if (typeof window === "undefined" || !modeInitialized || !mode) {
       return;
     }
 
@@ -338,22 +339,25 @@ export default function App() {
     } catch (error) {
       console.warn("Failed to persist mode selection", error);
     }
-  }, [mode]);
+  }, [mode, modeInitialized]);
   useEffect(() => {
     if (!db || !gameId) {
       remoteModeRef.current = null;
+      setModeInitialized(true);
       return;
     }
 
+    setModeInitialized(false);
+
     const unsubscribe = subscribeToSessionMode(db, gameId, (nextMode) => {
       remoteModeRef.current = nextMode ?? null;
-      if (!nextMode) {
-        return;
+      if (nextMode) {
+        setMode((currentMode) =>
+          currentMode === nextMode ? currentMode : nextMode
+        );
       }
 
-      setMode((currentMode) =>
-        currentMode === nextMode ? currentMode : nextMode
-      );
+      setModeInitialized(true);
     });
 
     return () => {
@@ -362,7 +366,7 @@ export default function App() {
     };
   }, [db, gameId]);
   useEffect(() => {
-    if (!db || !gameId || !mode) {
+    if (!modeInitialized || !db || !gameId || !mode) {
       return;
     }
 
@@ -371,7 +375,7 @@ export default function App() {
     }
 
     setSessionMode(db, gameId, mode).catch(() => {});
-  }, [db, gameId, mode]);
+  }, [db, gameId, mode, modeInitialized]);
   useEffect(() => {
     if (!gameId) {
       return;
