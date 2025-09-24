@@ -136,6 +136,7 @@ const parseInteger = (value, fallback) => {
 export default function App() {
   const [toneReady, setToneReady] = useState(false);
   const [inputGameId, setInputGameId] = useState("");
+  const [mode, setMode] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
   const [pendingExtremeSpin, setPendingExtremeSpin] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState({
@@ -1121,6 +1122,7 @@ export default function App() {
     setIsExtremeRound(false);
     setRotation(0);
     rotationRef.current = 0;
+    setMode(null);
     setGameId(null);
     setRoundCount(0);
     setLastPrompts({});
@@ -1176,6 +1178,8 @@ export default function App() {
         inputGameId={inputGameId}
         setInputGameId={setInputGameId}
         resetInputGameId={resetInputGameId}
+        gameMode={mode}
+        onSelectMode={setMode}
         onButtonClick={playClick}
       />
     );
@@ -1566,6 +1570,7 @@ const parseInteger = (value, fallback) => {
 export default function App() {
   const [toneReady, setToneReady] = useState(false);
   const [inputGameId, setInputGameId] = useState("");
+  const [mode, setMode] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
   const [pendingExtremeSpin, setPendingExtremeSpin] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState({
@@ -2518,6 +2523,7 @@ export default function App() {
     setIsExtremeRound(false);
     setRotation(0);
     rotationRef.current = 0;
+    setMode(null);
     setGameId(null);
     setRoundCount(0);
     setLastPrompts({});
@@ -2573,6 +2579,8 @@ export default function App() {
         inputGameId={inputGameId}
         setInputGameId={setInputGameId}
         resetInputGameId={resetInputGameId}
+        gameMode={mode}
+        onSelectMode={setMode}
         onButtonClick={playClick}
       />
     );
