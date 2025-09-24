@@ -7,11 +7,19 @@ const responsiveFontSize = (sliceAngle, normalizedLength, longestWordLength) => 
   const lengthPenalty = clamp(1.18 - normalizedLength * 0.036, 0.6, 1.02);
   const longWordPenalty = clamp(1.08 - Math.max(0, longestWordLength - 7) * 0.038, 0.7, 1);
   const adjusted = angleFactor * lengthPenalty * longWordPenalty;
-  const minRem = (adjusted * 0.7).toFixed(3);
-  const idealRem = (adjusted * 0.84).toFixed(3);
-  const maxRem = (adjusted * 1.02).toFixed(3);
+
+  const minRem = adjusted * 0.7;
+  const idealRem = adjusted * 0.84;
+  const maxRem = adjusted * 1.02;
+  const minPx = Math.max(14, Math.round(minRem * 16 * 100) / 100);
+  const idealPx = Math.min(28, Math.max(14, Math.round(idealRem * 16 * 100) / 100));
+  const maxPx = Math.max(minPx, Math.round(Math.min(28, maxRem * 16) * 100) / 100);
   const vwComponent = clamp(sliceAngle * 0.012, 0.3, 1.32).toFixed(3);
-  return `clamp(${minRem}rem, calc(${idealRem}rem + ${vwComponent}vw), ${maxRem}rem)`;
+
+  return `clamp(${minPx.toFixed(2)}px, calc(${idealPx.toFixed(2)}px + ${vwComponent}vw), ${Math.max(
+    maxPx,
+    14,
+  ).toFixed(2)}px)`;
 };
 
 const deriveLabelTypography = (sliceAngle, label) => {
@@ -40,34 +48,6 @@ const deriveLabelTypography = (sliceAngle, label) => {
     letterSpacing,
     lineHeight,
   };
-};
-
-const getLabelColorVar = (segmentId, tone) => {
-  const fallback = tone === "light"
-    ? "var(--wheel-label-light, var(--text-main, #f8fafc))"
-    : tone === "dark"
-    ? "var(--wheel-label-dark, rgba(15, 23, 42, 0.92))"
-    : "var(--wheel-label-default, var(--text-main, #f8fafc))";
-
-  if (!segmentId) {
-    return fallback;
-  }
-
-  return `var(--wheel-${segmentId}-label, ${fallback})`;
-};
-
-const getLabelSurfaceVar = (segmentId, tone) => {
-  const fallback = tone === "light"
-    ? "var(--wheel-label-surface-light, rgba(15, 23, 42, 0.55))"
-    : tone === "dark"
-    ? "var(--wheel-label-surface-dark, rgba(248, 250, 252, 0.32))"
-    : "var(--wheel-label-surface, rgba(15, 23, 42, 0.45))";
-
-  if (!segmentId) {
-    return fallback;
-  }
-
-  return `var(--wheel-${segmentId}-label-surface, ${fallback})`;
 };
 
 const Wheel = ({
@@ -147,14 +127,7 @@ const Wheel = ({
         24,
         segments.length <= 2 ? 70 : 58,
       );
-      const toneOverrides = {
-        truth: "dark",
-        dare: "light",
-        trivia: "dark",
-      };
-      const tone = segment.labelTone ?? toneOverrides[segment.id] ?? undefined;
-      const color = getLabelColorVar(segment.id, tone);
-      const surface = getLabelSurfaceVar(segment.id, tone);
+      const color = "#FFFFFF";
 
       return {
         id,
@@ -163,7 +136,6 @@ const Wheel = ({
         y,
         width,
         color,
-        surface,
         fontSize: typography.fontSize,
         lineClamp: typography.lineClamp,
         letterSpacing: typography.letterSpacing,
@@ -252,7 +224,6 @@ const Wheel = ({
                 width: `${item.width}%`,
                 transform: `translate(-50%, -50%) rotate(${-normalizedRotation}deg)`,
                 color: item.color,
-                background: item.surface,
               }}
             >
                 <span
