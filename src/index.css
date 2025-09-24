@@ -439,18 +439,23 @@
   }
 
   .wheel-wrapper {
-    --wheel-size: min(82vw, 340px);
+    --wheel-max-size: min(70vw, 70vh);
+    --wheel-size: min(var(--wheel-max-size), max(240px, 60vw));
     position: relative;
     display: grid;
     place-items: center;
+    justify-items: center;
+    align-content: center;
     width: var(--wheel-size);
     height: var(--wheel-size);
+    max-width: var(--wheel-max-size);
+    max-height: var(--wheel-max-size);
     margin: 0 auto clamp(2.5rem, 6vw, 3.75rem);
     touch-action: none;
   }
 
   .wheel {
-    @apply relative flex items-center justify-center rounded-full border-[6px] border-white/90 shadow-[0_30px_60px_rgba(15,23,42,0.45),_inset_0_0_25px_rgba(15,23,42,0.45)] transition-[transform] ease-[cubic-bezier(0.25,1,0.5,1.08)];
+    @apply relative flex items-center justify-center rounded-full border-[6px] border-white shadow-[0_30px_60px_rgba(15,23,42,0.45),_inset_0_0_25px_rgba(15,23,42,0.45)] transition-[transform] ease-[cubic-bezier(0.25,1,0.5,1.08)];
     width: 100%;
     height: 100%;
     aspect-ratio: 1 / 1;
@@ -459,7 +464,7 @@
   }
 
   .wheel--extreme {
-    @apply border-[color:var(--danger)] shadow-[0_30px_60px_rgba(244,114,182,0.45),_inset_0_0_25px_rgba(244,114,182,0.4)];
+    @apply border-white shadow-[0_30px_60px_rgba(244,114,182,0.45),_inset_0_0_25px_rgba(244,114,182,0.4)];
   }
 
   .wheel__labels {
@@ -480,15 +485,15 @@
     transform-origin: center;
     pointer-events: none;
     max-width: min(62%, 320px);
-    padding: clamp(0.35rem, 0.8vw, 0.55rem) clamp(0.65rem, 1.35vw, 0.95rem);
-    border-radius: clamp(0.75rem, 1.8vw, 1.05rem);
+    padding: 0;
+    border-radius: 0;
     backface-visibility: hidden;
     will-change: transform;
-    background: var(--wheel-label-surface, rgba(15, 23, 42, 0.45));
-    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.36), inset 0 0 0 1px rgba(248, 250, 252, 0.08);
-    backdrop-filter: saturate(140%) blur(6px);
-    -webkit-backdrop-filter: saturate(140%) blur(6px);
-    transition: transform 220ms ease, box-shadow 220ms ease, background 220ms ease;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    transition: transform 220ms ease;
   }
 
   .wheel__label-text {
@@ -532,8 +537,10 @@
   }
 
   .wheel__pointer {
-    @apply absolute left-1/2 -translate-x-1/2 text-3xl text-[color:var(--secondary-accent)] drop-shadow-[0_6px_20px_rgba(15,23,42,0.7)];
-    top: calc(-1 * clamp(1.75rem, 4.5vw, 2.25rem));
+    @apply absolute left-1/2 text-3xl text-[color:var(--secondary-accent)] drop-shadow-[0_6px_20px_rgba(15,23,42,0.7)];
+    bottom: calc(100% + clamp(0.25rem, 1.4vw, 0.6rem));
+    transform: translateX(-50%);
+    line-height: 1;
     z-index: 2;
   }
 
