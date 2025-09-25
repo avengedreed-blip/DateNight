@@ -1,4 +1,12 @@
-import { onSnapshot, setDoc } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  getDoc,
+  increment,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 
 import { db } from "../config/firebase";
 import { getGameDocRef } from "./schema";
@@ -22,8 +30,37 @@ const DEFAULT_PARTICLES = Object.freeze({
   seed: 0,
 });
 
+const DEFAULT_SPIN_LOCK = Object.freeze({
+  locked: false,
+  ownerId: null,
+  acquiredAt: null,
+  expiresAt: null,
+});
+
+const DEFAULT_ROUND_STATE = Object.freeze({
+  current: 0,
+  updatedAt: null,
+});
+
+const DEFAULT_PROMPT_STATE = Object.freeze({
+  weightsVersion: 0,
+  resetCount: 0,
+  lastResetAt: null,
+});
+
+const DEFAULT_LIFECYCLE_STATE = Object.freeze({
+  status: "idle",
+  createdAt: null,
+  startedAt: null,
+  endedAt: null,
+  lastResetAt: null,
+  resetCount: 0,
+});
+
 const DEFAULT_STATUS = "idle";
 const DEFAULT_MESSAGE = null;
+
+const PROMPT_STATE_STORAGE_PREFIX = `${STORAGE_PREFIX}::prompt-state-marker`;
 
 const getStorage = () => {
   if (typeof window === "undefined") {
@@ -85,6 +122,13 @@ const normalizeTimer = (timer = {}) => {
   };
 };
 
+const toNonNegativeInt = (value, fallback = 0) => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.floor(value));
+  }
+  return fallback;
+};
+
 const normalizeExtremeMeter = (meter = {}) => ({
   value:
     typeof meter.value === "number"
@@ -101,19 +145,142 @@ const normalizeParticles = (particles = {}) => ({
       : DEFAULT_PARTICLES.seed,
 });
 
+const normalizeRoundState = (roundState = {}) => ({
+  current: toNonNegativeInt(roundState.current, DEFAULT_ROUND_STATE.current),
+  updatedAt: toMillis(roundState.updatedAt),
+});
+
+const normalizePromptState = (promptState = {}) => {
+  const weightsVersion =
+    coercePromptWeightsVersion(promptState.weightsVersion) ?? DEFAULT_PROMPT_STATE.weightsVersion;
+
+  const resetCount = toNonNegativeInt(promptState.resetCount, DEFAULT_PROMPT_STATE.resetCount);
+
+  return {
+    weightsVersion,
+    resetCount,
+    lastResetAt: toMillis(promptState.lastResetAt),
+  };
+};
+
+const coercePromptWeightsVersion = (value) => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length > 0) {
+      const parsed = Number.parseFloat(trimmed);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+  return null;
+};
+
+const normalizeLifecycleState = (lifecycle = {}) => {
+  const status =
+    typeof lifecycle.status === "string" && lifecycle.status.trim().length > 0
+      ? lifecycle.status.trim()
+      : DEFAULT_LIFECYCLE_STATE.status;
+
+  const resetCount = toNonNegativeInt(lifecycle.resetCount, DEFAULT_LIFECYCLE_STATE.resetCount);
+
+  return {
+    status,
+    createdAt: toMillis(lifecycle.createdAt),
+    startedAt: toMillis(lifecycle.startedAt),
+    endedAt: toMillis(lifecycle.endedAt),
+    lastResetAt: toMillis(lifecycle.lastResetAt),
+    resetCount,
+  };
+};
+
+const normalizeSpinLock = (spinLock = {}) => ({
+  locked: Boolean(spinLock.locked),
+  ownerId: typeof spinLock.ownerId === "string" ? spinLock.ownerId : null,
+  acquiredAt: toMillis(spinLock.acquiredAt),
+  expiresAt: toMillis(spinLock.expiresAt),
+});
+
+const isSpinLockExpired = (spinLock) => {
+  if (!spinLock?.locked) {
+    return false;
+  }
+  const expiresAt = spinLock.expiresAt;
+  if (!expiresAt) {
+    return true;
+  }
+  return expiresAt <= Date.now();
+};
+
 const cloneDefaultSessionState = () => ({
   timer: { ...DEFAULT_TIMER },
   extremeMeter: { ...DEFAULT_EXTREME_METER },
   particles: { ...DEFAULT_PARTICLES },
+  roundState: { ...DEFAULT_ROUND_STATE },
+  promptState: { ...DEFAULT_PROMPT_STATE },
+  lifecycle: { ...DEFAULT_LIFECYCLE_STATE },
   status: DEFAULT_STATUS,
   message: DEFAULT_MESSAGE,
   lastSyncedAt: null,
 });
 
+const buildDefaultGameDocument = ({
+  promptVersion,
+  lifecycleStatus,
+  timestamp,
+} = {}) => {
+  const version =
+    typeof promptVersion === "number" && Number.isFinite(promptVersion)
+      ? promptVersion
+      : generatePromptWeightsVersion();
+  const resolvedTimestamp = timestamp ?? serverTimestamp();
+  const status =
+    typeof lifecycleStatus === "string" && lifecycleStatus.trim().length > 0
+      ? lifecycleStatus.trim()
+      : "waiting";
+
+  return {
+    wheelState: {
+      currentSlice: "",
+      spinSeed: 0,
+      lastSpinnerId: "",
+    },
+    timer: { ...DEFAULT_TIMER },
+    extremeMeter: { ...DEFAULT_EXTREME_METER },
+    particles: { ...DEFAULT_PARTICLES },
+    spinLock: { ...DEFAULT_SPIN_LOCK },
+    roundState: {
+      current: DEFAULT_ROUND_STATE.current,
+      updatedAt: resolvedTimestamp,
+    },
+    promptState: {
+      weightsVersion: version,
+      resetCount: DEFAULT_PROMPT_STATE.resetCount,
+      lastResetAt: resolvedTimestamp,
+    },
+    lifecycle: {
+      status,
+      createdAt: resolvedTimestamp,
+      startedAt: null,
+      endedAt: null,
+      lastResetAt: resolvedTimestamp,
+      resetCount: DEFAULT_LIFECYCLE_STATE.resetCount,
+    },
+    createdAt: resolvedTimestamp,
+    updatedAt: resolvedTimestamp,
+  };
+};
+
 const normalizeSessionState = (rawState = {}) => {
   const timer = normalizeTimer(rawState.timer);
   const extremeMeter = normalizeExtremeMeter(rawState.extremeMeter);
   const particles = normalizeParticles(rawState.particles);
+  const roundState = normalizeRoundState(rawState.roundState);
+  const promptState = normalizePromptState(rawState.promptState);
+  const lifecycle = normalizeLifecycleState(rawState.lifecycle);
   const status =
     typeof rawState.status === "string" && rawState.status.trim().length > 0
       ? rawState.status.trim()
@@ -128,6 +295,9 @@ const normalizeSessionState = (rawState = {}) => {
     timer,
     extremeMeter,
     particles,
+    roundState,
+    promptState,
+    lifecycle,
     status,
     message,
     lastSyncedAt,
@@ -146,6 +316,16 @@ const getSessionStorageKey = (gameId) => {
 };
 
 const getPendingStorageKey = (gameId) => `${getSessionStorageKey(gameId)}::pending`;
+
+const getPromptStateStorageKey = (gameId) => {
+  const suffix =
+    typeof gameId === "string" && gameId.trim().length > 0 ? gameId.trim() : "anonymous";
+  return `${PROMPT_STATE_STORAGE_PREFIX}::${suffix}`;
+};
+
+const generatePromptWeightsVersion = () => Date.now() + Math.floor(Math.random() * 1000);
+
+const createLocalGameId = () => `local-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
 const serialize = (value) => {
   try {
@@ -166,6 +346,73 @@ const deserialize = (value) => {
     console.warn("Failed to deserialize session state", error);
     return null;
   }
+};
+
+const readPromptStateMarker = (gameId) => {
+  const storage = getStorage();
+  if (!storage) {
+    return null;
+  }
+
+  const raw = storage.getItem(getPromptStateStorageKey(gameId));
+  if (!raw) {
+    return null;
+  }
+
+  const parsed = deserialize(raw);
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
+
+  return parsed;
+};
+
+const persistPromptStateMarker = (gameId, marker) => {
+  const storage = getStorage();
+  if (!storage) {
+    return;
+  }
+
+  const serialized = serialize(marker);
+  if (!serialized) {
+    return;
+  }
+
+  try {
+    storage.setItem(getPromptStateStorageKey(gameId), serialized);
+  } catch (error) {
+    console.warn("Failed to persist prompt state marker", error);
+  }
+};
+
+const clearPromptStateMarker = (gameId) => {
+  const storage = getStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.removeItem(getPromptStateStorageKey(gameId));
+  } catch (error) {
+    console.warn("Failed to clear prompt state marker", error);
+  }
+};
+
+const getStoredPromptWeightsVersion = (gameId) => {
+  const marker = readPromptStateMarker(gameId);
+  if (!marker || typeof marker !== "object") {
+    return null;
+  }
+  return coercePromptWeightsVersion(marker.version);
+};
+
+const persistPromptWeightsVersion = (gameId, version) => {
+  const normalized = coercePromptWeightsVersion(version);
+  if (normalized == null) {
+    clearPromptStateMarker(gameId);
+    return;
+  }
+  persistPromptStateMarker(gameId, { version: normalized });
 };
 
 const loadSessionFromStorage = (gameId) => {
@@ -322,6 +569,490 @@ const getSafeReconnectionState = ({ lastKnown, reason } = {}) => {
   };
 };
 
+const createGame = async (options = {}) => {
+  const { gameId, lifecycleStatus } = options;
+  const promptVersion = generatePromptWeightsVersion();
+  const now = Date.now();
+
+  const resolvedLifecycleStatus =
+    typeof lifecycleStatus === "string" && lifecycleStatus.trim().length > 0
+      ? lifecycleStatus.trim()
+      : "waiting";
+
+  const localDefaults = cloneDefaultSessionState();
+  const baseState = {
+    ...localDefaults,
+    timer: { ...DEFAULT_TIMER },
+    extremeMeter: { ...DEFAULT_EXTREME_METER },
+    particles: { ...DEFAULT_PARTICLES },
+    roundState: {
+      current: DEFAULT_ROUND_STATE.current,
+      updatedAt: now,
+    },
+    promptState: {
+      weightsVersion: promptVersion,
+      resetCount: 0,
+      lastResetAt: now,
+    },
+    lifecycle: {
+      ...localDefaults.lifecycle,
+      status: resolvedLifecycleStatus,
+      createdAt: now,
+      lastResetAt: now,
+      endedAt: null,
+      resetCount: 0,
+    },
+    status: "online",
+    message: null,
+    lastSyncedAt: now,
+  };
+
+  const storeLocalState = (id, state) => {
+    persistSessionToStorage(id, state);
+    persistPromptWeightsVersion(id, promptVersion);
+  };
+
+  const normalizedGameId =
+    typeof gameId === "string" && gameId.trim().length > 0 ? gameId.trim() : null;
+
+  if (!db) {
+    const fallbackId = normalizedGameId ?? createLocalGameId();
+    const offlineState = {
+      ...baseState,
+      status: "offline",
+      message: "Multiplayer is unavailable. Session created locally.",
+    };
+    storeLocalState(fallbackId, offlineState);
+    return {
+      gameId: fallbackId,
+      state: offlineState,
+      promptVersion,
+      offline: true,
+      created: false,
+    };
+  }
+
+  const payload = buildDefaultGameDocument({
+    promptVersion,
+    lifecycleStatus: resolvedLifecycleStatus,
+  });
+
+  try {
+    let gameRef;
+
+    if (normalizedGameId) {
+      gameRef = getGameDocRef(normalizedGameId);
+      const snapshot = await getDoc(gameRef);
+      if (snapshot.exists()) {
+        throw new Error(`Game with id "${normalizedGameId}" already exists`);
+      }
+      await setDoc(gameRef, payload, { merge: false });
+    } else {
+      gameRef = await addDoc(collection(db, "games"), payload);
+    }
+
+    const resolvedId = gameRef.id;
+    const onlineState = {
+      ...baseState,
+      status: "online",
+      message: null,
+      lastSyncedAt: now,
+    };
+
+    storeLocalState(resolvedId, onlineState);
+
+    return {
+      gameId: resolvedId,
+      state: onlineState,
+      promptVersion,
+      offline: false,
+      created: true,
+    };
+  } catch (error) {
+    console.error("Failed to create multiplayer game", error);
+    const fallbackId = normalizedGameId ?? createLocalGameId();
+    const failedState = {
+      ...baseState,
+      status: "offline",
+      message: error?.message ?? "Unable to create game session",
+    };
+    storeLocalState(fallbackId, failedState);
+
+    return {
+      gameId: fallbackId,
+      state: failedState,
+      promptVersion,
+      offline: true,
+      created: false,
+      error,
+    };
+  }
+};
+
+const joinGame = async (gameId) => {
+  if (typeof gameId !== "string" || gameId.trim().length === 0) {
+    throw new Error("A valid gameId is required to join a game.");
+  }
+
+  const normalizedGameId = gameId.trim();
+  const now = Date.now();
+
+  if (!db) {
+    const localState = normalizeSessionState({
+      ...loadSessionFromStorage(normalizedGameId),
+      status: "offline",
+      message: "Multiplayer is offline",
+      lastSyncedAt: now,
+    });
+
+    persistSessionToStorage(normalizedGameId, localState);
+
+    return {
+      gameId: normalizedGameId,
+      state: localState,
+      exists: Boolean(localState),
+      offline: true,
+    };
+  }
+
+  const gameRef = getGameDocRef(normalizedGameId);
+  const snapshot = await getDoc(gameRef);
+
+  if (!snapshot.exists()) {
+    clearStoredSession(normalizedGameId);
+    clearPromptStateMarker(normalizedGameId);
+    return {
+      gameId: normalizedGameId,
+      state: null,
+      exists: false,
+      offline: false,
+    };
+  }
+
+  const data = snapshot.data() || {};
+  const spinLock = normalizeSpinLock(data.spinLock);
+
+  if (isSpinLockExpired(spinLock)) {
+    try {
+      await setDoc(
+        gameRef,
+        { spinLock: { ...DEFAULT_SPIN_LOCK } },
+        { merge: true }
+      );
+    } catch (error) {
+      console.warn("Failed to clear expired spin lock", error);
+    }
+  }
+
+  const normalizedState = normalizeSessionState({
+    ...data,
+    status: "online",
+    message: null,
+    lastSyncedAt: now,
+  });
+
+  if (!normalizedState.roundState.updatedAt) {
+    normalizedState.roundState = {
+      ...normalizedState.roundState,
+      updatedAt: now,
+    };
+  }
+
+  if (!normalizedState.promptState.lastResetAt) {
+    normalizedState.promptState = {
+      ...normalizedState.promptState,
+      lastResetAt: now,
+    };
+  }
+
+  normalizedState.lastSyncedAt = now;
+  normalizedState.status = "online";
+  normalizedState.message = null;
+
+  persistSessionToStorage(normalizedGameId, normalizedState);
+
+  const remotePromptVersion = coercePromptWeightsVersion(
+    data.promptState?.weightsVersion
+  );
+
+  if (remotePromptVersion != null) {
+    const storedVersion = getStoredPromptWeightsVersion(normalizedGameId);
+    if (storedVersion == null || storedVersion !== remotePromptVersion) {
+      persistPromptWeightsVersion(normalizedGameId, remotePromptVersion);
+    }
+  } else {
+    clearPromptStateMarker(normalizedGameId);
+  }
+
+  return {
+    gameId: normalizedGameId,
+    state: normalizedState,
+    exists: true,
+    offline: false,
+    promptVersion:
+      remotePromptVersion ?? normalizedState.promptState.weightsVersion ?? null,
+    snapshot: data,
+  };
+};
+
+const resetGame = async (gameId, options = {}) => {
+  if (typeof gameId !== "string" || gameId.trim().length === 0) {
+    throw new Error("A valid gameId is required to reset a game.");
+  }
+
+  const normalizedGameId = gameId.trim();
+  const promptVersion = generatePromptWeightsVersion();
+  const now = Date.now();
+  const previousState = loadSessionFromStorage(normalizedGameId);
+
+  const previousLifecycleResets = toNonNegativeInt(
+    previousState?.lifecycle?.resetCount,
+    0
+  );
+  const previousPromptResets = toNonNegativeInt(
+    previousState?.promptState?.resetCount,
+    0
+  );
+
+  const nextState = {
+    ...cloneDefaultSessionState(),
+    ...previousState,
+    timer: { ...DEFAULT_TIMER },
+    extremeMeter: { ...DEFAULT_EXTREME_METER },
+    particles: { ...DEFAULT_PARTICLES },
+    roundState: {
+      current: DEFAULT_ROUND_STATE.current,
+      updatedAt: now,
+    },
+    promptState: {
+      weightsVersion: promptVersion,
+      resetCount: previousPromptResets + 1,
+      lastResetAt: now,
+    },
+    lifecycle: {
+      ...DEFAULT_LIFECYCLE_STATE,
+      ...previousState?.lifecycle,
+      status: "waiting",
+      createdAt: previousState?.lifecycle?.createdAt ?? now,
+      lastResetAt: now,
+      endedAt: null,
+      resetCount: previousLifecycleResets + 1,
+    },
+    status: db ? "online" : "offline",
+    message: db ? null : "Pending reset sync",
+    lastSyncedAt: db ? now : previousState?.lastSyncedAt ?? now,
+  };
+
+  persistSessionToStorage(normalizedGameId, nextState);
+  persistPromptWeightsVersion(normalizedGameId, promptVersion);
+
+  const resetTimestamp = serverTimestamp();
+  const payload = {
+    spinLock: { ...DEFAULT_SPIN_LOCK },
+    timer: {
+      ownerId: DEFAULT_TIMER.ownerId,
+      durationMs: DEFAULT_TIMER.durationMs,
+      startedAt: null,
+      expiresAt: null,
+      updatedAt: resetTimestamp,
+      updatedBy: options?.playerId ?? null,
+    },
+    extremeMeter: {
+      value: DEFAULT_EXTREME_METER.value,
+      isForced: DEFAULT_EXTREME_METER.isForced,
+      updatedAt: resetTimestamp,
+      lastUpdatedBy: options?.playerId ?? null,
+    },
+    particles: {
+      preset: DEFAULT_PARTICLES.preset,
+      seed: DEFAULT_PARTICLES.seed,
+      updatedAt: resetTimestamp,
+      lastUpdatedBy: options?.playerId ?? null,
+    },
+    roundState: {
+      current: DEFAULT_ROUND_STATE.current,
+      updatedAt: resetTimestamp,
+    },
+    promptState: {
+      weightsVersion: promptVersion,
+      resetCount: increment(1),
+      lastResetAt: resetTimestamp,
+    },
+    lifecycle: {
+      status: "waiting",
+      endedAt: null,
+      lastResetAt: resetTimestamp,
+      resetCount: increment(1),
+    },
+    updatedAt: resetTimestamp,
+  };
+
+  const mutation = { data: payload, merge: true };
+
+  if (!db) {
+    queuePendingSessionWrite(normalizedGameId, mutation);
+    return {
+      gameId: normalizedGameId,
+      state: nextState,
+      promptVersion,
+      queued: true,
+      offline: true,
+    };
+  }
+
+  try {
+    await setDoc(getGameDocRef(normalizedGameId), payload, { merge: true });
+    return {
+      gameId: normalizedGameId,
+      state: nextState,
+      promptVersion,
+      queued: false,
+      offline: false,
+    };
+  } catch (error) {
+    console.error("Failed to reset multiplayer game", error);
+    queuePendingSessionWrite(normalizedGameId, mutation);
+    const offlineState = {
+      ...nextState,
+      status: "offline",
+      message: "Pending reset sync",
+    };
+    persistSessionToStorage(normalizedGameId, offlineState);
+
+    return {
+      gameId: normalizedGameId,
+      state: offlineState,
+      promptVersion,
+      queued: true,
+      offline: true,
+      error,
+    };
+  }
+};
+
+const endGame = async (gameId, options = {}) => {
+  if (typeof gameId !== "string" || gameId.trim().length === 0) {
+    throw new Error("A valid gameId is required to end a game.");
+  }
+
+  const normalizedGameId = gameId.trim();
+  const now = Date.now();
+  const previousState = loadSessionFromStorage(normalizedGameId);
+
+  const endedState = {
+    ...cloneDefaultSessionState(),
+    ...previousState,
+    timer: { ...DEFAULT_TIMER },
+    extremeMeter: { ...DEFAULT_EXTREME_METER },
+    particles: { ...DEFAULT_PARTICLES },
+    roundState: {
+      current: DEFAULT_ROUND_STATE.current,
+      updatedAt: now,
+    },
+    promptState: {
+      weightsVersion: DEFAULT_PROMPT_STATE.weightsVersion,
+      resetCount: toNonNegativeInt(previousState?.promptState?.resetCount, 0),
+      lastResetAt: previousState?.promptState?.lastResetAt ?? null,
+    },
+    lifecycle: {
+      ...previousState?.lifecycle,
+      status: "ended",
+      endedAt: now,
+    },
+    status: db ? "online" : "offline",
+    message: db ? "Game ended" : "Pending end sync",
+    lastSyncedAt: db ? now : previousState?.lastSyncedAt ?? now,
+  };
+
+  persistSessionToStorage(normalizedGameId, endedState);
+  clearPromptStateMarker(normalizedGameId);
+
+  const promptVersion = generatePromptWeightsVersion();
+  const endedTimestamp = serverTimestamp();
+
+  const payload = {
+    spinLock: { ...DEFAULT_SPIN_LOCK },
+    timer: {
+      ownerId: DEFAULT_TIMER.ownerId,
+      durationMs: DEFAULT_TIMER.durationMs,
+      startedAt: null,
+      expiresAt: null,
+      updatedAt: endedTimestamp,
+      updatedBy: options?.playerId ?? null,
+    },
+    extremeMeter: {
+      value: DEFAULT_EXTREME_METER.value,
+      isForced: DEFAULT_EXTREME_METER.isForced,
+      updatedAt: endedTimestamp,
+      lastUpdatedBy: options?.playerId ?? null,
+    },
+    particles: {
+      preset: DEFAULT_PARTICLES.preset,
+      seed: DEFAULT_PARTICLES.seed,
+      updatedAt: endedTimestamp,
+      lastUpdatedBy: options?.playerId ?? null,
+    },
+    roundState: {
+      current: DEFAULT_ROUND_STATE.current,
+      updatedAt: endedTimestamp,
+    },
+    promptState: {
+      weightsVersion: promptVersion,
+      resetCount: increment(1),
+      lastResetAt: endedTimestamp,
+    },
+    lifecycle: {
+      status: "ended",
+      endedAt: endedTimestamp,
+      lastResetAt: endedTimestamp,
+      resetCount: increment(1),
+    },
+    updatedAt: endedTimestamp,
+  };
+
+  const mutation = { data: payload, merge: true };
+
+  if (!db) {
+    queuePendingSessionWrite(normalizedGameId, mutation);
+    return {
+      gameId: normalizedGameId,
+      state: endedState,
+      promptVersion,
+      queued: true,
+      offline: true,
+    };
+  }
+
+  try {
+    await setDoc(getGameDocRef(normalizedGameId), payload, { merge: true });
+    return {
+      gameId: normalizedGameId,
+      state: endedState,
+      promptVersion,
+      queued: false,
+      offline: false,
+    };
+  } catch (error) {
+    console.error("Failed to end multiplayer game", error);
+    queuePendingSessionWrite(normalizedGameId, mutation);
+    const offlineState = {
+      ...endedState,
+      status: "offline",
+      message: "Pending end sync",
+    };
+    persistSessionToStorage(normalizedGameId, offlineState);
+
+    return {
+      gameId: normalizedGameId,
+      state: offlineState,
+      promptVersion,
+      queued: true,
+      offline: true,
+      error,
+    };
+  }
+};
+
 const subscribeToSession = (gameId, handlers = {}) => {
   const { onSession, onError, onFallback } = handlers;
 
@@ -434,11 +1165,15 @@ export {
   SAFE_RECONNECTION_STATE,
   clearStoredSession,
   cloneDefaultSessionState,
+  createGame,
+  endGame,
   flushPendingSessionWrites,
   getSafeReconnectionState,
+  joinGame,
   loadSessionFromStorage,
   normalizeSessionState,
   persistSessionToStorage,
+  resetGame,
   queuePendingSessionWrite,
   subscribeToSession,
   writeSessionSection,
