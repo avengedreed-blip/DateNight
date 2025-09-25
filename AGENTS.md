@@ -97,13 +97,12 @@ Never introduce git markers, placeholders, or invalid code.
 ============================================================
 10. WORKFLOW RULES
 ============================================================
-- Branch: always "new_main". Never create new branches.  
 - No git markers, placeholders, or invalid code.  
 - After every edit:  
   - Test in CodeSandbox.  
   - Verify: wheel spins w/ sounds, labels centered, modals open w/ synced sounds, particles fire, meter pulses, multiplayer sync intact, analytics update, themes/music transitions.  
 - Provide screenshot proof after each working update.  
-- Stage, commit, and push directly to "new_main". Repo must remain clean and production-ready.  
+- Stage, commit, and push directly to "main". Repo must remain clean and production-ready.  
 
 ============================================================
 11. SAFEGUARD CLAUSE
