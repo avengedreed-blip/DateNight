@@ -4,6 +4,11 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../config/firebase";
 import { defaultPrompts, PROMPT_CATEGORIES, PROMPT_INTENSITIES } from "../config/prompts";
 import {
+  EXTREME_PHASES,
+  getExtremePhaseForRound,
+  normalizeRoundNumber,
+} from "./useExtremeMeter";
+import {
   CUSTOM_PROMPTS_COLLECTION,
   getPlayerCustomPromptsCollectionRef,
   persistCustomPromptsForPlayer,
@@ -22,6 +27,24 @@ const MIN_WEIGHT = 0.1;
 const RECOVERY_STEP = 0.2;
 const HISTORY_PENALTY = 0.35;
 const HISTORY_LIMIT = 4;
+
+const INTENSITY_WEIGHTS_BY_PHASE = Object.freeze({
+  [EXTREME_PHASES.EARLY]: Object.freeze({
+    normal: 0.7,
+    spicy: 0.25,
+    extreme: 0.05,
+  }),
+  [EXTREME_PHASES.MID]: Object.freeze({
+    normal: 0.25,
+    spicy: 0.5,
+    extreme: 0.25,
+  }),
+  [EXTREME_PHASES.LATE]: Object.freeze({
+    normal: 0.1,
+    spicy: 0.3,
+    extreme: 0.6,
+  }),
+});
 
 const isPlainObject = (value) =>
   typeof value === "object" && value !== null &&
@@ -234,6 +257,37 @@ const updateHistory = (historyMap, key, promptId) => {
 
 const getHistorySet = (historyMap, key) => new Set(historyMap.get(key) ?? []);
 
+const selectIntensityForPhase = (phase, availableIntensities) => {
+  if (!Array.isArray(availableIntensities) || availableIntensities.length === 0) {
+    return "normal";
+  }
+
+  const weights = INTENSITY_WEIGHTS_BY_PHASE[phase] ?? INTENSITY_WEIGHTS_BY_PHASE[EXTREME_PHASES.EARLY];
+  let total = 0;
+  const weighted = availableIntensities.map((intensity) => {
+    const weight = Math.max(weights[intensity] ?? 0, 0);
+    total += weight;
+    return { intensity, weight };
+  });
+
+  if (total <= 0) {
+    return availableIntensities[0];
+  }
+
+  const roll = Math.random() * total;
+  let cumulative = 0;
+
+  for (let index = 0; index < weighted.length; index += 1) {
+    const entry = weighted[index];
+    cumulative += entry.weight;
+    if (roll <= cumulative) {
+      return entry.intensity;
+    }
+  }
+
+  return weighted[weighted.length - 1].intensity;
+};
+
 const usePromptGenerator = ({
   playerId = null,
   remoteCollection = null,
@@ -250,6 +304,7 @@ const usePromptGenerator = ({
   const weightsRef = useRef(new Map());
   const historyRef = useRef(new Map());
   const customPromptsRef = useRef([]);
+  const roundNumberRef = useRef(0);
 
   useEffect(() => {
     const storage = getStorage();
@@ -478,9 +533,29 @@ const usePromptGenerator = ({
         return null;
       }
 
-      const intensity = INTENSITY_REQUIRED_CATEGORIES.has(category)
-        ? sanitizeIntensity(intensityInput) ?? "normal"
-        : null;
+      let intensity = null;
+      if (INTENSITY_REQUIRED_CATEGORIES.has(category)) {
+        const sanitizedIntensity = sanitizeIntensity(intensityInput);
+
+        if (sanitizedIntensity) {
+          intensity = sanitizedIntensity;
+        } else {
+          const availableIntensities = PROMPT_INTENSITIES.filter((level) => {
+            const key = `${category}:${level}`;
+            const pool = promptPools.get(key);
+            return Array.isArray(pool) && pool.length > 0;
+          });
+          const phase = getExtremePhaseForRound(roundNumberRef.current);
+          const weightedIntensity = selectIntensityForPhase(
+            phase,
+            availableIntensities.length > 0 ? availableIntensities : PROMPT_INTENSITIES
+          );
+
+          intensity = promptPools.has(`${category}:${weightedIntensity}`)
+            ? weightedIntensity
+            : availableIntensities[0] ?? "normal";
+        }
+      }
 
       const poolKey = intensity ? `${category}:${intensity}` : `${category}:default`;
       const pool = promptPools.get(poolKey);
@@ -542,6 +617,17 @@ const usePromptGenerator = ({
 
   const isReady = isLocalLoaded && isRemoteLoaded;
 
+  const setRoundNumber = useCallback((round) => {
+    roundNumberRef.current = normalizeRoundNumber(round);
+  }, []);
+
+  const getRoundNumber = useCallback(() => roundNumberRef.current, []);
+
+  const getRoundPhase = useCallback(
+    () => getExtremePhaseForRound(roundNumberRef.current),
+    []
+  );
+
   return useMemo(
     () => ({
       isReady,
@@ -553,6 +639,9 @@ const usePromptGenerator = ({
       addCustomPrompt,
       removeCustomPrompt,
       replaceCustomPrompts,
+      setRoundNumber,
+      getRoundNumber,
+      getRoundPhase,
     }),
     [
       addCustomPrompt,
@@ -564,6 +653,9 @@ const usePromptGenerator = ({
       removeCustomPrompt,
       replaceCustomPrompts,
       updateCustomPrompts,
+      getRoundNumber,
+      getRoundPhase,
+      setRoundNumber,
     ]
   );
 };
