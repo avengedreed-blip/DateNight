@@ -122,14 +122,15 @@ function Wheel() {
         label: category.label,
         wrapperStyle: {
           transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(calc(-1 * var(--label-radius)))`,
-          textShadow: shouldShowShadow ? "0 1px 2px rgba(0,0,0,.35)" : "none",
           "--label-color": isActive ? "#1f2933" : category.textColor,
+          "--label-text-shadow": shouldShowShadow
+            ? "0 1px 2px rgba(0,0,0,.35)"
+            : "none",
+          "--label-background": isActive ? "rgba(255, 255, 255, 0.82)" : "transparent",
+          "--label-box-shadow": isActive ? "0 6px 20px rgba(17, 24, 39, 0.18)" : "none",
+          "--label-text-rotation": `${-angle}deg`,
         },
-        textStyle: {
-          transform: `rotate(-${angle}deg)`,
-          backgroundColor: isActive ? "rgba(255, 255, 255, 0.82)" : "transparent",
-          boxShadow: isActive ? "0 6px 20px rgba(17, 24, 39, 0.18)" : "none",
-        },
+        textStyle: undefined,
       };
     });
   }, [selectedCategory]);
