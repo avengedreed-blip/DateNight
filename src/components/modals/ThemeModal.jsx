@@ -1,43 +1,41 @@
-import React from 'react';
+import React, { memo } from 'react';
+import Modal from './Modal';
+import themes from '../../theme/themes';
 
-const ThemeModal = ({ isOpen, onClose, onThemeChange }) => {
-  if (!isOpen) return null;
-
-  const themes = [
-    { id: 'classic-dark', label: 'Classic Dark' },
-    { id: 'romantic-glow', label: 'Romantic Glow' },
-    { id: 'playful-neon', label: 'Playful Neon' },
-    { id: 'mystic-night', label: 'Mystic Night' },
-  ];
+const ThemeModal = memo(({ isOpen, onClose, onThemeChange }) => {
+  const handleThemeChange = (themeName) => {
+    onThemeChange(themeName);
+    onClose();
+  };
 
   return (
-    <div className="glass-modal fixed inset-0 flex items-center justify-center p-6">
-      <div className="bg-black/75 text-white rounded-2xl p-6 max-w-md w-full space-y-4">
-        <h2 className="text-2xl font-bold">Choose a Theme</h2>
-        <ul className="space-y-2">
-          {themes.map((theme) => (
-            <li key={theme.id}>
-              <button
-                onClick={() => {
-                  onThemeChange?.(theme.id);
-                  onClose?.();
-                }}
-                className="w-full px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 transition text-left"
-              >
-                {theme.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-        <button
-          onClick={onClose}
-          className="mt-4 px-4 py-2 rounded-full bg-pink-600 hover:bg-pink-500 text-white font-semibold"
-        >
-          Close
-        </button>
+    <Modal title="Choose a Theme" isOpen={isOpen} onClose={onClose} buttons={[]}>
+      <div className="grid grid-cols-2 gap-4">
+        {Object.keys(themes).map((themeName) => (
+          <button
+            key={themeName}
+            onClick={() => handleThemeChange(themeName)}
+            data-sound="click"
+            data-haptic="light"
+            className="p-4 rounded-xl flex flex-col items-center justify-center text-center font-semibold transition-transform hover:scale-105 duration-200"
+            style={{
+              background: `linear-gradient(180deg, ${themes[themeName].bg[0]}, ${themes[themeName].bg[1]})`,
+              color: themes[themeName].labels === 'white' ? 'white' : '#ccc',
+              border: `2px solid ${themes[themeName].colors[0]}`,
+            }}
+          >
+            {themeName
+              .split('-')
+              .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(' ')}
+          </button>
+        ))}
+        <div className="p-4 rounded-xl flex flex-col items-center justify-center text-center font-semibold text-white/50 border-2 border-dashed border-white/20">
+          Custom Theme (Coming Soon)
+        </div>
       </div>
-    </div>
+    </Modal>
   );
-};
+});
 
 export default ThemeModal;
