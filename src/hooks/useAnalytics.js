@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db as firestore } from "../config/firebase.js";
+import { loadOffline, saveOffline } from "../utils/offlineStorage.js";
 
 const STORAGE_KEY = "dateNightAnalyticsSessions";
+const OFFLINE_STORAGE_KEY = "dn_offline_analytics";
 const DEFAULT_SESSION = {
   id: "",
   gameId: "",
@@ -23,13 +25,17 @@ const REWARD_LEVELS = [
 
 const ensureWindow = () => (typeof window !== "undefined" ? window : null);
 
-const readStore = () => {
+const readStoreFromKey = (storageKey) => {
+  if (storageKey === OFFLINE_STORAGE_KEY) {
+    return loadOffline(storageKey, { sessions: {} }) ?? { sessions: {} };
+  }
+
   const target = ensureWindow();
   if (!target) {
     return { sessions: {} };
   }
 
-  const raw = target.localStorage?.getItem(STORAGE_KEY);
+  const raw = target.localStorage?.getItem(storageKey);
   if (!raw) {
     return { sessions: {} };
   }
@@ -46,14 +52,19 @@ const readStore = () => {
   }
 };
 
-const writeStore = (store) => {
+const writeStoreToKey = (storageKey, store) => {
+  if (storageKey === OFFLINE_STORAGE_KEY) {
+    saveOffline(storageKey, store);
+    return;
+  }
+
   const target = ensureWindow();
   if (!target) {
     return;
   }
 
   try {
-    target.localStorage?.setItem(STORAGE_KEY, JSON.stringify(store));
+    target.localStorage?.setItem(storageKey, JSON.stringify(store));
   } catch (error) {
     console.warn("Failed to persist analytics store", error);
   }
@@ -118,23 +129,25 @@ export function useAnalytics(gameId, options = {}) {
       ? options.playerId
       : null;
   const remoteDb = options.db ?? firestore;
+  const storageKey =
+    normalizedMode === "offline" ? OFFLINE_STORAGE_KEY : STORAGE_KEY;
   const [session, setSession] = useState(() => {
-    const store = readStore();
+    const store = readStoreFromKey(storageKey);
     const value = getSessionFromStore(store, sessionKey);
     return { ...value };
   });
   const [pendingReward, setPendingReward] = useState(null);
   const [events, setEvents] = useState(() => session.events ?? []);
-  const storeRef = useRef(readStore());
+  const storeRef = useRef(readStoreFromKey(storageKey));
 
   useEffect(() => {
-    const store = readStore();
+    const store = readStoreFromKey(storageKey);
     storeRef.current = store;
     const nextSession = getSessionFromStore(store, sessionKey);
     setSession({ ...nextSession });
     setPendingReward(null);
     setEvents(nextSession.events ?? []);
-  }, [sessionKey]);
+  }, [sessionKey, storageKey]);
 
   useEffect(() => {
     setEvents(session?.events ?? []);
@@ -163,17 +176,17 @@ export function useAnalytics(gameId, options = {}) {
   const persistSession = useCallback(
     (updater) => {
       setSession((previous) => {
-        const store = readStore();
+        const store = readStoreFromKey(storageKey);
         storeRef.current = store;
         const nextSession = updateSessionInStore(store, sessionKey, (current) => {
           const base = current ?? createSession(sessionKey);
           return updater(base);
         });
-        writeStore(store);
+        writeStoreToKey(storageKey, store);
         return { ...nextSession };
       });
     },
-    [sessionKey]
+    [sessionKey, storageKey]
   );
 
   const trackEvent = useCallback(

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { db as firestore } from "../config/firebase.js";
+import { loadOffline, saveOffline } from "../utils/offlineStorage.js";
 import {
   PLAYER_STATS_DEFAULTS,
   clampPlayerAdrenaline,
@@ -11,6 +12,7 @@ import {
 
 const SESSION_STORAGE_KEY = "dn_sessionStats";
 const PLAYER_STORAGE_PREFIX = "dn_playerStats_";
+const OFFLINE_STATS_KEY = "dn_offline_stats";
 
 const ensureWindow = () => (typeof window !== "undefined" ? window : null);
 
@@ -45,6 +47,11 @@ const readLocalStats = (key) => {
     return ensureStatsShape();
   }
 
+  if (key === OFFLINE_STATS_KEY) {
+    const payload = loadOffline(key, ensureStatsShape());
+    return ensureStatsShape(payload);
+  }
+
   try {
     const raw = target.localStorage?.getItem(key);
     if (!raw) {
@@ -61,6 +68,12 @@ const readLocalStats = (key) => {
 const writeLocalStats = (key, stats) => {
   const target = ensureWindow();
   if (!key || !target) {
+    return;
+  }
+
+  if (key === OFFLINE_STATS_KEY) {
+    const payload = ensureStatsShape(stats);
+    saveOffline(key, payload);
     return;
   }
 
@@ -123,7 +136,9 @@ const useRecentOutcomes = () => {
 export function usePlayerStats({ gameId, playerId, mode, db } = {}) {
   const normalizedMode = typeof mode === "string" && mode.length ? mode : "unknown";
   const usingSessionStats = normalizedMode === "single-device" || normalizedMode === "offline";
-  const storageKey = usingSessionStats
+  const storageKey = normalizedMode === "offline"
+    ? OFFLINE_STATS_KEY
+    : usingSessionStats
     ? SESSION_STORAGE_KEY
     : playerId
     ? `${PLAYER_STORAGE_PREFIX}${playerId}`
