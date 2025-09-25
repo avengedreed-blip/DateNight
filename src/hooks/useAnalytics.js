@@ -93,6 +93,39 @@ const useAnalytics = ({ gameId, playerId, username } = {}) => {
     [logEvent]
   );
 
+  const logTriviaAccuracy = useCallback(
+    async ({
+      questionId = "",
+      correct = false,
+      streak = null,
+      responseTimeMs = null,
+    } = {}) =>
+      logEvent("triviaAccuracy", {
+        questionId,
+        correct: Boolean(correct),
+        result: correct ? "correct" : "incorrect",
+        streak,
+        responseTimeMs,
+      }),
+    [logEvent]
+  );
+
+  const logTimeout = useCallback(
+    async ({
+      slice = "",
+      mode = "classic",
+      durationSeconds = 30,
+      autoRefusal = true,
+    } = {}) =>
+      logEvent("timeout", {
+        slice,
+        mode,
+        durationSeconds,
+        autoRefusal,
+      }),
+    [logEvent]
+  );
+
   return {
     isReady,
     metadata,
@@ -100,6 +133,8 @@ const useAnalytics = ({ gameId, playerId, username } = {}) => {
     logRound,
     logRefusal,
     logStreak,
+    logTriviaAccuracy,
+    logTimeout,
   };
 };
 
