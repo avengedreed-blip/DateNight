@@ -6,6 +6,112 @@ import {
 } from "firebase/firestore";
 import { db } from "../config/firebase";
 
+const STREAK_BADGE_CONFIG = Object.freeze([
+  { tier: "bronze", badgeId: "streak-bronze", minStreak: 3 },
+  { tier: "silver", badgeId: "streak-silver", minStreak: 6 },
+  { tier: "gold", badgeId: "streak-gold", minStreak: 10 },
+  { tier: "legendary", badgeId: "streak-legendary", minStreak: 15 },
+]);
+
+const STREAK_BADGE_ORDER = STREAK_BADGE_CONFIG.map((config) => config.badgeId);
+
+const ADRENALINE_INCREMENT = 0.25;
+const ADRENALINE_DECAY_ON_PENALTY = 0.25;
+const ADRENALINE_THRESHOLD = 1;
+const COWARD_PENALTY_THRESHOLD = 3;
+
+const isPlainObject = (value) =>
+  Object.prototype.toString.call(value) === "[object Object]";
+
+const cloneValue = (value) => {
+  if (Array.isArray(value)) {
+    return value.map(cloneValue);
+  }
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, cloneValue(entry)])
+    );
+  }
+  return value;
+};
+
+const mergeWithDefaults = (current, defaults) => {
+  if (Array.isArray(defaults)) {
+    return Array.isArray(current) ? current.map(cloneValue) : defaults.map(cloneValue);
+  }
+
+  if (isPlainObject(defaults)) {
+    const source = isPlainObject(current) ? current : {};
+    const result = {};
+
+    for (const [key, defaultValue] of Object.entries(defaults)) {
+      result[key] = mergeWithDefaults(source[key], defaultValue);
+    }
+
+    for (const [key, value] of Object.entries(source)) {
+      if (!(key in defaults)) {
+        result[key] = cloneValue(value);
+      }
+    }
+
+    return result;
+  }
+
+  return current === undefined ? defaults : current;
+};
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const sortBadges = (badges = []) => {
+  const badgeOrder = new Map(STREAK_BADGE_ORDER.map((id, index) => [id, index]));
+  return [...badges].sort((a, b) => {
+    const indexA = badgeOrder.get(a);
+    const indexB = badgeOrder.get(b);
+
+    if (indexA === undefined && indexB === undefined) {
+      return a.localeCompare(b);
+    }
+    if (indexA === undefined) {
+      return 1;
+    }
+    if (indexB === undefined) {
+      return -1;
+    }
+    return indexA - indexB;
+  });
+};
+
+const rewardDefaults = Object.freeze({
+  streakBadges: {
+    unlocked: [],
+    currentTier: "none",
+    progress: 0,
+    lastUnlockedAt: null,
+    lastUnlockedBadge: null,
+    thresholds: STREAK_BADGE_CONFIG.reduce((acc, config) => {
+      acc[config.tier] = config.minStreak;
+      return acc;
+    }, {}),
+  },
+  adrenalineBar: {
+    value: 0,
+    isCharged: false,
+    chargesConsumed: 0,
+    lastChargeAt: null,
+    lastConsumedAt: null,
+    threshold: ADRENALINE_THRESHOLD,
+    increment: ADRENALINE_INCREMENT,
+    decayOnPenalty: ADRENALINE_DECAY_ON_PENALTY,
+  },
+  cowardPenalty: {
+    refusalCount: 0,
+    isActive: false,
+    activatedAt: null,
+    clearedAt: null,
+    threshold: COWARD_PENALTY_THRESHOLD,
+  },
+});
+
 /**
  * Canonical shape of the multiplayer game document stored in Firestore.
  * All mutable gameplay systems (wheel, meter, timer, particle FX) are
@@ -111,7 +217,12 @@ export const playerProfileSchema = Object.freeze({
   },
   /** Earned reward badges. */
   badges: [],
+  /** Reward progress tracking for backend-driven unlocks. */
+  rewards: rewardDefaults,
 });
+
+const ensureProfileDefaults = (profile = {}) =>
+  mergeWithDefaults(profile, playerProfileSchema);
 
 const SPIN_LOCK_DEFAULT_TTL_MS = 10000;
 
@@ -123,6 +234,150 @@ const requireDb = () => {
 };
 
 const getGameDocRef = (gameId) => doc(requireDb(), "games", gameId);
+
+const getPlayerDocRef = (gameId, playerId) =>
+  doc(requireDb(), "games", gameId, "players", playerId);
+
+const applyStreakBadges = (profile) => {
+  const streakState = profile.rewards.streakBadges;
+  const badgesSet = new Set(profile.badges || []);
+  const unlockedSet = new Set(streakState.unlocked || []);
+  let highestTier = streakState.currentTier || "none";
+  const newlyUnlocked = [];
+
+  for (const config of STREAK_BADGE_CONFIG) {
+    if (profile.streaks.current >= config.minStreak) {
+      highestTier = config.tier;
+      if (!badgesSet.has(config.badgeId)) {
+        badgesSet.add(config.badgeId);
+        newlyUnlocked.push(config.badgeId);
+      }
+      unlockedSet.add(config.badgeId);
+    }
+  }
+
+  if (highestTier === "none" && unlockedSet.size > 0) {
+    for (let index = STREAK_BADGE_CONFIG.length - 1; index >= 0; index -= 1) {
+      const config = STREAK_BADGE_CONFIG[index];
+      if (unlockedSet.has(config.badgeId)) {
+        highestTier = config.tier;
+        break;
+      }
+    }
+  }
+
+  streakState.currentTier = highestTier;
+  streakState.progress = profile.streaks.current;
+  streakState.unlocked = sortBadges(Array.from(unlockedSet));
+
+  if (newlyUnlocked.length > 0) {
+    streakState.lastUnlockedBadge = newlyUnlocked[newlyUnlocked.length - 1];
+    streakState.lastUnlockedAt = serverTimestamp();
+  }
+
+  profile.badges = sortBadges(Array.from(badgesSet));
+};
+
+const applyAdrenalineBar = (profile, { roundCompleted, roundRefused, timedOut, consumeAdrenaline }) => {
+  const barState = profile.rewards.adrenalineBar;
+  let { value } = barState;
+
+  if (!Number.isFinite(value)) {
+    value = 0;
+  }
+  if (!Number.isFinite(barState.chargesConsumed)) {
+    barState.chargesConsumed = 0;
+  }
+
+  if (roundCompleted) {
+    value = clamp(value + ADRENALINE_INCREMENT, 0, ADRENALINE_THRESHOLD);
+    if (value >= ADRENALINE_THRESHOLD) {
+      barState.isCharged = true;
+      barState.lastChargeAt = serverTimestamp();
+    }
+  }
+
+  if (roundRefused || timedOut) {
+    value = clamp(value - ADRENALINE_DECAY_ON_PENALTY, 0, ADRENALINE_THRESHOLD);
+    if (value < ADRENALINE_THRESHOLD) {
+      barState.isCharged = false;
+    }
+  }
+
+  if (consumeAdrenaline) {
+    value = 0;
+    if (barState.isCharged) {
+      barState.lastConsumedAt = serverTimestamp();
+    }
+    barState.isCharged = false;
+    barState.chargesConsumed += 1;
+  }
+
+  barState.value = Number(value.toFixed(3));
+};
+
+const applyCowardPenalty = (profile, { roundCompleted, roundRefused, timedOut }) => {
+  const penaltyState = profile.rewards.cowardPenalty;
+
+  if (!Number.isFinite(penaltyState.refusalCount)) {
+    penaltyState.refusalCount = 0;
+  }
+
+  if (roundRefused || timedOut) {
+    penaltyState.refusalCount += 1;
+    if (penaltyState.refusalCount >= COWARD_PENALTY_THRESHOLD) {
+      penaltyState.isActive = true;
+      penaltyState.activatedAt = serverTimestamp();
+    }
+    return;
+  }
+
+  if (roundCompleted) {
+    if (penaltyState.isActive) {
+      penaltyState.clearedAt = serverTimestamp();
+    }
+    penaltyState.isActive = false;
+    penaltyState.refusalCount = 0;
+  }
+};
+
+const applyTriviaProgress = (profile, triviaResult) => {
+  if (!triviaResult) {
+    return;
+  }
+
+  if (triviaResult === "correct") {
+    profile.triviaStats.correct += 1;
+    profile.triviaStats.streak += 1;
+  } else if (triviaResult === "incorrect" || triviaResult === "timeout") {
+    profile.triviaStats.incorrect += 1;
+    profile.triviaStats.streak = 0;
+  }
+};
+
+const applyStreakProgress = (profile, { roundCompleted, roundRefused, timedOut }) => {
+  if (roundCompleted) {
+    profile.streaks.current += 1;
+    profile.streaks.best = Math.max(profile.streaks.best, profile.streaks.current);
+  }
+
+  if (roundRefused || timedOut) {
+    profile.streaks.current = 0;
+  }
+};
+
+const applyRewardProgress = (profile, event) => {
+  const nextProfile = ensureProfileDefaults(profile);
+
+  applyStreakProgress(nextProfile, event);
+  applyTriviaProgress(nextProfile, event.triviaResult);
+  applyStreakBadges(nextProfile);
+  applyAdrenalineBar(nextProfile, event);
+  applyCowardPenalty(nextProfile, event);
+
+  return nextProfile;
+};
+
 
 /**
  * Attempt to acquire the spin lock for the specified game.
@@ -205,6 +460,54 @@ export async function releaseSpinLock(gameId, playerId) {
     );
 
     return true;
+  });
+}
+
+/**
+ * Persist reward scaffolding and trivia accuracy progress to the player profile.
+ *
+ * @param {string} gameId - Firestore document ID for the game session.
+ * @param {string} playerId - Identifier of the player whose profile should be updated.
+ * @param {object} [event]
+ * @param {boolean} [event.roundCompleted=false] - Whether the player successfully completed the round.
+ * @param {boolean} [event.roundRefused=false] - Whether the player refused the prompt.
+ * @param {boolean} [event.timedOut=false] - Whether the round ended because of a timeout.
+ * @param {"correct"|"incorrect"|boolean|null} [event.triviaResult=null] - Trivia accuracy outcome.
+ * @param {boolean} [event.consumeAdrenaline=false] - Whether an adrenaline charge was consumed.
+ * @returns {Promise<object>} Resolves with the merged profile slice that was persisted.
+ */
+export async function updatePlayerProfileProgress(gameId, playerId, event = {}) {
+  const dbInstance = requireDb();
+  const playerRef = getPlayerDocRef(gameId, playerId);
+
+  const normalizedEvent = {
+    roundCompleted: Boolean(event.roundCompleted),
+    roundRefused: Boolean(event.roundRefused),
+    timedOut: Boolean(event.timedOut),
+    consumeAdrenaline: Boolean(event.consumeAdrenaline),
+    triviaResult:
+      event.triviaResult === true
+        ? "correct"
+        : event.triviaResult === false
+        ? "incorrect"
+        : event.triviaResult,
+  };
+
+  return runTransaction(dbInstance, async (transaction) => {
+    const snapshot = await transaction.get(playerRef);
+    const profile = snapshot.exists() ? snapshot.data() : {};
+
+    const updatedProfile = applyRewardProgress(profile, normalizedEvent);
+    const payload = {
+      streaks: updatedProfile.streaks,
+      triviaStats: updatedProfile.triviaStats,
+      rewards: updatedProfile.rewards,
+      badges: updatedProfile.badges,
+    };
+
+    transaction.set(playerRef, payload, { merge: true });
+
+    return payload;
   });
 }
 
