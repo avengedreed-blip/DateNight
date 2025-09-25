@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { defaultPrompts } from "../config/prompts";
 import "./Wheel.css";
 
@@ -44,10 +44,17 @@ function flattenPrompts(group) {
 }
 
 const sliceSize = 360 / categories.length;
+const POINTER_OFFSET = sliceSize / 2; // keep pointer centered on the active slice
+const SPIN_TURNS = 4; // full rotations before easing out
+const SPIN_DURATION = 3800; // ms
+const SPIN_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 function Wheel() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedPrompt, setSelectedPrompt] = useState("");
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [currentRotation, setCurrentRotation] = useState(0);
+  const spinTimeoutRef = useRef(null);
 
   const wheelGradient = useMemo(() => {
     const stops = categories
@@ -66,20 +73,48 @@ function Wheel() {
     return `conic-gradient(${stops})`;
   }, [selectedCategory]);
 
-  const handleSpin = () => {
-    const randomCategory =
-      categories[Math.floor(Math.random() * categories.length)];
-    const prompts = flattenPrompts(defaultPrompts[randomCategory.key]);
+  useEffect(() => {
+    return () => {
+      if (spinTimeoutRef.current) {
+        clearTimeout(spinTimeoutRef.current);
+      }
+    };
+  }, []);
 
-    if (!prompts.length) {
-      setSelectedPrompt("No prompts found for this category.");
-      setSelectedCategory(randomCategory.key);
+  const handleSpin = () => {
+    if (isSpinning) {
       return;
     }
 
-    const prompt = prompts[Math.floor(Math.random() * prompts.length)];
-    setSelectedCategory(randomCategory.key);
-    setSelectedPrompt(prompt);
+    setIsSpinning(true);
+    setSelectedCategory(null);
+
+    const randomAngle = Math.random() * 360;
+    const nextRotation = currentRotation + SPIN_TURNS * 360 + randomAngle;
+    setCurrentRotation(nextRotation);
+
+    if (spinTimeoutRef.current) {
+      clearTimeout(spinTimeoutRef.current);
+    }
+
+    spinTimeoutRef.current = setTimeout(() => {
+      const finalAngle = ((nextRotation % 360) + 360) % 360;
+      const sliceIndex = Math.floor(finalAngle / sliceSize) % categories.length;
+      const activeCategory = categories[sliceIndex];
+      const prompts = flattenPrompts(defaultPrompts[activeCategory.key]);
+
+      if (!prompts.length) {
+        setSelectedPrompt("No prompts found for this category.");
+        setSelectedCategory(activeCategory.key);
+        setIsSpinning(false);
+        return;
+      }
+
+      const prompt = prompts[Math.floor(Math.random() * prompts.length)];
+      setSelectedPrompt(prompt);
+      setSelectedCategory(activeCategory.key);
+      setIsSpinning(false);
+    }, SPIN_DURATION);
   };
 
   return (
@@ -92,20 +127,18 @@ function Wheel() {
         padding: "2rem 1rem",
       }}
     >
-      <div
-        style={{
-          width: "260px",
-          height: "260px",
-          borderRadius: "50%",
-          background: wheelGradient,
-          position: "relative",
-          boxShadow: "0 0 0 8px rgba(0, 0, 0, 0.05)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-        aria-label="Prompt category wheel"
-      >
+      <div className="wheel" aria-label="Prompt category wheel">
+        <div className="wheel__pointer" aria-hidden="true" />
+        <div
+          className="wheel__disc"
+          style={{
+            background: wheelGradient,
+            transform: `rotate(${currentRotation - POINTER_OFFSET}deg)`,
+            transition: isSpinning
+              ? `transform ${SPIN_DURATION}ms ${SPIN_EASING}`
+              : undefined,
+          }}
+        >
         {categories.map((category, index) => {
           const angle = index * sliceSize + sliceSize / 2;
           const isActive = selectedCategory === category.key;
@@ -151,6 +184,7 @@ function Wheel() {
             position: "absolute",
           }}
         />
+        </div>
       </div>
 
       <button
@@ -164,8 +198,10 @@ function Wheel() {
           color: "#ffffff",
           fontWeight: 600,
           letterSpacing: "0.05em",
-          cursor: "pointer",
+          cursor: isSpinning ? "wait" : "pointer",
+          opacity: isSpinning ? 0.7 : 1,
         }}
+        disabled={isSpinning}
       >
         Spin
       </button>
