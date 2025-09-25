@@ -1,4 +1,14 @@
-import { collection, doc, getDoc, getDocs, query, where, writeBatch } from "firebase/firestore";
+import {
+  arrayUnion,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  setDoc,
+  where,
+  writeBatch,
+} from "firebase/firestore";
 
 import { db } from "../config/firebase";
 
@@ -60,6 +70,21 @@ const sanitizeBadges = (value) => {
   return Array.from(deduped).sort();
 };
 
+const sanitizeAchievements = (value) => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const deduped = new Set();
+  value.forEach((achievement) => {
+    if (isNonEmptyString(achievement)) {
+      deduped.add(achievement.trim());
+    }
+  });
+
+  return Array.from(deduped).sort();
+};
+
 const sanitizeCustomTheme = (value) => {
   if (typeof value !== "object" || value === null) {
     return null;
@@ -109,6 +134,7 @@ const computeStatsSignature = (profile = {}) => {
     refusals: sanitizeNumericRecord(profile.refusals),
     triviaStats: sanitizeTriviaStats(profile.triviaStats),
     badges: sanitizeBadges(profile.badges),
+    achievements: sanitizeAchievements(profile.achievements),
   };
 
   return JSON.stringify(sanitized);
@@ -153,6 +179,13 @@ const mergeBadges = (currentBadges = [], incomingBadges = []) => {
   sanitizeBadges(currentBadges).forEach((badge) => badges.add(badge));
   sanitizeBadges(incomingBadges).forEach((badge) => badges.add(badge));
   return Array.from(badges).sort();
+};
+
+const mergeAchievements = (current = [], incoming = []) => {
+  const merged = new Set();
+  sanitizeAchievements(current).forEach((achievement) => merged.add(achievement));
+  sanitizeAchievements(incoming).forEach((achievement) => merged.add(achievement));
+  return Array.from(merged).sort();
 };
 
 const getSnapshotUpdateTime = (snapshot) => {
@@ -252,6 +285,7 @@ const normalizeProfilePayload = (profile, fallbacks = {}) => {
     refusals: sanitizeNumericRecord(profile.refusals),
     triviaStats: sanitizeTriviaStats(profile.triviaStats),
     badges: sanitizeBadges(profile.badges),
+    achievements: sanitizeAchievements(profile.achievements),
   };
 };
 
@@ -436,6 +470,7 @@ const mergePlayerProfilesByUsername = async (playerId, options = {}) => {
   let aggregatedRefusals = {};
   let aggregatedTrivia = sanitizeTriviaStats();
   let aggregatedBadges = [];
+  let aggregatedAchievements = [];
 
   const seenSignatures = new Set();
 
@@ -473,6 +508,7 @@ const mergePlayerProfilesByUsername = async (playerId, options = {}) => {
       aggregatedRefusals = mergeNumericTotals(aggregatedRefusals, entry.data.refusals);
       aggregatedTrivia = mergeTriviaStats(aggregatedTrivia, entry.data.triviaStats);
       aggregatedBadges = mergeBadges(aggregatedBadges, entry.data.badges);
+      aggregatedAchievements = mergeAchievements(aggregatedAchievements, entry.data.achievements);
       seenSignatures.add(signature);
     }
   });
@@ -493,6 +529,7 @@ const mergePlayerProfilesByUsername = async (playerId, options = {}) => {
       refusals: aggregatedRefusals,
       triviaStats: aggregatedTrivia,
       badges: aggregatedBadges,
+      achievements: aggregatedAchievements,
     },
     {
       username: resolvedUsername,
@@ -515,6 +552,7 @@ const mergePlayerProfilesByUsername = async (playerId, options = {}) => {
         refusals: mergedProfile.refusals,
         triviaStats: mergedProfile.triviaStats,
         badges: mergedProfile.badges,
+        achievements: mergedProfile.achievements,
         mergeSignature: finalSignature,
       },
       { merge: true }
@@ -536,11 +574,79 @@ const mergePlayerProfilesByUsername = async (playerId, options = {}) => {
   };
 };
 
+const getGamePlayerDocumentRef = (gameId, playerId) => {
+  if (!db || !isNonEmptyString(gameId) || !isNonEmptyString(playerId)) {
+    return null;
+  }
+
+  try {
+    return doc(db, "games", gameId.trim(), "players", playerId.trim());
+  } catch (error) {
+    console.warn("Failed to resolve game player document reference", error);
+    return null;
+  }
+};
+
+const addAchievementsToDocument = async (docRef, achievements) => {
+  if (!db || !docRef || !Array.isArray(achievements) || achievements.length === 0) {
+    return false;
+  }
+
+  try {
+    await setDoc(docRef, { achievements: arrayUnion(...achievements) }, { merge: true });
+    return true;
+  } catch (error) {
+    console.error("Failed to persist achievements to profile", error);
+    return false;
+  }
+};
+
+const addAchievementsToProfile = async ({ playerId, gameId } = {}, achievements = []) => {
+  if (!Array.isArray(achievements) || achievements.length === 0) {
+    return { updated: false, count: 0 };
+  }
+
+  const sanitizedAchievements = sanitizeAchievements(achievements);
+  if (sanitizedAchievements.length === 0) {
+    return { updated: false, count: 0 };
+  }
+
+  const targets = [];
+
+  const playerRef = getPlayerDocumentRef(playerId);
+  if (playerRef) {
+    targets.push(playerRef);
+  }
+
+  const gamePlayerRef = getGamePlayerDocumentRef(gameId, playerId);
+  if (gamePlayerRef) {
+    targets.push(gamePlayerRef);
+  }
+
+  if (targets.length === 0) {
+    return { updated: false, count: 0 };
+  }
+
+  let successCount = 0;
+  await Promise.all(
+    targets.map(async (ref) => {
+      const success = await addAchievementsToDocument(ref, sanitizedAchievements);
+      if (success) {
+        successCount += 1;
+      }
+    })
+  );
+
+  return { updated: successCount > 0, count: successCount };
+};
+
 export {
   CUSTOM_PROMPTS_COLLECTION,
   getPlayerCustomPromptsCollectionRef,
+  getPlayerDocumentRef,
   mergePlayerProfilesByUsername,
   persistCustomPromptsForPlayer,
   persistCustomPromptsToCollection,
+  addAchievementsToProfile,
 };
 
