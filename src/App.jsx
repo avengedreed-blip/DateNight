@@ -1065,6 +1065,17 @@ export default function App() {
         });
         if (meterForcedExtremeRef.current) {
           meterForcedExtremeRef.current = false;
+        } else {
+          const nextMeter = Math.min(100, extremeMeter + 20);
+          console.log("Extreme meter:", nextMeter);
+          setExtremeMeter(nextMeter);
+          logExtremeMeterEvent({
+            action: "increment",
+            value: nextMeter,
+            delta: nextMeter - extremeMeter,
+            round: nextRoundNumber,
+            reason: "random-extreme",
+          });
         }
       } else {
         const nextMeter = Math.min(100, extremeMeter + 20);
