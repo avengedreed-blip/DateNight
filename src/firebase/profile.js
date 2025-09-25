@@ -448,15 +448,23 @@ const mergePlayerProfilesByUsername = async (playerId, options = {}) => {
     }
 
     if (!resolvedTheme) {
-      const hasThemeId = isNonEmptyString(entry.data.themeId);
-      const hasCustomTheme = typeof entry.data.customTheme === "object" && entry.data.customTheme !== null;
+      const { themeId, customTheme } = entry.data;
+      const hasThemeId = isNonEmptyString(themeId);
+      const hasCustomTheme =
+        typeof customTheme === "object" &&
+        customTheme !== null &&
+        Object.keys(customTheme).length > 0;
 
       if (hasThemeId || hasCustomTheme) {
-        const candidateTheme = sanitizeTheme(entry.data.themeId, entry.data.customTheme);
-        if (candidateTheme.themeId !== "custom") {
-          candidateTheme.customTheme = null;
+        const candidateTheme = sanitizeTheme(themeId, customTheme);
+        const containsThemeData = hasThemeId || candidateTheme.themeId === "custom";
+
+        if (containsThemeData) {
+          if (candidateTheme.themeId !== "custom") {
+            candidateTheme.customTheme = null;
+          }
+          resolvedTheme = candidateTheme;
         }
-        resolvedTheme = candidateTheme;
       }
     }
 
