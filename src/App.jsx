@@ -280,7 +280,7 @@ export default function App() {
     isLoading: promptsLoading,
     error: promptsError,
     retry: retryPrompts,
-  } = usePrompts(isSingleDeviceMode ? null : gameId);
+  } = usePrompts(gameId);
   const generatedPromptGroups = useMemo(
     () => buildPromptGroups(generatedPrompts),
     [generatedPrompts]
@@ -342,12 +342,6 @@ export default function App() {
     }
   }, [mode, modeInitialized]);
   useEffect(() => {
-    if (isSingleDeviceMode) {
-      remoteModeRef.current = null;
-      setModeInitialized(true);
-      return undefined;
-    }
-
     if (!db || !gameId) {
       remoteModeRef.current = null;
       setModeInitialized(true);
@@ -371,10 +365,9 @@ export default function App() {
       remoteModeRef.current = null;
       unsubscribe();
     };
-  }, [db, gameId, isSingleDeviceMode]);
+  }, [db, gameId]);
   useEffect(() => {
     if (
-      isSingleDeviceMode ||
       !modeInitialized ||
       !db ||
       !gameId ||
@@ -388,7 +381,7 @@ export default function App() {
     }
 
     setSessionMode(db, gameId, mode).catch(() => {});
-  }, [db, gameId, isSingleDeviceMode, mode, modeInitialized]);
+  }, [db, gameId, mode, modeInitialized]);
   useEffect(() => {
     if (!gameId) {
       return;
@@ -1343,7 +1336,7 @@ export default function App() {
                 aria-live="polite"
                 style={{ justifySelf: "center", pointerEvents: "none", cursor: "default" }}
               >
-                Single Device Mode
+                Playing Together
               </div>
             )}
             <button

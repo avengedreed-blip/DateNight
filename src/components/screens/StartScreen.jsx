@@ -1,7 +1,7 @@
 import React from "react";
 
 const MODE_OPTIONS = [
-  { value: "single-device", label: "Single Device" },
+  { value: "single-device", label: "Together" },
   { value: "multiplayer", label: "Multiplayer" },
   { value: "offline", label: "Offline" },
   { value: "party", label: "Party" },
@@ -53,7 +53,7 @@ const StartScreen = ({
     }
 
     if (mode === "single-device" && typeof createNewGame === "function") {
-      console.info("Single Device mode selected");
+      console.info("Together mode selected");
       createNewGame();
     } else {
       console.info(`Selected mode: ${label}`);
