@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { defaultPrompts } from "../config/prompts";
 import "./Wheel.css";
 
@@ -76,6 +76,16 @@ function relativeLuminance(hexColor) {
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 }
 
+const Label = React.memo(function Label({ label, wrapperStyle, textStyle }) {
+  return (
+    <div className="wheel__label" style={wrapperStyle}>
+      <span className="wheel__label-text" style={textStyle}>
+        {label}
+      </span>
+    </div>
+  );
+});
+
 function Wheel() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedPrompt, setSelectedPrompt] = useState("");
@@ -100,6 +110,30 @@ function Wheel() {
     return `conic-gradient(${stops})`;
   }, [selectedCategory]);
 
+  const labelConfigs = useMemo(() => {
+    return categories.map((category, index) => {
+      const angle = index * sliceSize + sliceSize / 2;
+      const isActive = selectedCategory === category.key;
+      const sliceColor = isActive ? category.highlightColor : category.baseColor;
+      const shouldShowShadow = relativeLuminance(sliceColor) < 0.5 && !isActive;
+
+      return {
+        key: category.key,
+        label: category.label,
+        wrapperStyle: {
+          transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(calc(-1 * var(--label-radius)))`,
+          textShadow: shouldShowShadow ? "0 1px 2px rgba(0,0,0,.35)" : "none",
+          "--label-color": isActive ? "#1f2933" : category.textColor,
+        },
+        textStyle: {
+          transform: `rotate(-${angle}deg)`,
+          backgroundColor: isActive ? "rgba(255, 255, 255, 0.82)" : "transparent",
+          boxShadow: isActive ? "0 6px 20px rgba(17, 24, 39, 0.18)" : "none",
+        },
+      };
+    });
+  }, [selectedCategory]);
+
   useEffect(() => {
     return () => {
       if (spinTimeoutRef.current) {
@@ -108,7 +142,7 @@ function Wheel() {
     };
   }, []);
 
-  const handleSpin = () => {
+  const handleSpin = useCallback(() => {
     if (isSpinning) {
       return;
     }
@@ -117,15 +151,19 @@ function Wheel() {
     setSelectedCategory(null);
 
     const randomAngle = Math.random() * 360;
-    const nextRotation = currentRotation + SPIN_TURNS * 360 + randomAngle;
-    setCurrentRotation(nextRotation);
+    let nextRotationValue = 0;
+
+    setCurrentRotation((previousRotation) => {
+      nextRotationValue = previousRotation + SPIN_TURNS * 360 + randomAngle;
+      return nextRotationValue;
+    });
 
     if (spinTimeoutRef.current) {
       clearTimeout(spinTimeoutRef.current);
     }
 
     spinTimeoutRef.current = setTimeout(() => {
-      const finalAngle = ((nextRotation % 360) + 360) % 360;
+      const finalAngle = ((nextRotationValue % 360) + 360) % 360;
       const sliceIndex = Math.floor(finalAngle / sliceSize) % categories.length;
       const activeCategory = categories[sliceIndex];
       const prompts = flattenPrompts(defaultPrompts[activeCategory.key]);
@@ -142,7 +180,7 @@ function Wheel() {
       setSelectedCategory(activeCategory.key);
       setIsSpinning(false);
     }, SPIN_DURATION);
-  };
+  }, [isSpinning]);
 
   return (
     <section
@@ -166,45 +204,14 @@ function Wheel() {
               : undefined,
           }}
         >
-        {categories.map((category, index) => {
-          const angle = index * sliceSize + sliceSize / 2;
-          const isActive = selectedCategory === category.key;
-          const sliceColor = isActive
-            ? category.highlightColor
-            : category.baseColor;
-          const isDarkBackground = !isActive && relativeLuminance(sliceColor) < 0.5;
-
-          return (
-            <div
-              key={category.key}
-              className="wheel__label"
-              style={{
-                transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(calc(-1 * var(--label-radius)))`,
-                width: "52%",
-                maxWidth: "9.5rem",
-                textShadow: isDarkBackground
-                  ? "0 1px 2px rgba(0,0,0,.35)"
-                  : "none",
-                "--label-color": isActive ? "#1f2933" : category.textColor,
-              }}
-            >
-              <span
-                className="wheel__label-text"
-                style={{
-                  transform: `rotate(-${angle}deg)`,
-                  backgroundColor: isActive
-                    ? "rgba(255, 255, 255, 0.82)"
-                    : "transparent",
-                  boxShadow: isActive
-                    ? "0 6px 20px rgba(17, 24, 39, 0.18)"
-                    : "none",
-                }}
-              >
-                {category.label}
-              </span>
-            </div>
-          );
-        })}
+        {labelConfigs.map(({ key, label, wrapperStyle, textStyle }) => (
+          <Label
+            key={key}
+            label={label}
+            wrapperStyle={wrapperStyle}
+            textStyle={textStyle}
+          />
+        ))}
         <div
           style={{
             width: "52px",
