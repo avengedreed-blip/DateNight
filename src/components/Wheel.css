@@ -1,8 +1,21 @@
+.wheel-module {
+  display: grid;
+  justify-items: center;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: min(520px, 100%);
+  padding: 1rem;
+  text-align: center;
+  color: #0f172a;
+  height: 100%;
+  align-content: center;
+}
+
 .wheel {
   position: relative;
   --wheel-size: clamp(220px, 60vw, 320px);
   --labelRadius: calc(var(--wheel-size) * 0.36);
-  width: var(--wheel-size);
+  width: min(var(--wheel-size), 100%);
   aspect-ratio: 1 / 1;
   display: flex;
   align-items: center;
@@ -115,7 +128,7 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   word-break: break-word;
-  transform: rotate(var(--label-text-rotation, 0deg));
+  transform: rotate(calc(-1 * var(--label-text-rotation, 0deg)));
   text-shadow: none;
 }
 
@@ -128,6 +141,69 @@
     justify-content: center;
     align-items: center;
   }
+}
+
+.wheel__hub {
+  width: clamp(48px, 12vw, 60px);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 3px solid #1f2933;
+  position: absolute;
+}
+
+.wheel__actions {
+  display: grid;
+  gap: 0.75rem;
+  width: min(460px, 100%);
+}
+
+.wheel__spin-button {
+  justify-self: center;
+  padding: 0.65rem 1.8rem;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #111827, #1f2937);
+  color: #ffffff;
+  font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+    Arial, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.25);
+}
+
+.wheel__spin-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+  box-shadow: none;
+}
+
+.wheel__spin-button:not(:disabled):hover,
+.wheel__spin-button:not(:disabled):focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.28);
+}
+
+.wheel__mode {
+  margin: 0;
+  font-size: 0.95rem;
+  color: rgba(15, 23, 42, 0.72);
+}
+
+.wheel__prompt {
+  padding: 1rem 1.25rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #0f172a;
+}
+
+.wheel__prompt p {
+  margin: 0;
 }
 
 @media (max-width: 420px) {
@@ -146,5 +222,11 @@
     border-left-width: 9px;
     border-right-width: 9px;
     border-bottom-width: 14px;
+  }
+}
+
+@media (min-width: 900px) {
+  .wheel__label {
+    font-size: clamp(12px, 1.6vw, 24px);
   }
 }
