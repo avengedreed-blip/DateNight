@@ -129,6 +129,10 @@ export function useAnalytics(gameId, options = {}) {
       ? options.playerId
       : null;
   const remoteDb = options.db ?? firestore;
+  const debugEnabled =
+    typeof options.debug === "boolean"
+      ? options.debug
+      : Boolean(options.debugAnalyticsEnabled);
   const storageKey =
     normalizedMode === "offline" ? OFFLINE_STORAGE_KEY : STORAGE_KEY;
   const [session, setSession] = useState(() => {
@@ -139,6 +143,11 @@ export function useAnalytics(gameId, options = {}) {
   const [pendingReward, setPendingReward] = useState(null);
   const [events, setEvents] = useState(() => session.events ?? []);
   const storeRef = useRef(readStoreFromKey(storageKey));
+  const debugRef = useRef(debugEnabled);
+
+  useEffect(() => {
+    debugRef.current = debugEnabled;
+  }, [debugEnabled]);
 
   useEffect(() => {
     const store = readStoreFromKey(storageKey);
@@ -209,7 +218,9 @@ export function useAnalytics(gameId, options = {}) {
         payload: basePayload,
         data: basePayload,
       };
-      console.log(`[Analytics:${normalizedMode}]`, type, entry.payload);
+      if (debugRef.current) {
+        console.log(`[Analytics:${normalizedMode}]`, type, entry.payload);
+      }
       setEvents((current) => {
         const next = [...current, entry];
         return next.slice(-100);
