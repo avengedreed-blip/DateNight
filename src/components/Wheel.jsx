@@ -203,6 +203,7 @@ function Wheel() {
             transition: isSpinning
               ? `transform ${SPIN_DURATION}ms ${SPIN_EASING}`
               : undefined,
+            willChange: isSpinning ? "transform" : undefined,
           }}
         >
         {labelConfigs.map(({ key, label, wrapperStyle, textStyle }) => (
