@@ -1,7 +1,8 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
 import { db } from "../config/firebase";
+import { addAchievementsToProfile } from "../firebase/profile";
 
 const EVENTS_COLLECTION = "analytics";
 const ANALYTICS_COLLECTION = EVENTS_COLLECTION;
@@ -347,6 +348,57 @@ const useAnalytics = ({ gameId, playerId, username } = {}) => {
     () => normalizeMetadata({ playerId, username }),
     [playerId, username]
   );
+  const achievementsStateRef = useRef({
+    triviaCorrectStreak: 0,
+    extremeDaresAccepted: 0,
+    refusals: 0,
+    unlocked: new Set(),
+  });
+
+  useEffect(() => {
+    achievementsStateRef.current = {
+      triviaCorrectStreak: 0,
+      extremeDaresAccepted: 0,
+      refusals: 0,
+      unlocked: new Set(),
+    };
+  }, [gameId, playerId]);
+
+  const persistAchievements = useCallback(
+    async (achievementNames = []) => {
+      if (!playerId || achievementNames.length === 0) {
+        return;
+      }
+
+      try {
+        await addAchievementsToProfile(
+          { playerId, gameId },
+          achievementNames.filter((name) => typeof name === "string" && name.trim().length > 0)
+        );
+      } catch (error) {
+        console.error("Failed to persist achievements", error);
+      }
+    },
+    [gameId, playerId]
+  );
+
+  const unlockAchievement = useCallback(
+    (achievementName) => {
+      if (typeof achievementName !== "string" || achievementName.trim().length === 0) {
+        return;
+      }
+
+      const normalized = achievementName.trim();
+      const state = achievementsStateRef.current;
+      if (state.unlocked.has(normalized)) {
+        return;
+      }
+
+      state.unlocked.add(normalized);
+      persistAchievements([normalized]);
+    },
+    [persistAchievements]
+  );
 
   const getCollectionRef = useCallback(() => {
     if (!isReady) {
@@ -379,24 +431,50 @@ const useAnalytics = ({ gameId, playerId, username } = {}) => {
   );
 
   const logRound = useCallback(
-    async ({ outcome = "completed", slice = "", mode = "classic", streak = null } = {}) =>
-      logEvent("round", {
+    async ({
+      outcome = "completed",
+      slice = "",
+      mode = "classic",
+      streak = null,
+      intensity = "",
+    } = {}) => {
+      if (normalizeString(slice) === "dare" && normalizeString(outcome) === "completed") {
+        const state = achievementsStateRef.current;
+        const normalizedIntensity = normalizeString(intensity);
+        if (normalizedIntensity === "extreme") {
+          state.extremeDaresAccepted += 1;
+          if (state.extremeDaresAccepted >= 5) {
+            unlockAchievement("Iron Stomach");
+          }
+        }
+      }
+
+      return logEvent("round", {
         outcome,
         slice,
         mode,
         streak,
-      }),
-    [logEvent]
+        intensity,
+      });
+    },
+    [logEvent, unlockAchievement]
   );
 
   const logRefusal = useCallback(
-    async ({ reason = "manual", slice = "", consequence = "" } = {}) =>
-      logEvent("refusal", {
+    async ({ reason = "manual", slice = "", consequence = "" } = {}) => {
+      const state = achievementsStateRef.current;
+      state.refusals += 1;
+      if (state.refusals >= 3) {
+        unlockAchievement("Coward");
+      }
+
+      return logEvent("refusal", {
         reason,
         slice,
         consequence,
-      }),
-    [logEvent]
+      });
+    },
+    [logEvent, unlockAchievement]
   );
 
   const logStreak = useCallback(
@@ -424,15 +502,28 @@ const useAnalytics = ({ gameId, playerId, username } = {}) => {
       correct = false,
       streak = null,
       responseTimeMs = null,
-    } = {}) =>
-      logEvent("triviaAccuracy", {
+    } = {}) => {
+      const isCorrect = Boolean(correct);
+      const state = achievementsStateRef.current;
+
+      if (isCorrect) {
+        state.triviaCorrectStreak += 1;
+        if (state.triviaCorrectStreak >= 10) {
+          unlockAchievement("Trivia Master");
+        }
+      } else {
+        state.triviaCorrectStreak = 0;
+      }
+
+      return logEvent("triviaAccuracy", {
         questionId,
-        correct: Boolean(correct),
-        result: correct ? "correct" : "incorrect",
+        correct: isCorrect,
+        result: isCorrect ? "correct" : "incorrect",
         streak,
         responseTimeMs,
-      }),
-    [logEvent]
+      });
+    },
+    [logEvent, unlockAchievement]
   );
 
   const logTimeout = useCallback(
@@ -441,14 +532,23 @@ const useAnalytics = ({ gameId, playerId, username } = {}) => {
       mode = "classic",
       durationSeconds = 30,
       autoRefusal = true,
-    } = {}) =>
-      logEvent("timeout", {
+    } = {}) => {
+      if (autoRefusal) {
+        const state = achievementsStateRef.current;
+        state.refusals += 1;
+        if (state.refusals >= 3) {
+          unlockAchievement("Coward");
+        }
+      }
+
+      return logEvent("timeout", {
         slice,
         mode,
         durationSeconds,
         autoRefusal,
-      }),
-    [logEvent]
+      });
+    },
+    [logEvent, unlockAchievement]
   );
 
   return {
