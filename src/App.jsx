@@ -334,7 +334,12 @@ export default function App() {
     trackOutcome: logOutcomeEvent,
     trackTimer: logTimerEvent,
     trackExtremeMeter: logExtremeMeterEvent,
-  } = useAnalytics(gameId, { mode, playerId, db: remoteDb });
+  } = useAnalytics(gameId, {
+    mode,
+    playerId,
+    db: remoteDb,
+    debug: debugAnalyticsEnabled,
+  });
 
   const {
     badges: playerBadges,
