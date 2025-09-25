@@ -635,7 +635,7 @@
   }
 
   .wheel__label {
-    @apply absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center text-center;
+    @apply flex items-center justify-center text-center;
     transform-origin: center;
     pointer-events: none;
     max-width: min(62%, 320px);
