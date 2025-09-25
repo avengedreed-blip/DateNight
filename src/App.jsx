@@ -22,6 +22,7 @@ import {
 import { useBackgroundMusic } from "./hooks/useBackgroundMusic.js";
 import { useAnalytics } from "./hooks/useAnalytics.js";
 import { usePlayerStats } from "./hooks/usePlayerStats.js";
+import { useLifetimeStats } from "./hooks/useLifetimeStats.js";
 import { usePersistentState } from "./hooks/usePersistentState.js";
 import { usePrompts } from "./hooks/usePrompts.js";
 import { useSound } from "./hooks/useSound.js";
@@ -346,6 +347,8 @@ export default function App() {
     adrenaline: playerAdrenaline,
     recordEvent: recordPlayerEvent,
   } = usePlayerStats({ gameId, playerId, mode, db: remoteDb });
+  const lifetimeStats = useLifetimeStats({ mode, playerId, db: remoteDb });
+  const { recordLifetimeEvent } = lifetimeStats;
 
   const {
     prompts,
@@ -1031,6 +1034,12 @@ export default function App() {
         promptType: segment.id,
         isExtreme: flags.isExtreme,
       });
+      recordLifetimeEvent("round-start", {
+        promptType: segment.id,
+        intensity,
+        isExtreme: flags.isExtreme,
+        adrenaline: playerAdrenaline,
+      });
 
       setCurrentPrompt({
         title: segment.title,
@@ -1099,6 +1108,8 @@ export default function App() {
       extremeMeter,
       logAnalyticsEvent,
       logExtremeMeterEvent,
+      playerAdrenaline,
+      recordLifetimeEvent,
       recordPlayerEvent,
       recordPromptHistory,
       roundCount,
@@ -1412,6 +1423,27 @@ export default function App() {
     }
   }, [pendingExtremeSpin, startSpin]);
 
+  const logLifetimePromptEvent = useCallback(
+    (type, extra = {}) => {
+      if (!type) {
+        return;
+      }
+
+      recordLifetimeEvent(type, {
+        promptType: currentPrompt.type,
+        intensity: currentPrompt.intensity,
+        adrenaline: playerAdrenaline,
+        ...extra,
+      });
+    },
+    [
+      currentPrompt.intensity,
+      currentPrompt.type,
+      playerAdrenaline,
+      recordLifetimeEvent,
+    ]
+  );
+
   const handleRefuse = useCallback(
     (reason = "refused") => {
       stopRoundTimer();
@@ -1455,10 +1487,13 @@ export default function App() {
 
       if (reason === "timeout") {
         recordPlayerEvent("timeout", { promptType: currentPrompt.type });
+        logLifetimePromptEvent("timeout");
       } else if (currentPrompt.type === "trivia") {
         recordPlayerEvent("trivia-incorrect", { promptType: currentPrompt.type });
+        logLifetimePromptEvent("trivia-incorrect");
       } else {
         recordPlayerEvent("refusal", { promptType: currentPrompt.type });
+        logLifetimePromptEvent("refusal");
       }
 
       timerStopReasonRef.current = outcomeResult;
@@ -1466,6 +1501,7 @@ export default function App() {
     [
       currentPrompt.intensity,
       currentPrompt.type,
+      logLifetimePromptEvent,
       logOutcomeEvent,
       recordPlayerEvent,
       promptGroups,
@@ -1579,8 +1615,10 @@ export default function App() {
     setInputGameId("");
     setCopySuccess(false);
     regenerateGeneratedPrompts();
+    recordLifetimeEvent("session-reset");
   }, [
     regenerateGeneratedPrompts,
+    recordLifetimeEvent,
     setGameId,
     setLastPrompts,
     setRoundCount,
@@ -1614,8 +1652,10 @@ export default function App() {
     });
     if (currentPrompt.type === "trivia") {
       recordPlayerEvent("trivia-correct", { promptType: currentPrompt.type });
+      logLifetimePromptEvent("trivia-correct");
     } else {
       recordPlayerEvent("round-success", { promptType: currentPrompt.type });
+      logLifetimePromptEvent("round-success");
     }
     timerStopReasonRef.current = outcomeResult;
     closeModal();
@@ -1623,6 +1663,7 @@ export default function App() {
     closeModal,
     currentPrompt.intensity,
     currentPrompt.type,
+    logLifetimePromptEvent,
     logOutcomeEvent,
     recordPlayerEvent,
     roundCount,
@@ -1843,6 +1884,7 @@ export default function App() {
             mode={mode}
             playerId={playerId}
             db={remoteDb}
+            lifetime={lifetimeStats}
           />
         </div>
       </main>
