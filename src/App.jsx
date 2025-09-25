@@ -34,6 +34,7 @@ import {
   generatePromptSet,
 } from "./utils/promptGenerator.js";
 import StatsDashboardPlaceholder from "./components/StatsDashboardPlaceholder.jsx";
+import { loadOffline, saveOffline } from "./utils/offlineStorage.js";
 
 const STORAGE_KEYS = {
   gameId: "dateNightGameId",
@@ -48,6 +49,10 @@ const STORAGE_KEYS = {
 };
 
 const PLAYER_STORAGE_KEY = "dateNightPlayerId";
+
+const OFFLINE_GAME_ID = "OFFLINE";
+const OFFLINE_SESSION_KEY = "dn_offline_session";
+const OFFLINE_PROMPTS_KEY = "dn_offline_prompts";
 
 const EXTREME_ROUND_CHANCE = 0.2;
 const MAX_RECENT_PROMPTS = 25;
@@ -179,6 +184,7 @@ export default function App() {
     }
   });
   const isSingleDeviceMode = mode === "single-device";
+  const isOfflineMode = mode === "offline";
   const [modeInitialized, setModeInitialized] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
   const [pendingExtremeSpin, setPendingExtremeSpin] = useState(false);
@@ -262,6 +268,8 @@ export default function App() {
   });
   const remoteModeRef = useRef(null);
   const previousModalRef = useRef(null);
+  const offlineSessionHydratedRef = useRef(false);
+  const offlinePromptsHydratedRef = useRef(false);
 
   const [gameId, setGameId] = usePersistentState(STORAGE_KEYS.gameId, null, {
     serialize: (value) => value ?? "",
@@ -316,6 +324,9 @@ export default function App() {
     }
   );
 
+  const remoteDb = isOfflineMode ? null : db;
+  const promptsGameId = isOfflineMode ? null : gameId;
+
   const {
     events: analyticsEvents,
     trackEvent: logAnalyticsEvent,
@@ -323,13 +334,13 @@ export default function App() {
     trackOutcome: logOutcomeEvent,
     trackTimer: logTimerEvent,
     trackExtremeMeter: logExtremeMeterEvent,
-  } = useAnalytics(gameId, { mode, playerId });
+  } = useAnalytics(gameId, { mode, playerId, db: remoteDb });
 
   const {
     badges: playerBadges,
     adrenaline: playerAdrenaline,
     recordEvent: recordPlayerEvent,
-  } = usePlayerStats({ gameId, playerId, mode, db });
+  } = usePlayerStats({ gameId, playerId, mode, db: remoteDb });
 
   const {
     prompts,
@@ -338,7 +349,7 @@ export default function App() {
     isLoading: promptsLoading,
     error: promptsError,
     retry: retryPrompts,
-  } = usePrompts(gameId);
+  } = usePrompts(promptsGameId);
   const generatedPromptGroups = useMemo(
     () => buildPromptGroups(generatedPrompts),
     [generatedPrompts]
@@ -400,7 +411,7 @@ export default function App() {
     }
   }, [mode, modeInitialized]);
   useEffect(() => {
-    if (!db || !gameId) {
+    if (!remoteDb || !gameId) {
       remoteModeRef.current = null;
       setModeInitialized(true);
       return undefined;
@@ -408,7 +419,7 @@ export default function App() {
 
     setModeInitialized(false);
 
-    const unsubscribe = subscribeToSessionMode(db, gameId, (nextMode) => {
+    const unsubscribe = subscribeToSessionMode(remoteDb, gameId, (nextMode) => {
       remoteModeRef.current = nextMode ?? null;
       if (nextMode) {
         setMode((currentMode) =>
@@ -423,11 +434,11 @@ export default function App() {
       remoteModeRef.current = null;
       unsubscribe();
     };
-  }, [db, gameId]);
+  }, [gameId, remoteDb]);
   useEffect(() => {
     if (
       !modeInitialized ||
-      !db ||
+      !remoteDb ||
       !gameId ||
       !mode
     ) {
@@ -438,8 +449,8 @@ export default function App() {
       return;
     }
 
-    setSessionMode(db, gameId, mode).catch(() => {});
-  }, [db, gameId, mode, modeInitialized]);
+    setSessionMode(remoteDb, gameId, mode).catch(() => {});
+  }, [gameId, mode, modeInitialized, remoteDb]);
   useEffect(() => {
     if (!gameId) {
       return;
@@ -447,6 +458,149 @@ export default function App() {
 
     regenerateGeneratedPrompts();
   }, [gameId, regenerateGeneratedPrompts]);
+
+  useEffect(() => {
+    if (!isOfflineMode) {
+      offlineSessionHydratedRef.current = false;
+      return;
+    }
+
+    if (!gameId || offlineSessionHydratedRef.current) {
+      return;
+    }
+
+    const stored = loadOffline(OFFLINE_SESSION_KEY, null);
+    if (!stored || typeof stored !== "object") {
+      offlineSessionHydratedRef.current = true;
+      return;
+    }
+
+    if (Number.isFinite(stored.roundCount)) {
+      setRoundCount(stored.roundCount);
+    }
+    if (Number.isFinite(stored.extremeMeter)) {
+      setExtremeMeter(stored.extremeMeter);
+    }
+    if (stored.lastPrompts && typeof stored.lastPrompts === "object") {
+      setLastPrompts(stored.lastPrompts);
+    }
+    if (stored.currentPrompt && typeof stored.currentPrompt === "object") {
+      setCurrentPrompt((previous) => ({ ...previous, ...stored.currentPrompt }));
+    }
+    if (stored.currentConsequence && typeof stored.currentConsequence === "object") {
+      setCurrentConsequence((previous) => ({
+        ...previous,
+        ...stored.currentConsequence,
+      }));
+    }
+    if (Number.isFinite(stored.rotation)) {
+      setRotation(stored.rotation);
+      rotationRef.current = stored.rotation;
+    }
+    if (typeof stored.pendingExtremeSpin === "boolean") {
+      setPendingExtremeSpin(stored.pendingExtremeSpin);
+    }
+    if (typeof stored.isExtremeRound === "boolean") {
+      setIsExtremeRound(stored.isExtremeRound);
+    }
+    if (typeof stored.timerActive === "boolean") {
+      setTimerActive(stored.timerActive);
+    }
+    if (Number.isFinite(stored.roundTimer)) {
+      setRoundTimer(stored.roundTimer);
+    }
+
+    offlineSessionHydratedRef.current = true;
+  }, [
+    gameId,
+    isOfflineMode,
+    setCurrentConsequence,
+    setCurrentPrompt,
+    setExtremeMeter,
+    setLastPrompts,
+    setRoundCount,
+    setIsExtremeRound,
+    setPendingExtremeSpin,
+    setRotation,
+    setRoundTimer,
+    setTimerActive,
+  ]);
+
+  useEffect(() => {
+    if (!isOfflineMode || !gameId) {
+      return;
+    }
+
+    if (!offlineSessionHydratedRef.current) {
+      return;
+    }
+
+    const payload = {
+      roundCount,
+      extremeMeter,
+      lastPrompts,
+      currentPrompt,
+      currentConsequence,
+      rotation,
+      pendingExtremeSpin,
+      isExtremeRound,
+      timerActive,
+      roundTimer,
+    };
+    saveOffline(OFFLINE_SESSION_KEY, payload);
+  }, [
+    currentConsequence,
+    currentPrompt,
+    extremeMeter,
+    gameId,
+    isExtremeRound,
+    isOfflineMode,
+    lastPrompts,
+    pendingExtremeSpin,
+    roundCount,
+    roundTimer,
+    rotation,
+    timerActive,
+  ]);
+
+  useEffect(() => {
+    if (!isOfflineMode) {
+      offlinePromptsHydratedRef.current = false;
+      return;
+    }
+
+    if (offlinePromptsHydratedRef.current) {
+      return;
+    }
+
+    const stored = loadOffline(OFFLINE_PROMPTS_KEY, null);
+    if (stored && typeof stored === "object") {
+      if (stored.generatedPrompts) {
+        setGeneratedPrompts(stored.generatedPrompts);
+      }
+      if (stored.prompts) {
+        savePrompts(stored.prompts);
+      }
+    }
+
+    offlinePromptsHydratedRef.current = true;
+  }, [isOfflineMode, savePrompts, setGeneratedPrompts]);
+
+  useEffect(() => {
+    if (!isOfflineMode || !prompts) {
+      return;
+    }
+
+    if (!offlinePromptsHydratedRef.current) {
+      return;
+    }
+
+    saveOffline(OFFLINE_PROMPTS_KEY, {
+      prompts,
+      generatedPrompts,
+      updatedAt: Date.now(),
+    });
+  }, [generatedPrompts, isOfflineMode, prompts]);
 
   const shouldPlayMusic = Boolean(gameId) && toneReady && musicVolume > 0;
   const { stop: stopMusic } = useBackgroundMusic(
@@ -1327,11 +1481,11 @@ export default function App() {
   }, [activeModal, pendingConsequenceSounds, triggerSound]);
 
   const createNewGame = useCallback(() => {
-    const newId = createRandomGameId();
+    const newId = isOfflineMode ? OFFLINE_GAME_ID : createRandomGameId();
     setGameId(newId);
     setRoundCount(0);
     setLastPrompts({});
-  }, [setGameId, setLastPrompts, setRoundCount]);
+  }, [isOfflineMode, setGameId, setLastPrompts, setRoundCount]);
 
   const joinGame = useCallback(
     (event) => {
@@ -1562,17 +1716,27 @@ export default function App() {
               >
                 Reset
               </button>
-        </div>
+            </div>
           {isSingleDeviceMode && (
             <div
               className="badge-button"
               role="status"
-                aria-live="polite"
-                style={{ justifySelf: "center", pointerEvents: "none", cursor: "default" }}
-              >
-                Playing Together
-              </div>
-            )}
+              aria-live="polite"
+              style={{ justifySelf: "center", pointerEvents: "none", cursor: "default" }}
+            >
+              Playing Together
+            </div>
+          )}
+          {isOfflineMode && (
+            <div
+              className="badge-button"
+              role="status"
+              aria-live="polite"
+              style={{ justifySelf: "center", pointerEvents: "none", cursor: "default" }}
+            >
+              Offline Mode
+            </div>
+          )}
             <button
               type="button"
               className="icon-button"
@@ -1663,7 +1827,7 @@ export default function App() {
             gameId={gameId}
             mode={mode}
             playerId={playerId}
-            db={db}
+            db={remoteDb}
           />
         </div>
       </main>

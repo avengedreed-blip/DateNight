@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { db as firestore } from "../config/firebase.js";
+import { loadOffline } from "../utils/offlineStorage.js";
 import {
   readLocalAnalyticsEvents,
   subscribeToGamePlayers,
@@ -10,6 +11,8 @@ import {
 const LAST_EVENTS_LIMIT = 20;
 const SESSION_STORAGE_KEY = "dn_sessionStats";
 const PLAYER_STORAGE_PREFIX = "dn_playerStats_";
+const OFFLINE_STATS_KEY = "dn_offline_stats";
+const OFFLINE_ANALYTICS_KEY = "dn_offline_analytics";
 
 const DEFAULT_TOTALS = {
   rounds: 0,
@@ -69,6 +72,10 @@ const readLocalJson = (key) => {
     return null;
   }
 
+  if (key === OFFLINE_STATS_KEY || key === OFFLINE_ANALYTICS_KEY) {
+    return loadOffline(key, null);
+  }
+
   try {
     const raw = target.localStorage?.getItem(key);
     if (!raw) {
@@ -110,10 +117,43 @@ const normalizePlayerStats = (source) => {
   };
 };
 
-const readLocalSessionStats = () => normalizePlayerStats(readLocalJson(SESSION_STORAGE_KEY));
+const readLocalSessionStats = (storageKey = SESSION_STORAGE_KEY) =>
+  normalizePlayerStats(readLocalJson(storageKey));
 
-const readLocalPlayerStats = (playerId) =>
-  normalizePlayerStats(readLocalJson(`${PLAYER_STORAGE_PREFIX}${playerId}`));
+const readLocalPlayerStats = (playerId, storagePrefix = PLAYER_STORAGE_PREFIX) => {
+  if (storagePrefix === OFFLINE_STATS_KEY) {
+    return normalizePlayerStats(readLocalJson(storagePrefix));
+  }
+
+  return normalizePlayerStats(readLocalJson(`${storagePrefix}${playerId}`));
+};
+
+const readOfflineAnalyticsEvents = (sessionKey) => {
+  if (!sessionKey) {
+    return [];
+  }
+
+  const store = loadOffline(OFFLINE_ANALYTICS_KEY, { sessions: {} });
+  const session = store?.sessions?.[sessionKey];
+  const events = Array.isArray(session?.events) ? session.events : [];
+  return events
+    .map((event) => ({
+      id:
+        event.id ?? `${event.type ?? "event"}-${Math.random().toString(36).slice(2, 10)}`,
+      type: typeof event.type === "string" ? event.type : "unknown",
+      payload: event.payload ?? event.data ?? {},
+      timestamp: event.timestamp ?? Date.now(),
+      clientTimestamp: event.clientTimestamp ?? event.timestamp ?? Date.now(),
+      playerId:
+        typeof event.payload?.playerId === "string" && event.payload.playerId.length
+          ? event.payload.playerId
+          : null,
+      source: "local",
+    }))
+    .sort(
+      (a, b) => (b.clientTimestamp ?? b.timestamp ?? 0) - (a.clientTimestamp ?? a.timestamp ?? 0)
+    );
+};
 
 const ensureHistoryEntry = (summary, value, timestamp) => {
   const target = summary.adrenalineHistory ?? [];
@@ -342,12 +382,19 @@ export function useStatsDashboard({ gameId, mode, db } = {}) {
   const [remoteSessionEvents, setRemoteSessionEvents] = useState([]);
   const [remotePlayers, setRemotePlayers] = useState([]);
   const [remotePlayerEvents, setRemotePlayerEvents] = useState({});
-  const [localEvents, setLocalEvents] = useState(() => readLocalAnalyticsEvents(sessionKey));
+  const getLocalEvents = useCallback(
+    (key) =>
+      (normalizedMode === "offline"
+        ? readOfflineAnalyticsEvents
+        : readLocalAnalyticsEvents)(key),
+    [normalizedMode]
+  );
+  const [localEvents, setLocalEvents] = useState(() => getLocalEvents(sessionKey));
   const pollingRef = useRef(null);
 
   useEffect(() => {
-    setLocalEvents(readLocalAnalyticsEvents(sessionKey));
-  }, [sessionKey]);
+    setLocalEvents(getLocalEvents(sessionKey));
+  }, [getLocalEvents, sessionKey]);
 
   useEffect(() => {
     const target = ensureWindow();
@@ -361,7 +408,7 @@ export function useStatsDashboard({ gameId, mode, db } = {}) {
     }
 
     const poll = () => {
-      setLocalEvents(readLocalAnalyticsEvents(sessionKey));
+      setLocalEvents(getLocalEvents(sessionKey));
     };
     poll();
     pollingRef.current = target.setInterval(poll, 1500);
@@ -428,7 +475,9 @@ export function useStatsDashboard({ gameId, mode, db } = {}) {
 
     const sessionTotals = computeSessionTotals(combinedSessionEvents);
     if (sessionTotals.rounds === 0) {
-      const localFallback = readLocalSessionStats();
+      const statsKey =
+        normalizedMode === "offline" ? OFFLINE_STATS_KEY : SESSION_STORAGE_KEY;
+      const localFallback = readLocalSessionStats(statsKey);
       if (localFallback.rounds > 0) {
         sessionTotals.rounds = localFallback.rounds;
         sessionTotals.refusals = localFallback.refusals;
@@ -516,7 +565,10 @@ export function useStatsDashboard({ gameId, mode, db } = {}) {
         }
 
         for (const [playerId, events] of eventsByPlayer.entries()) {
-          const baseStats = readLocalPlayerStats(playerId);
+          const baseStats = readLocalPlayerStats(
+            playerId,
+            normalizedMode === "offline" ? OFFLINE_STATS_KEY : PLAYER_STORAGE_PREFIX
+          );
           const derivedStats =
             events.length > 0 ? computePlayerFromEvents(events) : baseStats;
           playerSummaries.push({
