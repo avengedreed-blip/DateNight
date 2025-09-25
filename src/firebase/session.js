@@ -6,6 +6,8 @@ import {
   getDocs,
   increment,
   onSnapshot,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
@@ -62,6 +64,18 @@ const DEFAULT_LIFECYCLE_STATE = Object.freeze({
 
 const DEFAULT_STATUS = "idle";
 const DEFAULT_MESSAGE = null;
+
+const EVENT_LOG_COLLECTION = "log";
+const EVENT_LOG_STORAGE_PREFIX = `${STORAGE_PREFIX}::event-log`;
+
+const DEFAULT_EVENT_LOG_ENTRY = Object.freeze({
+  id: "",
+  timestamp: 0,
+  playerId: "",
+  username: "anonymous",
+  action: "",
+  pending: false,
+});
 
 const PROMPT_STATE_STORAGE_PREFIX = `${STORAGE_PREFIX}::prompt-state-marker`;
 
@@ -382,6 +396,278 @@ const deserialize = (value) => {
     return null;
   }
 };
+
+const normalizeNonEmptyString = (value, fallback = "") => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+  return fallback;
+};
+
+const generateEventLogId = () => `local-log-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+
+const normalizeEventLogEntry = (entry = {}, fallbackId) => {
+  if (!entry || typeof entry !== "object") {
+    return {
+      ...DEFAULT_EVENT_LOG_ENTRY,
+      id: fallbackId || generateEventLogId(),
+      timestamp: Date.now(),
+    };
+  }
+
+  const resolvedId = normalizeNonEmptyString(entry.id, fallbackId ?? "");
+  const timestampSource = entry.timestamp ?? entry.createdAt ?? null;
+  const millis = toMillis(timestampSource);
+  const resolvedTimestamp =
+    millis != null && Number.isFinite(millis)
+      ? millis
+      : typeof entry.timestamp === "number" && Number.isFinite(entry.timestamp)
+      ? entry.timestamp
+      : Date.now();
+
+  return {
+    id: resolvedId || generateEventLogId(),
+    timestamp: resolvedTimestamp,
+    playerId: normalizeNonEmptyString(entry.playerId, DEFAULT_EVENT_LOG_ENTRY.playerId),
+    username: normalizeNonEmptyString(entry.username, DEFAULT_EVENT_LOG_ENTRY.username),
+    action: normalizeNonEmptyString(entry.action, DEFAULT_EVENT_LOG_ENTRY.action),
+    pending: Boolean(entry.pending),
+  };
+};
+
+const sortEventLogEntries = (entries = []) =>
+  entries
+    .filter((entry) => entry && typeof entry === "object")
+    .slice()
+    .sort((a, b) => {
+      if (a.timestamp !== b.timestamp) {
+        return a.timestamp - b.timestamp;
+      }
+      return a.id.localeCompare(b.id);
+    });
+
+const mergeEventLogEntries = (baseEntries = [], updates = []) => {
+  const merged = new Map();
+  baseEntries.forEach((entry) => {
+    if (!entry) {
+      return;
+    }
+    const normalized = normalizeEventLogEntry(entry);
+    merged.set(normalized.id, normalized);
+  });
+  updates.forEach((entry) => {
+    if (!entry) {
+      return;
+    }
+    const normalized = normalizeEventLogEntry(entry);
+    merged.set(normalized.id, normalized);
+  });
+  return sortEventLogEntries(Array.from(merged.values()));
+};
+
+const getEventLogStorageKey = (gameId) => {
+  const suffix = normalizeNonEmptyString(gameId, "anonymous");
+  return `${EVENT_LOG_STORAGE_PREFIX}::${suffix}`;
+};
+
+const loadEventLogFromStorage = (gameId) => {
+  const storage = getStorage();
+  if (!storage) {
+    return [];
+  }
+
+  const raw = storage.getItem(getEventLogStorageKey(gameId));
+  if (!raw) {
+    return [];
+  }
+
+  const parsed = deserialize(raw);
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  return sortEventLogEntries(parsed.map((entry) => normalizeEventLogEntry(entry)));
+};
+
+const persistEventLogToStorage = (gameId, entries) => {
+  const storage = getStorage();
+  if (!storage) {
+    return;
+  }
+
+  if (!Array.isArray(entries)) {
+    return;
+  }
+
+  const normalizedEntries = entries.map((entry) => normalizeEventLogEntry(entry));
+  const sortedEntries = sortEventLogEntries(normalizedEntries);
+  const serialized = serialize(sortedEntries);
+  if (!serialized) {
+    return;
+  }
+
+  try {
+    storage.setItem(getEventLogStorageKey(gameId), serialized);
+  } catch (error) {
+    console.warn("Failed to persist event log", error);
+  }
+};
+
+const mergeEventLogIntoStorage = (gameId, entries) => {
+  const existing = loadEventLogFromStorage(gameId);
+  const merged = mergeEventLogEntries(existing, entries);
+  persistEventLogToStorage(gameId, merged);
+  return merged;
+};
+
+const appendEventLogEntryOffline = (gameId, entry) => {
+  const normalizedEntry = normalizeEventLogEntry({ ...entry, pending: true });
+  mergeEventLogIntoStorage(gameId, [normalizedEntry]);
+  return normalizedEntry;
+};
+
+const getPendingEventLogEntries = (entries = []) =>
+  entries.filter((entry) => entry && typeof entry === "object" && entry.pending);
+
+const subscribeToEventLog = (gameId, handlers = {}) => {
+  const normalizedGameId = normalizeNonEmptyString(gameId);
+
+  const emitUpdate = (entries) => {
+    if (typeof handlers.onUpdate === "function") {
+      handlers.onUpdate(entries);
+    }
+  };
+
+  const emitError = (error) => {
+    if (typeof handlers.onError === "function") {
+      handlers.onError(error);
+    }
+  };
+
+  const emitReady = (() => {
+    let emitted = false;
+    return () => {
+      if (emitted) {
+        return;
+      }
+      emitted = true;
+      if (typeof handlers.onReady === "function") {
+        handlers.onReady();
+      }
+    };
+  })();
+
+  if (!normalizedGameId) {
+    emitUpdate([]);
+    emitReady();
+    return () => {};
+  }
+
+  const storedEntries = loadEventLogFromStorage(normalizedGameId);
+  emitUpdate(storedEntries);
+
+  if (!db) {
+    emitReady();
+    return () => {};
+  }
+
+  const collectionRef = collection(db, "games", normalizedGameId, EVENT_LOG_COLLECTION);
+  const queryRef = query(collectionRef, orderBy("timestamp", "asc"));
+
+  const unsubscribe = onSnapshot(
+    queryRef,
+    (snapshot) => {
+      const remoteEntries = snapshot.docs.map((docSnapshot) => {
+        const data = docSnapshot.data() || {};
+        return normalizeEventLogEntry(
+          {
+            id: docSnapshot.id,
+            ...data,
+            pending: false,
+          },
+          docSnapshot.id
+        );
+      });
+
+      const pendingEntries = getPendingEventLogEntries(loadEventLogFromStorage(normalizedGameId));
+      const merged = mergeEventLogEntries(pendingEntries, remoteEntries);
+      persistEventLogToStorage(normalizedGameId, merged);
+      emitUpdate(merged);
+      emitReady();
+    },
+    (error) => {
+      console.error(
+        `Failed to subscribe to event log for game "${normalizedGameId}"`,
+        error
+      );
+      emitError(error);
+      emitUpdate(loadEventLogFromStorage(normalizedGameId));
+      emitReady();
+    }
+  );
+
+  return unsubscribe;
+};
+
+const appendEventLogEntry = async (gameId, event = {}) => {
+  const normalizedGameId = normalizeNonEmptyString(gameId);
+  if (!normalizedGameId) {
+    throw new Error("A valid gameId is required to append an event log entry.");
+  }
+
+  const action = normalizeNonEmptyString(event.action);
+  if (!action) {
+    throw new Error("Event action is required.");
+  }
+
+  const timestampCandidate = event.timestamp ?? null;
+  const timestampMillis = toMillis(timestampCandidate);
+  const resolvedTimestamp =
+    timestampMillis != null && Number.isFinite(timestampMillis)
+      ? timestampMillis
+      : typeof event.timestamp === "number" && Number.isFinite(event.timestamp)
+      ? event.timestamp
+      : Date.now();
+
+  const payload = {
+    action,
+    playerId: normalizeNonEmptyString(event.playerId, DEFAULT_EVENT_LOG_ENTRY.playerId),
+    username: normalizeNonEmptyString(event.username, DEFAULT_EVENT_LOG_ENTRY.username),
+    timestamp: resolvedTimestamp,
+  };
+
+  if (!db) {
+    const entry = appendEventLogEntryOffline(normalizedGameId, payload);
+    return { success: false, offline: true, entry };
+  }
+
+  try {
+    const logRef = collection(db, "games", normalizedGameId, EVENT_LOG_COLLECTION);
+    const docRef = await addDoc(logRef, {
+      action: payload.action,
+      playerId: payload.playerId,
+      username: payload.username,
+      timestamp: serverTimestamp(),
+    });
+
+    const entry = normalizeEventLogEntry({
+      ...payload,
+      id: docRef.id,
+      pending: false,
+    });
+    mergeEventLogIntoStorage(normalizedGameId, [entry]);
+
+    return { success: true, offline: false, entry, id: docRef.id };
+  } catch (error) {
+    console.error(`Failed to append event log entry for game "${normalizedGameId}"`, error);
+    const entry = appendEventLogEntryOffline(normalizedGameId, payload);
+    return { success: false, offline: true, entry, error };
+  }
+};
+
 
 const readPromptStateMarker = (gameId) => {
   const storage = getStorage();
@@ -1199,6 +1485,7 @@ const writeSessionSection = async (gameId, section, payload, options = {}) => {
 
 export {
   SAFE_RECONNECTION_STATE,
+  appendEventLogEntry,
   clearStoredSession,
   cloneDefaultSessionState,
   createGame,
@@ -1206,11 +1493,13 @@ export {
   flushPendingSessionWrites,
   getSafeReconnectionState,
   joinGame,
+  loadEventLogFromStorage,
   loadSessionFromStorage,
   normalizeSessionState,
   persistSessionToStorage,
   resetGame,
   queuePendingSessionWrite,
+  subscribeToEventLog,
   subscribeToSession,
   writeSessionSection,
 };
