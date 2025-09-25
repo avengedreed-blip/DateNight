@@ -1,29 +1,71 @@
-import React from "react";
+import React, { memo, useCallback } from 'react';
 
-const TopBar = React.memo(function TopBar({ onOpenSettings = () => {} }) {
+const TopBar = memo(({ onSettingsClick }) => {
+  // Stabilize the handler function passed from the parent component.
+  // This ensures that the function reference is stable across renders.
+  const handleSettingsClick = useCallback(() => {
+    if (onSettingsClick) {
+      onSettingsClick();
+    }
+  }, [onSettingsClick]);
+
   return (
-    <header className="top-bar" role="banner">
-      <div className="top-bar__inner">
-        <h1 className="top-bar__title">Date Night</h1>
-        <button
-          type="button"
-          className="top-bar__action"
-          onClick={onOpenSettings}
-          aria-label="Open settings"
+    // Locked Spec: Slim height, fixed position, uses glass style
+    <header className="fixed top-0 left-0 w-full z-40 h-16 px-4 flex items-center justify-between bg-theme-surface/20 backdrop-blur-md border-b border-white/10">
+      <div className="flex items-center space-x-2">
+        {/* Left side: Logo + Title (Clutter-free center) */}
+        <svg
+          className="h-8 w-8 text-theme-primary" // Uses theme token
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
         >
-          <svg
-            aria-hidden="true"
-            className="top-bar__action-icon"
-            viewBox="0 0 24 24"
-            focusable="false"
-          >
-            <path
-              fill="currentColor"
-              d="M12 8.75a3.25 3.25 0 1 1 0 6.5a3.25 3.25 0 0 1 0-6.5Zm8.4 2.95l1.3 1.5a1 1 0 0 1-.08 1.41l-1.42 1.25c.03.27.05.54.05.81c0 .27-.02.54-.05.81l1.42 1.25a1 1 0 0 1 .08 1.41l-1.3 1.5a1 1 0 0 1-1.34.17l-1.67-.96c-.43.34-.9.63-1.41.85l-.32 1.9a1 1 0 0 1-.98.82h-2.6a1 1 0 0 1-.98-.82l-.32-1.9a6.92 6.92 0 0 1-1.41-.85l-1.67.96a1 1 0 0 1-1.34-.17l-1.3-1.5a1 1 0 0 1 .08-1.41l1.42-1.25c-.03-.27-.05-.54-.05-.81c0-.27.02-.54.05-.81l-1.42-1.25a1 1 0 0 1-.08-1.41l1.3-1.5a1 1 0 0 1 1.34-.17l1.67.96c.43-.34.9-.63 1.41-.85l.32-1.9a1 1 0 0 1 .98-.82h2.6a1 1 0 0 1 .98.82l.32 1.9c.51.22.98.51 1.41.85l1.67-.96a1 1 0 0 1 1.34.17Z"
-            />
-          </svg>
-        </button>
+          {/* Clock Icon Placeholder */}
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+        <h1 className="text-xl font-bold text-theme-text tracking-wide">
+          Date Night
+        </h1>
       </div>
+
+      {/* Right side: Gear/Settings icon */}
+      <button
+        // Use the memoized handler
+        onClick={handleSettingsClick} 
+        aria-label="Settings"
+        data-sound="click"
+        data-haptic="light"
+        // Smooth transition for hover/active, using theme-primary ring
+        className="p-2 rounded-full transition-transform hover:scale-110 active:scale-95 duration-200 focus:outline-none focus:ring-2 focus:ring-theme-primary"
+      >
+        <svg
+          className="h-6 w-6 text-theme-text" // Uses theme token
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden="true"
+        >
+          {/* Gear Icon */}
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.514.939 1.543 1.252 2.573 1.066z"
+          />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+          />
+        </svg>
+      </button>
     </header>
   );
 });
