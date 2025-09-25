@@ -448,9 +448,15 @@ const mergePlayerProfilesByUsername = async (playerId, options = {}) => {
     }
 
     if (!resolvedTheme) {
-      resolvedTheme = sanitizeTheme(entry.data.themeId, entry.data.customTheme);
-      if (resolvedTheme.themeId !== "custom") {
-        resolvedTheme.customTheme = null;
+      const hasThemeId = isNonEmptyString(entry.data.themeId);
+      const hasCustomTheme = typeof entry.data.customTheme === "object" && entry.data.customTheme !== null;
+
+      if (hasThemeId || hasCustomTheme) {
+        const candidateTheme = sanitizeTheme(entry.data.themeId, entry.data.customTheme);
+        if (candidateTheme.themeId !== "custom") {
+          candidateTheme.customTheme = null;
+        }
+        resolvedTheme = candidateTheme;
       }
     }
 
@@ -464,6 +470,10 @@ const mergePlayerProfilesByUsername = async (playerId, options = {}) => {
   });
 
   const mergedPrompts = mergeCustomPrompts(entries);
+
+  if (!resolvedTheme) {
+    resolvedTheme = sanitizeTheme(null, null);
+  }
 
   const mergedProfile = normalizeProfilePayload(
     {
