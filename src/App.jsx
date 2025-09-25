@@ -33,6 +33,7 @@ import {
   buildPromptGroups,
   generatePromptSet,
 } from "./utils/promptGenerator.js";
+import StatsDashboardPlaceholder from "./components/StatsDashboardPlaceholder.jsx";
 
 const STORAGE_KEYS = {
   gameId: "dateNightGameId",
@@ -1658,6 +1659,12 @@ export default function App() {
           <span className="sr-only" aria-live="polite">
             {isSfxActive ? "Sound effects playing" : "Sound effects idle"}
           </span>
+          <StatsDashboardPlaceholder
+            gameId={gameId}
+            mode={mode}
+            playerId={playerId}
+            db={db}
+          />
         </div>
       </main>
 
