@@ -43,8 +43,6 @@ function flattenPrompts(group) {
   }, []);
 }
 
-const sliceSize = 360 / categories.length;
-const POINTER_OFFSET = sliceSize / 2; // keep pointer centered on the active slice
 const SPIN_TURNS = 4; // full rotations before easing out
 const SPIN_DURATION = 3800; // ms
 const SPIN_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
@@ -86,18 +84,40 @@ const Label = React.memo(function Label({ label, wrapperStyle, textStyle }) {
   );
 });
 
-function Wheel() {
+function Wheel({ extremeOnly = false }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedPrompt, setSelectedPrompt] = useState("");
   const [isSpinning, setIsSpinning] = useState(false);
   const [currentRotation, setCurrentRotation] = useState(0);
   const spinTimeoutRef = useRef(null);
 
+  const availableCategories = useMemo(() => {
+    if (!extremeOnly) {
+      return categories;
+    }
+
+    return categories.filter((category) => category.key !== "triviaQuestions");
+  }, [extremeOnly]);
+
+  const visibleSliceCount = availableCategories.length;
+
+  const sliceAngle = useMemo(() => {
+    if (visibleSliceCount === 0) {
+      return 0;
+    }
+
+    return 360 / visibleSliceCount;
+  }, [visibleSliceCount]);
+
   const wheelGradient = useMemo(() => {
-    const stops = categories
+    if (!sliceAngle) {
+      return "transparent";
+    }
+
+    const stops = availableCategories
       .map((category, index) => {
-        const start = index * sliceSize;
-        const end = (index + 1) * sliceSize;
+        const start = index * sliceAngle;
+        const end = (index + 1) * sliceAngle;
         const color =
           selectedCategory === category.key
             ? category.highlightColor
@@ -108,32 +128,35 @@ function Wheel() {
       .join(", ");
 
     return `conic-gradient(${stops})`;
-  }, [selectedCategory]);
+  }, [availableCategories, sliceAngle, selectedCategory]);
 
   const labelConfigs = useMemo(() => {
-    return categories.map((category, index) => {
-      const angle = index * sliceSize + sliceSize / 2;
+    if (!sliceAngle) {
+      return [];
+    }
+
+    return availableCategories.map((category, index) => {
+      const rotation = index * sliceAngle + sliceAngle / 2;
       const isActive = selectedCategory === category.key;
       const sliceColor = isActive ? category.highlightColor : category.baseColor;
-      const shouldShowShadow = relativeLuminance(sliceColor) < 0.5 && !isActive;
+      const shouldShowShadow = relativeLuminance(sliceColor) < 0.5;
 
       return {
         key: category.key,
         label: category.label,
         wrapperStyle: {
-          transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(calc(-1 * var(--label-radius)))`,
-          "--label-color": isActive ? "#1f2933" : category.textColor,
-          "--label-text-shadow": shouldShowShadow
-            ? "0 1px 2px rgba(0,0,0,.35)"
-            : "none",
-          "--label-background": isActive ? "rgba(255, 255, 255, 0.82)" : "transparent",
-          "--label-box-shadow": isActive ? "0 6px 20px rgba(17, 24, 39, 0.18)" : "none",
-          "--label-text-rotation": `${-angle}deg`,
+          transform: `translate(-50%, -50%) rotate(${rotation}deg) translateY(calc(-1 * var(--labelRadius)))`,
+          "--label-color": isActive
+            ? "#1f2933"
+            : category.textColor || undefined,
         },
-        textStyle: undefined,
+        textStyle: {
+          transform: `rotate(${-rotation}deg)`,
+          textShadow: shouldShowShadow ? "0 1px 2px rgba(0,0,0,.35)" : "none",
+        },
       };
     });
-  }, [selectedCategory]);
+  }, [availableCategories, selectedCategory, sliceAngle]);
 
   useEffect(() => {
     return () => {
@@ -143,16 +166,28 @@ function Wheel() {
     };
   }, []);
 
+  useEffect(() => {
+    if (
+      selectedCategory &&
+      !availableCategories.some((category) => category.key === selectedCategory)
+    ) {
+      setSelectedCategory(null);
+    }
+  }, [availableCategories, selectedCategory]);
+
   const handleSpin = useCallback(() => {
-    if (isSpinning) {
+    if (isSpinning || visibleSliceCount === 0 || !sliceAngle) {
       return;
     }
 
     setIsSpinning(true);
     setSelectedCategory(null);
+    setSelectedPrompt("");
 
     const randomAngle = Math.random() * 360;
     let nextRotationValue = 0;
+    const anglePerSlice = sliceAngle;
+    const categorySnapshot = availableCategories;
 
     setCurrentRotation((previousRotation) => {
       nextRotationValue = previousRotation + SPIN_TURNS * 360 + randomAngle;
@@ -165,8 +200,8 @@ function Wheel() {
 
     spinTimeoutRef.current = setTimeout(() => {
       const finalAngle = ((nextRotationValue % 360) + 360) % 360;
-      const sliceIndex = Math.floor(finalAngle / sliceSize) % categories.length;
-      const activeCategory = categories[sliceIndex];
+      const sliceIndex = Math.floor(finalAngle / anglePerSlice) % categorySnapshot.length;
+      const activeCategory = categorySnapshot[sliceIndex];
       const prompts = flattenPrompts(defaultPrompts[activeCategory.key]);
 
       if (!prompts.length) {
@@ -181,7 +216,7 @@ function Wheel() {
       setSelectedCategory(activeCategory.key);
       setIsSpinning(false);
     }, SPIN_DURATION);
-  }, [isSpinning]);
+  }, [availableCategories, isSpinning, sliceAngle, visibleSliceCount]);
 
   return (
     <section
@@ -199,7 +234,7 @@ function Wheel() {
           className="wheel__disc"
           style={{
             background: wheelGradient,
-            transform: `rotate(${currentRotation - POINTER_OFFSET}deg)`,
+            transform: `rotate(${currentRotation}deg)`,
             transition: isSpinning
               ? `transform ${SPIN_DURATION}ms ${SPIN_EASING}`
               : undefined,
