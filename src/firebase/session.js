@@ -86,7 +86,9 @@ const persistAnalyticsSummary = async (gameId) => {
       source: "endGame",
     };
 
-    await setDoc(doc(db, "games", gameId, "summary"), summaryPayload, { merge: true });
+    await setDoc(doc(db, "games", gameId, "summary", "current"), summaryPayload, {
+      merge: true,
+    });
 
     return { success: true, summary: summaryPayload };
   } catch (error) {
