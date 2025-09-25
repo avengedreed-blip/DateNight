@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { defaultPrompts } from "../config/prompts";
+import "./Wheel.css";
 
 const categories = [
   {
@@ -108,32 +109,31 @@ function Wheel() {
         {categories.map((category, index) => {
           const angle = index * sliceSize + sliceSize / 2;
           const isActive = selectedCategory === category.key;
+          const labelOffset = 104;
 
           return (
             <div
               key={category.key}
+              className="wheel__label"
               style={{
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                transform: `rotate(${angle}deg) translate(0, -42%)`,
-                transformOrigin: "center top",
-                textAlign: "center",
+                transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(-${labelOffset}px)`,
                 width: "50%",
+                maxWidth: "9rem",
+                "--label-color": isActive
+                  ? "#1f2933"
+                  : category.textColor,
               }}
             >
               <span
+                className="wheel__label-text"
                 style={{
-                  display: "inline-block",
                   transform: `rotate(-${angle}deg)`,
-                  fontWeight: 600,
-                  color: isActive ? "#1f2933" : category.textColor,
                   backgroundColor: isActive
                     ? "rgba(255, 255, 255, 0.7)"
                     : "transparent",
-                  padding: "0.15rem 0.35rem",
-                  borderRadius: "9999px",
-                  transition: "background-color 0.2s ease",
+                  boxShadow: isActive
+                    ? "0 6px 20px rgba(17, 24, 39, 0.18)"
+                    : "none",
                 }}
               >
                 {category.label}
