@@ -68,13 +68,13 @@ Local storage fallback.
 PWA support (installable on iOS/Android).
 Future: Capacitor/Expo for standalone app.
 ============================================================ 10. WORKFLOW RULES
-Branch: always "new_main". Never create new branches.
+Branch: always "main". Never create new branches.
 No git markers, placeholders, or invalid code.
 After every edit:
 Test in CodeSandbox.
 Verify: wheel spins w/ sounds, labels centered, modals open w/ synced sounds, particles fire, meter pulses, multiplayer sync intact, analytics update, themes/music transitions.
 Provide screenshot proof after each working update.
-Stage, commit, and push directly to "new_main". Repo must remain clean and production-ready.
+Stage, commit, and push directly to "main". Repo must remain clean and production-ready.
 ============================================================ 11. SAFEGUARD CLAUSE
 Never remove or disable these features:
 
