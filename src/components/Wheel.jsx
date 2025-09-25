@@ -84,12 +84,17 @@ const Label = React.memo(function Label({ label, wrapperStyle, textStyle }) {
   );
 });
 
+const Pointer = React.memo(function Pointer() {
+  return <div className="wheel__pointer" aria-hidden="true" />;
+});
+
 function Wheel({ extremeOnly = false }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedPrompt, setSelectedPrompt] = useState("");
   const [isSpinning, setIsSpinning] = useState(false);
   const [currentRotation, setCurrentRotation] = useState(0);
   const spinTimeoutRef = useRef(null);
+  const rotationRef = useRef(0);
 
   const availableCategories = useMemo(() => {
     if (!extremeOnly) {
@@ -145,13 +150,13 @@ function Wheel({ extremeOnly = false }) {
         key: category.key,
         label: category.label,
         wrapperStyle: {
-          transform: `translate(-50%, -50%) rotate(${rotation}deg) translateY(calc(-1 * var(--labelRadius)))`,
+          transform: `translate(-50%, -50%) rotate(${rotation}deg) translateY(calc(-1 * var(--labelRadius, 60%)))`,
           "--label-color": isActive
             ? "#1f2933"
             : category.textColor || undefined,
         },
         textStyle: {
-          transform: `rotate(${-rotation}deg)`,
+          "--label-text-rotation": `${rotation}deg`,
           textShadow: shouldShowShadow ? "0 1px 2px rgba(0,0,0,.35)" : "none",
         },
       };
@@ -185,21 +190,22 @@ function Wheel({ extremeOnly = false }) {
     setSelectedPrompt("");
 
     const randomAngle = Math.random() * 360;
-    let nextRotationValue = 0;
     const anglePerSlice = sliceAngle;
     const categorySnapshot = availableCategories;
-
-    setCurrentRotation((previousRotation) => {
-      nextRotationValue = previousRotation + SPIN_TURNS * 360 + randomAngle;
-      return nextRotationValue;
-    });
+    const baseRotation = rotationRef.current;
+    const targetRotation = baseRotation + SPIN_TURNS * 360 + randomAngle;
 
     if (spinTimeoutRef.current) {
       clearTimeout(spinTimeoutRef.current);
     }
 
+    requestAnimationFrame(() => {
+      rotationRef.current = targetRotation;
+      setCurrentRotation(targetRotation);
+    });
+
     spinTimeoutRef.current = setTimeout(() => {
-      const finalAngle = ((nextRotationValue % 360) + 360) % 360;
+      const finalAngle = ((targetRotation % 360) + 360) % 360;
       const sliceIndex = Math.floor(finalAngle / anglePerSlice) % categorySnapshot.length;
       const activeCategory = categorySnapshot[sliceIndex];
       const prompts = flattenPrompts(defaultPrompts[activeCategory.key]);
@@ -218,18 +224,19 @@ function Wheel({ extremeOnly = false }) {
     }, SPIN_DURATION);
   }, [availableCategories, isSpinning, sliceAngle, visibleSliceCount]);
 
+  useEffect(() => {
+    rotationRef.current = currentRotation;
+  }, [currentRotation]);
+
+  useEffect(() => {
+    setSelectedCategory(null);
+    setSelectedPrompt("");
+  }, [extremeOnly]);
+
   return (
-    <section
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: "1.5rem",
-        padding: "2rem 1rem",
-      }}
-    >
+    <section className="wheel-module" aria-label="Prompt wheel module">
       <div className="wheel" aria-label="Prompt category wheel">
-        <div className="wheel__pointer" aria-hidden="true" />
+        <Pointer />
         <div
           className="wheel__disc"
           style={{
@@ -241,54 +248,37 @@ function Wheel({ extremeOnly = false }) {
             willChange: isSpinning ? "transform" : undefined,
           }}
         >
-        {labelConfigs.map(({ key, label, wrapperStyle, textStyle }) => (
-          <Label
-            key={key}
-            label={label}
-            wrapperStyle={wrapperStyle}
-            textStyle={textStyle}
-          />
-        ))}
-        <div
-          style={{
-            width: "52px",
-            height: "52px",
-            borderRadius: "50%",
-            backgroundColor: "#ffffff",
-            border: "3px solid #1f2933",
-            position: "absolute",
-          }}
-        />
+          {labelConfigs.map(({ key, label, wrapperStyle, textStyle }) => (
+            <Label
+              key={key}
+              label={label}
+              wrapperStyle={wrapperStyle}
+              textStyle={textStyle}
+            />
+          ))}
+          <div className="wheel__hub" />
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={handleSpin}
-        style={{
-          padding: "0.6rem 1.6rem",
-          borderRadius: "9999px",
-          border: "none",
-          backgroundColor: "#1f2933",
-          color: "#ffffff",
-          fontWeight: 600,
-          letterSpacing: "0.05em",
-          cursor: isSpinning ? "wait" : "pointer",
-          opacity: isSpinning ? 0.7 : 1,
-        }}
-        disabled={isSpinning}
-      >
-        Spin
-      </button>
-
-      <div style={{ maxWidth: "360px", textAlign: "center" }}>
-        {selectedPrompt ? (
-          <p style={{ lineHeight: 1.5 }}>{selectedPrompt}</p>
-        ) : (
-          <p style={{ color: "#6b7280" }}>
-            Give the wheel a spin to get your first prompt.
-          </p>
-        )}
+      <div className="wheel__actions">
+        <button
+          type="button"
+          className="wheel__spin-button"
+          onClick={handleSpin}
+          disabled={isSpinning}
+        >
+          {isSpinning ? "Spinning…" : "Spin"}
+        </button>
+        <p className="wheel__mode" aria-live="polite">
+          Mode: {extremeOnly ? "Extreme (Truth & Dare)" : "Classic (Truth, Dare, Trivia)"}
+        </p>
+        <div className="wheel__prompt" aria-live="polite">
+          {selectedPrompt ? (
+            <p>{selectedPrompt}</p>
+          ) : (
+            <p>Give the wheel a spin to get your first prompt.</p>
+          )}
+        </div>
       </div>
     </section>
   );
