@@ -1,300 +1,96 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { defaultPrompts } from "../config/prompts";
-import "./Wheel.css";
+import React, { memo, useCallback, useMemo } from 'react';
+import './Wheel.css';
 
-const categories = [
-  {
-    key: "truthPrompts",
-    label: "Truth",
-    colorVar: "--truth",
-  },
-  {
-    key: "darePrompts",
-    label: "Dare",
-    colorVar: "--dare",
-  },
-  {
-    key: "triviaQuestions",
-    label: "Trivia",
-    colorVar: "--trivia",
-  },
-];
+// Helper function to calculate luminance... (Luminance function remains unchanged)
+const getLuminance = (hex) => {
+  if (!hex || hex.length < 7) return 1;
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const a = [r, g, b].map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+  return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+};
 
-function flattenPrompts(group) {
-  if (!group) {
-    return [];
+const Wheel = memo(({ slices = [] }) => {
+  if (!Array.isArray(slices) || slices.length === 0) {
+    console.error("The 'slices' prop is not a valid array, or is empty.");
+    return null;
   }
+  
+  const totalSlices = slices.length;
+  const sliceAngle = 360 / totalSlices;
+  
+  const wheelStyle = useMemo(() => {
+    let gradient = 'conic-gradient(';
+    slices.forEach((slice, index) => {
+      const color = slice.color; 
+      const start = (100 / totalSlices) * index;
+      const end = start + (100 / totalSlices);
+      gradient += `${color} ${start}% ${end}%${index < totalSlices - 1 ? ', ' : ''}`;
+    });
+    gradient += ')';
+    
+    const gloss = `radial-gradient(120% 120% at 35% 25%, rgba(255,255,255,.10), rgba(0,0,0,.20) 70%)`;
+    
+    return {
+      backgroundImage: `${gradient}, ${gloss}`,
+      willChange: 'transform',
+    };
+  }, [slices, totalSlices]);
+  
+  const getLabelTransform = useCallback((index) => {
+    const bisectorAngle = (index * sliceAngle) + (sliceAngle / 2);
+    return {
+      transform: `rotate(${bisectorAngle}deg) translateY(calc(-1 * var(--labelRadius))) rotate(${-bisectorAngle}deg)`,
+    };
+  }, [sliceAngle]);
 
-  if (Array.isArray(group)) {
-    return group;
-  }
-
-  return Object.values(group).reduce((acc, value) => {
-    if (Array.isArray(value)) {
-      acc.push(...value);
-    }
-    return acc;
-  }, []);
-}
-
-const SPIN_TURNS = 4;
-const SPIN_DURATION = 3800;
-const SPIN_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
-
-const Label = React.memo(function Label({ label, wrapperStyle, textStyle, sliceKey, isActive }) {
   return (
-    <div className="wheel__label" style={wrapperStyle} data-slice={sliceKey} data-active={isActive ? "true" : undefined}>
-      <span className="wheel__label-text" style={textStyle}>
-        {label}
-      </span>
+    <div className="wheel-container relative flex items-center justify-center">
+      {/* Pointer uses CSS variable for ring color */}
+      <div 
+        className="wheel-pointer absolute top-0 left-1/2 -translate-x-1/2 z-50"
+        style={{ borderBottomColor: 'var(--ring-color, #fff)' }} 
+      ></div>
+
+      <div 
+        className="wheel relative w-full h-full rounded-full overflow-hidden"
+        style={wheelStyle}
+      >
+        {slices.map((slice, index) => {
+          const isDark = getLuminance(slice.rawColor) < 0.5;
+          
+          return (
+            <div
+              key={index}
+              className="absolute inset-0 flex justify-center items-center text-white text-center"
+            >
+              <div
+                className="wheel-label w-1/2 whitespace-normal"
+                style={getLabelTransform(index)}
+              >
+                <p 
+                  className={`wheel-label-text font-semibold ${isDark ? 'has-shadow' : ''}`}
+                >
+                  {slice.label}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+        
+        {/* Render Separators */}
+        {slices.map((_, index) => (
+          <div
+            key={`separator-${index}`}
+            className="wheel-separator"
+            style={{ transform: `rotate(${index * sliceAngle}deg)` }}
+          />
+        ))}
+
+      </div>
     </div>
   );
 });
-
-const Pointer = React.memo(function Pointer() {
-  return <div className="wheel__pointer" aria-hidden="true" />;
-});
-
-const SeparatorOverlay = React.memo(function SeparatorOverlay({ count }) {
-  const lines = useMemo(() => {
-    if (!count || count < 2) {
-      return [];
-    }
-
-    const radius = 47;
-
-    return Array.from({ length: count }, (_, index) => {
-      const angle = (index * 360) / count;
-      const radians = ((angle - 90) * Math.PI) / 180;
-      const x = 50 + radius * Math.cos(radians);
-      const y = 50 + radius * Math.sin(radians);
-
-      return {
-        key: angle,
-        x: Number(x.toFixed(3)),
-        y: Number(y.toFixed(3)),
-      };
-    });
-  }, [count]);
-
-  if (lines.length === 0) {
-    return null;
-  }
-
-  return (
-    <svg className="wheel__separators" viewBox="0 0 100 100" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
-      {lines.map(({ key, x, y }) => (
-        <line key={key} x1="50" y1="50" x2={x} y2={y} />
-      ))}
-    </svg>
-  );
-});
-
-const POINTER_APEX_OFFSET = 0;
-
-function Wheel({ extremeOnly = false }) {
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [selectedPrompt, setSelectedPrompt] = useState("");
-  const [isSpinning, setIsSpinning] = useState(false);
-  const [currentRotation, setCurrentRotation] = useState(0);
-  const spinTimeoutRef = useRef(null);
-  const rotationRef = useRef(0);
-
-  const availableCategories = useMemo(() => {
-    if (!extremeOnly) {
-      return categories;
-    }
-
-    return categories.filter((category) => category.key !== "triviaQuestions");
-  }, [extremeOnly]);
-
-  const visibleSliceCount = availableCategories.length;
-
-  const sliceAngle = useMemo(() => {
-    if (visibleSliceCount === 0) {
-      return 0;
-    }
-
-    return 360 / visibleSliceCount;
-  }, [visibleSliceCount]);
-
-  const wheelGradient = useMemo(() => {
-    if (!sliceAngle || visibleSliceCount === 0) {
-      return "transparent";
-    }
-
-    const stops = availableCategories
-      .map((category, index) => {
-        const start = index * sliceAngle;
-        const end = (index + 1) * sliceAngle;
-        const baseColor = `var(${category.colorVar})`;
-        const color =
-          selectedCategory === category.key
-            ? `color-mix(in srgb, ${baseColor} 72%, white 28%)`
-            : baseColor;
-
-        return `${color} ${start}deg ${end}deg`;
-      })
-      .join(", ");
-
-    return `conic-gradient(${stops})`;
-  }, [availableCategories, selectedCategory, sliceAngle, visibleSliceCount]);
-
-  const labelConfigs = useMemo(() => {
-    if (!sliceAngle) {
-      return [];
-    }
-
-    return availableCategories.map((category, index) => {
-      const rotation = index * sliceAngle + sliceAngle / 2;
-      const isActive = selectedCategory === category.key;
-
-      return {
-        key: category.key,
-        label: category.label,
-        sliceKey: category.key,
-        isActive,
-        wrapperStyle: {
-          transform: `translate(-50%, -50%) rotate(${rotation}deg) translateY(calc(-1 * var(--labelRadius)))`,
-        },
-        textStyle: {
-          transform: `rotate(${-rotation}deg)`,
-        },
-      };
-    });
-  }, [availableCategories, selectedCategory, sliceAngle]);
-
-  useEffect(() => {
-    return () => {
-      if (spinTimeoutRef.current) {
-        clearTimeout(spinTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (
-      selectedCategory &&
-      !availableCategories.some((category) => category.key === selectedCategory)
-    ) {
-      setSelectedCategory(null);
-    }
-  }, [availableCategories, selectedCategory]);
-
-  const handleSpin = useCallback(() => {
-    if (isSpinning || visibleSliceCount === 0 || !sliceAngle) {
-      return;
-    }
-
-    setIsSpinning(true);
-    setSelectedCategory(null);
-    setSelectedPrompt("");
-
-    const randomAngle = Math.random() * 360;
-    const anglePerSlice = sliceAngle;
-    const categorySnapshot = availableCategories;
-    const baseRotation = rotationRef.current;
-    const targetRotation = baseRotation + SPIN_TURNS * 360 + randomAngle;
-
-    if (spinTimeoutRef.current) {
-      clearTimeout(spinTimeoutRef.current);
-    }
-
-    requestAnimationFrame(() => {
-      rotationRef.current = targetRotation;
-      setCurrentRotation(targetRotation);
-    });
-
-    spinTimeoutRef.current = setTimeout(() => {
-      const normalizedRotation = ((targetRotation % 360) + 360) % 360;
-      const pointerAngle = (360 - normalizedRotation + POINTER_APEX_OFFSET + 360) % 360;
-      const sliceIndex = Math.floor(pointerAngle / anglePerSlice) % categorySnapshot.length;
-      const activeCategory = categorySnapshot[sliceIndex];
-      const prompts = flattenPrompts(defaultPrompts[activeCategory.key]);
-
-      if (!prompts.length) {
-        setSelectedPrompt("No prompts found for this category.");
-        setSelectedCategory(activeCategory.key);
-        setIsSpinning(false);
-        return;
-      }
-
-      const prompt = prompts[Math.floor(Math.random() * prompts.length)];
-      setSelectedPrompt(prompt);
-      setSelectedCategory(activeCategory.key);
-      setIsSpinning(false);
-    }, SPIN_DURATION);
-  }, [availableCategories, isSpinning, sliceAngle, visibleSliceCount]);
-
-  useEffect(() => {
-    rotationRef.current = currentRotation;
-  }, [currentRotation]);
-
-  useEffect(() => {
-    setSelectedCategory(null);
-    setSelectedPrompt("");
-  }, [extremeOnly]);
-
-  const discStyle = useMemo(() => {
-    const baseStyle = {
-      "--wheel-slices": wheelGradient,
-      transform: `rotate(${currentRotation}deg)`,
-    };
-
-    if (isSpinning) {
-      baseStyle.transition = `transform ${SPIN_DURATION}ms ${SPIN_EASING}`;
-      baseStyle.willChange = "transform";
-    }
-
-    return baseStyle;
-  }, [currentRotation, isSpinning, wheelGradient]);
-
-  return (
-    <section className="wheel-module" aria-label="Prompt wheel module">
-      <div className="wheel" aria-label="Prompt category wheel">
-        <Pointer />
-        <div
-          className="wheel__disc"
-          style={discStyle}
-          data-slice-count={visibleSliceCount || undefined}
-        >
-          <SeparatorOverlay count={visibleSliceCount} />
-          {labelConfigs.map(({ key, label, wrapperStyle, textStyle, sliceKey, isActive }) => (
-            <Label
-              key={key}
-              label={label}
-              wrapperStyle={wrapperStyle}
-              textStyle={textStyle}
-              sliceKey={sliceKey}
-              isActive={isActive}
-            />
-          ))}
-          <div className="wheel__hub" />
-        </div>
-      </div>
-
-      <div className="wheel__actions">
-        <button
-          type="button"
-          className="wheel__spin-button"
-          onClick={handleSpin}
-          disabled={isSpinning}
-        >
-          {isSpinning ? "Spinning…" : "Spin"}
-        </button>
-        <p className="wheel__mode" aria-live="polite">
-          Mode: {extremeOnly ? "Extreme (Truth & Dare)" : "Classic (Truth, Dare, Trivia)"}
-        </p>
-        <div className="wheel__prompt" aria-live="polite">
-          {selectedPrompt ? (
-            <p>{selectedPrompt}</p>
-          ) : (
-            <p>Give the wheel a spin to get your first prompt.</p>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 export default Wheel;
