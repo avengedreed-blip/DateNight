@@ -9,20 +9,18 @@ import React, {
 import AnnouncementModal from "./components/modals/AnnouncementModal.jsx";
 import ConsequenceModal from "./components/modals/ConsequenceModal.jsx";
 import EditorModal from "./components/modals/EditorModal.jsx";
-import Modal from "./components/modals/Modal.jsx";
 import PromptModal from "./components/modals/PromptModal.jsx";
+import SettingsModal from "./components/modals/SettingsModal.jsx";
 import Wheel from "./components/Wheel.jsx";
 import LoadingScreen from "./components/screens/LoadingScreen.jsx";
 import StartScreen from "./components/screens/StartScreen.jsx";
 import {
-  MusicIcon,
-  PencilIcon,
   SettingsIcon,
-  SoundIcon,
   SparklesIcon,
   FlameIcon,
 } from "./components/icons/Icons.jsx";
 import { useBackgroundMusic } from "./hooks/useBackgroundMusic.js";
+import { useAnalytics } from "./hooks/useAnalytics.js";
 import { usePersistentState } from "./hooks/usePersistentState.js";
 import { usePrompts } from "./hooks/usePrompts.js";
 import { useSound } from "./hooks/useSound.js";
@@ -42,7 +40,10 @@ const STORAGE_KEYS = {
   extremeMeter: "dateNightExtremeMeter",
   generatedPrompts: "dateNightGeneratedPrompts",
   mode: "dateNightMode",
+  debugAnalytics: "dateNightDebugAnalyticsEnabled",
 };
+
+const PLAYER_STORAGE_KEY = "dateNightPlayerId";
 
 const EXTREME_ROUND_CHANCE = 0.2;
 const MAX_RECENT_PROMPTS = 25;
@@ -123,6 +124,26 @@ const confettiBurst = () => {
   frame();
 };
 
+const getOrCreatePlayerId = () => {
+  if (typeof window === "undefined") {
+    return "local-player";
+  }
+
+  try {
+    const stored = window.localStorage?.getItem(PLAYER_STORAGE_KEY);
+    if (stored) {
+      return stored;
+    }
+
+    const generated = `P-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    window.localStorage?.setItem(PLAYER_STORAGE_KEY, generated);
+    return generated;
+  } catch (error) {
+    console.warn("Failed to create persistent player id", error);
+    return `P-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  }
+};
+
 const createRandomGameId = () =>
   Math.random().toString(36).slice(2, 8).toUpperCase();
 
@@ -139,6 +160,7 @@ const parseInteger = (value, fallback) => {
 export default function App() {
   const [toneReady, setToneReady] = useState(false);
   const [inputGameId, setInputGameId] = useState("");
+  const [playerId] = useState(getOrCreatePlayerId);
   const [mode, setMode] = useState(() => {
     if (typeof window === "undefined") {
       return null;
@@ -194,6 +216,21 @@ export default function App() {
       },
     }
   );
+  const [debugAnalyticsEnabled, setDebugAnalyticsEnabled] = usePersistentState(
+    STORAGE_KEYS.debugAnalytics,
+    false,
+    {
+      serialize: (value) => JSON.stringify(Boolean(value)),
+      deserialize: (value) => {
+        try {
+          return JSON.parse(value);
+        } catch (error) {
+          console.warn("Failed to restore debug analytics preference", error);
+          return false;
+        }
+      },
+    }
+  );
   const [roundTimer, setRoundTimer] = useState(30);
   const [timerActive, setTimerActive] = useState(false);
   const regenerateGeneratedPrompts = useCallback(() => {
@@ -207,6 +244,7 @@ export default function App() {
   const meterForcedExtremeRef = useRef(false);
   const timerRef = useRef(null);
   const timerExpiredRef = useRef(false);
+  const timerStopReasonRef = useRef(null);
   const swipeStateRef = useRef({
     active: false,
     pointerId: null,
@@ -219,6 +257,7 @@ export default function App() {
     peakVelocity: 0,
   });
   const remoteModeRef = useRef(null);
+  const previousModalRef = useRef(null);
 
   const [gameId, setGameId] = usePersistentState(STORAGE_KEYS.gameId, null, {
     serialize: (value) => value ?? "",
@@ -272,6 +311,15 @@ export default function App() {
       },
     }
   );
+
+  const {
+    events: analyticsEvents,
+    trackEvent: logAnalyticsEvent,
+    trackSpin: logSpinEvent,
+    trackOutcome: logOutcomeEvent,
+    trackTimer: logTimerEvent,
+    trackExtremeMeter: logExtremeMeterEvent,
+  } = useAnalytics(gameId, { mode, playerId });
 
   const {
     prompts,
@@ -637,16 +685,49 @@ export default function App() {
   }, [pendingExtremeSpin]);
 
   useEffect(() => {
+    const previous = previousModalRef.current;
+
     if (activeModal === "prompt") {
       setRoundTimer(30);
       timerExpiredRef.current = false;
       setTimerActive(true);
-      return;
+      if (previous !== "prompt") {
+        logTimerEvent({
+          state: "start",
+          duration: 30,
+          promptType: currentPrompt.type,
+          intensity: currentPrompt.intensity,
+          round: roundCount,
+        });
+      }
+    } else {
+      if (previous === "prompt") {
+        const pendingReason = timerStopReasonRef.current;
+        timerStopReasonRef.current = null;
+        if (pendingReason !== "skip") {
+          logTimerEvent({
+            state: "stop",
+            reason: pendingReason ?? "modal-closed",
+            remaining: roundTimer,
+            promptType: currentPrompt.type,
+            intensity: currentPrompt.intensity,
+          });
+        }
+      }
+      stopRoundTimer();
+      setRoundTimer(30);
     }
 
-    stopRoundTimer();
-    setRoundTimer(30);
-  }, [activeModal, stopRoundTimer]);
+    previousModalRef.current = activeModal;
+  }, [
+    activeModal,
+    currentPrompt.intensity,
+    currentPrompt.type,
+    logTimerEvent,
+    roundCount,
+    roundTimer,
+    stopRoundTimer,
+  ]);
 
   useEffect(() => {
     if (!timerActive) {
@@ -685,6 +766,12 @@ export default function App() {
           }
           timerExpiredRef.current = true;
           setTimerActive(false);
+          logTimerEvent({
+            state: "timeout",
+            promptType: currentPrompt.type,
+            intensity: currentPrompt.intensity,
+            round: roundCount,
+          });
           return 0;
         }
 
@@ -698,12 +785,20 @@ export default function App() {
         timerRef.current = null;
       }
     };
-  }, [play, timerActive, triggerTimerVibration]);
+  }, [
+    currentPrompt.intensity,
+    currentPrompt.type,
+    logTimerEvent,
+    play,
+    roundCount,
+    timerActive,
+    triggerTimerVibration,
+  ]);
 
   useEffect(() => {
     if (!timerActive && activeModal === "prompt" && timerExpiredRef.current) {
       timerExpiredRef.current = false;
-      handleRefuse();
+      handleRefuse("timeout");
     }
   }, [activeModal, handleRefuse, timerActive]);
 
@@ -756,6 +851,12 @@ export default function App() {
         : flags.isSpicy
         ? "spicy"
         : "normal";
+      const nextRoundNumber = roundCount + 1;
+      const extremeTrigger = flags.isExtreme
+        ? meterForcedExtremeRef.current
+          ? "meter"
+          : "random"
+        : null;
 
       setCurrentPrompt({
         title: segment.title,
@@ -777,21 +878,44 @@ export default function App() {
       );
       setIsExtremeRound(flags.isExtreme);
       setRoundCount((value) => value + 1);
+
+      logAnalyticsEvent("roundStart", {
+        round: nextRoundNumber,
+        segmentId: segment.id,
+        outcomeKey,
+        intensity,
+        isExtremeRound: flags.isExtreme,
+        isSpicyRound: flags.isSpicy,
+      });
+
       if (flags.isExtreme) {
+        logAnalyticsEvent("extremeRound", {
+          round: nextRoundNumber,
+          segmentId: segment.id,
+          trigger: extremeTrigger,
+        });
         if (meterForcedExtremeRef.current) {
           meterForcedExtremeRef.current = false;
         }
       } else {
-        setExtremeMeter((previous) => {
-          const next = Math.min(100, previous + 20);
-          console.log("Extreme meter:", next);
-          return next;
+        const nextMeter = Math.min(100, extremeMeter + 20);
+        console.log("Extreme meter:", nextMeter);
+        setExtremeMeter(nextMeter);
+        logExtremeMeterEvent({
+          action: "increment",
+          value: nextMeter,
+          delta: nextMeter - extremeMeter,
+          round: nextRoundNumber,
         });
       }
     },
     [
       choosePrompt,
+      extremeMeter,
+      logAnalyticsEvent,
+      logExtremeMeterEvent,
       recordPromptHistory,
+      roundCount,
       setExtremeMeter,
       setRoundCount,
       triggerHapticFeedback,
@@ -877,6 +1001,16 @@ export default function App() {
         selectedIndex,
         outcome,
       };
+      logSpinEvent({
+        round: roundCount + 1,
+        forceExtreme,
+        selectedIndex,
+        segmentId: selectedSegment?.id ?? null,
+        swipeStrength: normalizedStrength,
+        outcomeKey: outcome.outcomeKey,
+        isExtreme: outcome.isExtreme,
+        isSpicy: outcome.isSpicy,
+      });
       const randomOffset = (Math.random() - 0.5) * sliceAngle * 0.6;
       const targetAngle =
         -(selectedIndex * sliceAngle + sliceAngle / 2) + randomOffset;
@@ -913,6 +1047,8 @@ export default function App() {
     [
       determineOutcome,
       finalizeSpin,
+      logSpinEvent,
+      roundCount,
       setSpinDuration,
       startSoundLoop,
       stopSoundLoop,
@@ -927,9 +1063,15 @@ export default function App() {
 
     if (extremeMeter >= 100) {
       meterForcedExtremeRef.current = true;
-      setExtremeMeter(() => {
-        console.log("Extreme meter:", 0);
-        return 0;
+      const previousMeter = extremeMeter;
+      const nextMeterValue = 0;
+      console.log("Extreme meter:", nextMeterValue);
+      setExtremeMeter(nextMeterValue);
+      logExtremeMeterEvent({
+        action: "reset",
+        reason: "meter-trigger",
+        previous: previousMeter,
+        value: nextMeterValue,
       });
       startSpin(true);
       return;
@@ -938,13 +1080,26 @@ export default function App() {
     const isExtreme = Math.random() < EXTREME_ROUND_CHANCE;
 
     if (isExtreme) {
+      logAnalyticsEvent("extremeRound", {
+        round: roundCount + 1,
+        trigger: "random",
+        status: "announcement",
+      });
       setPendingExtremeSpin(true);
       setActiveModal("announcement");
       return;
     }
 
     startSpin(false);
-  }, [extremeMeter, isSpinning, setExtremeMeter, startSpin]);
+  }, [
+    extremeMeter,
+    isSpinning,
+    logAnalyticsEvent,
+    logExtremeMeterEvent,
+    roundCount,
+    setExtremeMeter,
+    startSpin,
+  ]);
 
   const resetSwipeState = useCallback(() => {
     swipeStateRef.current = {
@@ -1071,32 +1226,59 @@ export default function App() {
     }
   }, [pendingExtremeSpin, startSpin]);
 
-  const handleRefuse = useCallback(() => {
-    stopRoundTimer();
-    const levels = ["normal", "spicy", "extreme"];
-    const selection = pickRandom(levels);
+  const handleRefuse = useCallback(
+    (reason = "refused") => {
+      stopRoundTimer();
+      const levels = ["normal", "spicy", "extreme"];
+      const selection = pickRandom(levels);
 
-    const keyMap = {
-      normal: "consequenceNormal",
-      spicy: "consequenceSpicy",
-      extreme: "consequenceExtreme",
-    };
-    const pool = promptGroups[keyMap[selection]] ?? [];
-    const consequence = pool.length
-      ? pickRandom(pool)
-      : "No consequences available. You're safe this time!";
+      const keyMap = {
+        normal: "consequenceNormal",
+        spicy: "consequenceSpicy",
+        extreme: "consequenceExtreme",
+      };
+      const pool = promptGroups[keyMap[selection]] ?? [];
+      const consequence = pool.length
+        ? pickRandom(pool)
+        : "No consequences available. You're safe this time!";
 
-    const sounds = ["refusalBoo"];
-    if (selection === "spicy") {
-      sounds.push("spicyGiggle");
-    }
-    if (selection === "extreme") {
-      sounds.push("extremeWooo");
-    }
-    setPendingConsequenceSounds(sounds);
-    setCurrentConsequence({ text: consequence, intensity: selection });
-    setActiveModal("consequence");
-  }, [promptGroups, stopRoundTimer]);
+      const sounds = ["refusalBoo"];
+      if (selection === "spicy") {
+        sounds.push("spicyGiggle");
+      }
+      if (selection === "extreme") {
+        sounds.push("extremeWooo");
+      }
+      setPendingConsequenceSounds(sounds);
+      setCurrentConsequence({ text: consequence, intensity: selection });
+      setActiveModal("consequence");
+
+      const outcomeResult =
+        reason === "timeout"
+          ? "timeout"
+          : currentPrompt.type === "trivia"
+          ? "incorrect"
+          : "refused";
+      logOutcomeEvent({
+        result: outcomeResult,
+        promptType: currentPrompt.type,
+        promptIntensity: currentPrompt.intensity,
+        consequenceIntensity: selection,
+        round: roundCount,
+      });
+
+      timerStopReasonRef.current =
+        outcomeResult === "timeout" ? "skip" : outcomeResult;
+    },
+    [
+      currentPrompt.intensity,
+      currentPrompt.type,
+      logOutcomeEvent,
+      promptGroups,
+      roundCount,
+      stopRoundTimer,
+    ]
+  );
 
   useEffect(() => {
     if (activeModal === "announcement") {
@@ -1189,6 +1371,8 @@ export default function App() {
       window.clearTimeout(soundPulseTimeoutRef.current);
       soundPulseTimeoutRef.current = null;
     }
+    timerStopReasonRef.current = null;
+    previousModalRef.current = null;
     setIsExtremeRound(false);
     setRotation(0);
     rotationRef.current = 0;
@@ -1224,6 +1408,25 @@ export default function App() {
       return null;
     });
   }, [stopRoundTimer]);
+
+  const handlePromptAccept = useCallback(() => {
+    const outcomeResult =
+      currentPrompt.type === "trivia" ? "correct" : "accepted";
+    logOutcomeEvent({
+      result: outcomeResult,
+      promptType: currentPrompt.type,
+      promptIntensity: currentPrompt.intensity,
+      round: roundCount,
+    });
+    timerStopReasonRef.current = outcomeResult;
+    closeModal();
+  }, [
+    closeModal,
+    currentPrompt.intensity,
+    currentPrompt.type,
+    logOutcomeEvent,
+    roundCount,
+  ]);
 
   const openSettingsModal = useCallback(() => {
     playClick();
@@ -1423,57 +1626,19 @@ export default function App() {
         </div>
       </main>
 
-      <Modal
+      <SettingsModal
         isOpen={activeModal === "settings"}
         onClose={closeModal}
-        labelledBy="settings-modal-title"
-      >
-        <h2
-          id="settings-modal-title"
-          className="mb-6 text-2xl font-semibold text-slate-100"
-        >
-          Settings
-        </h2>
-        <div className="settings-section">
-          <div className="settings-row">
-            <MusicIcon />
-            <input
-              className="settings-slider"
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={musicVolume}
-              onChange={(event) =>
-                setMusicVolume(parseFloat(event.target.value))
-              }
-            />
-          </div>
-          <div
-            className={`settings-row ${
-              isSfxActive ? "settings-row--active" : ""
-            }`}
-          >
-            <SoundIcon />
-            <input
-              className="settings-slider"
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={sfxVolume}
-              onChange={(event) => setSfxVolume(parseFloat(event.target.value))}
-            />
-          </div>
-          <button
-            type="button"
-            className="primary-button flex items-center justify-center gap-2"
-            onClick={openEditorModal}
-          >
-            <PencilIcon /> Edit Prompts
-          </button>
-        </div>
-      </Modal>
+        musicVolume={musicVolume}
+        onMusicVolumeChange={setMusicVolume}
+        sfxVolume={sfxVolume}
+        onSfxVolumeChange={setSfxVolume}
+        isSfxActive={isSfxActive}
+        onOpenEditor={openEditorModal}
+        debugAnalyticsEnabled={debugAnalyticsEnabled}
+        onToggleDebugAnalytics={setDebugAnalyticsEnabled}
+        analyticsEvents={analyticsEvents}
+      />
 
       <PromptModal
         isOpen={activeModal === "prompt"}
@@ -1481,7 +1646,7 @@ export default function App() {
         prompt={currentPrompt}
         onRefuse={handleRefuse}
         onButtonClick={playClick}
-        onAccept={closeModal}
+        onAccept={handlePromptAccept}
         roundTimer={roundTimer}
         timerActive={timerActive}
       />

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { db as firestore } from "../config/firebase.js";
 
 const STORAGE_KEY = "dateNightAnalyticsSessions";
 const DEFAULT_SESSION = {
@@ -107,14 +109,22 @@ const toCsvRow = (values) =>
     })
     .join(",");
 
-export function useAnalytics(gameId) {
+export function useAnalytics(gameId, options = {}) {
   const sessionKey = gameId || "local-session";
+  const modeOption = typeof options.mode === "string" ? options.mode : null;
+  const normalizedMode = modeOption && modeOption.length ? modeOption : "unknown";
+  const playerId =
+    typeof options.playerId === "string" && options.playerId.length
+      ? options.playerId
+      : null;
+  const remoteDb = options.db ?? firestore;
   const [session, setSession] = useState(() => {
     const store = readStore();
     const value = getSessionFromStore(store, sessionKey);
     return { ...value };
   });
   const [pendingReward, setPendingReward] = useState(null);
+  const [events, setEvents] = useState(() => session.events ?? []);
   const storeRef = useRef(readStore());
 
   useEffect(() => {
@@ -123,7 +133,32 @@ export function useAnalytics(gameId) {
     const nextSession = getSessionFromStore(store, sessionKey);
     setSession({ ...nextSession });
     setPendingReward(null);
+    setEvents(nextSession.events ?? []);
   }, [sessionKey]);
+
+  useEffect(() => {
+    setEvents(session?.events ?? []);
+  }, [session]);
+
+  const analyticsCollectionRef = useMemo(() => {
+    if (!remoteDb || !gameId || normalizedMode === "offline") {
+      return null;
+    }
+
+    try {
+      if (normalizedMode === "single-device") {
+        return collection(remoteDb, "games", gameId, "analytics");
+      }
+
+      if (playerId) {
+        return collection(remoteDb, "games", gameId, "players", playerId, "analytics");
+      }
+    } catch (error) {
+      console.warn("Failed to resolve analytics collection", error);
+    }
+
+    return null;
+  }, [gameId, normalizedMode, playerId, remoteDb]);
 
   const persistSession = useCallback(
     (updater) => {
@@ -141,21 +176,48 @@ export function useAnalytics(gameId) {
     [sessionKey]
   );
 
-  const logEvent = useCallback(
+  const trackEvent = useCallback(
     (type, payload) => {
+      const basePayload = { ...(payload ?? {}) };
+      basePayload.mode = normalizedMode;
+
+      if (
+        normalizedMode !== "single-device" &&
+        normalizedMode !== "offline" &&
+        playerId
+      ) {
+        basePayload.playerId = playerId;
+      }
+
       const entry = {
         id: `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         type,
         timestamp: Date.now(),
-        data: payload ?? {},
+        payload: basePayload,
+        data: basePayload,
       };
-      console.log("[Analytics]", type, entry.data);
+      console.log(`[Analytics:${normalizedMode}]`, type, entry.payload);
+      setEvents((current) => {
+        const next = [...current, entry];
+        return next.slice(-100);
+      });
       persistSession((current) => ({
         ...current,
-        events: [...(current.events ?? []), entry],
+        events: [...(current.events ?? []), entry].slice(-200),
       }));
+
+      if (analyticsCollectionRef) {
+        addDoc(analyticsCollectionRef, {
+          type,
+          payload: basePayload,
+          timestamp: serverTimestamp(),
+          clientTimestamp: entry.timestamp,
+        }).catch((error) => {
+          console.warn("Failed to record analytics event", error);
+        });
+      }
     },
-    [persistSession]
+    [analyticsCollectionRef, normalizedMode, persistSession, playerId]
   );
 
   const incrementStreak = useCallback(
@@ -192,7 +254,7 @@ export function useAnalytics(gameId) {
         };
       });
 
-      logEvent("streak", {
+      trackEvent("streak", {
         action: "increment",
         streak: nextValue,
         ...metadata,
@@ -200,7 +262,7 @@ export function useAnalytics(gameId) {
 
       if (triggeredReward) {
         setPendingReward(triggeredReward);
-        logEvent("reward", {
+        trackEvent("reward", {
           badge: triggeredReward.badge,
           threshold: triggeredReward.threshold,
           streak: triggeredReward.streak,
@@ -208,7 +270,7 @@ export function useAnalytics(gameId) {
         });
       }
     },
-    [logEvent, persistSession]
+    [persistSession, trackEvent]
   );
 
   const resetStreak = useCallback(
@@ -220,13 +282,13 @@ export function useAnalytics(gameId) {
           best: current.streak?.best ?? 0,
         },
       }));
-      logEvent("streak", {
+      trackEvent("streak", {
         action: "reset",
         streak: 0,
         ...metadata,
       });
     },
-    [logEvent, persistSession]
+    [persistSession, trackEvent]
   );
 
   const acknowledgeReward = useCallback(() => {
@@ -235,30 +297,30 @@ export function useAnalytics(gameId) {
 
   const trackSpin = useCallback(
     (details) => {
-      logEvent("spin", details);
+      trackEvent("spin", details);
     },
-    [logEvent]
+    [trackEvent]
   );
 
   const trackOutcome = useCallback(
     (details) => {
-      logEvent("outcome", details);
+      trackEvent("outcome", details);
     },
-    [logEvent]
+    [trackEvent]
   );
 
   const trackTimer = useCallback(
     (details) => {
-      logEvent("timer", details);
+      trackEvent("timer", details);
     },
-    [logEvent]
+    [trackEvent]
   );
 
   const trackExtremeMeter = useCallback(
     (details) => {
-      logEvent("extremeMeter", details);
+      trackEvent("extremeMeter", details);
     },
-    [logEvent]
+    [trackEvent]
   );
 
   const downloadReport = useCallback(() => {
@@ -298,7 +360,7 @@ export function useAnalytics(gameId) {
           event.id,
           new Date(event.timestamp).toISOString(),
           event.type,
-          JSON.stringify(event.data ?? {}),
+          JSON.stringify(event.payload ?? event.data ?? {}),
         ])
       );
     }
@@ -323,9 +385,11 @@ export function useAnalytics(gameId) {
       streak,
       bestStreak,
       pendingReward,
+      events,
       incrementStreak,
       resetStreak,
       acknowledgeReward,
+      trackEvent,
       trackSpin,
       trackOutcome,
       trackTimer,
@@ -335,11 +399,13 @@ export function useAnalytics(gameId) {
     [
       acknowledgeReward,
       bestStreak,
+      events,
       downloadReport,
       incrementStreak,
       pendingReward,
       resetStreak,
       streak,
+      trackEvent,
       trackExtremeMeter,
       trackOutcome,
       trackSpin,
