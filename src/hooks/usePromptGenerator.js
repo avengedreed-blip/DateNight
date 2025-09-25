@@ -3,9 +3,15 @@ import { collection, onSnapshot } from "firebase/firestore";
 
 import { db } from "../config/firebase";
 import { defaultPrompts, PROMPT_CATEGORIES, PROMPT_INTENSITIES } from "../config/prompts";
+import {
+  CUSTOM_PROMPTS_COLLECTION,
+  getPlayerCustomPromptsCollectionRef,
+  persistCustomPromptsForPlayer,
+  persistCustomPromptsToCollection,
+} from "../firebase/profile";
 
-const LOCAL_STORAGE_KEY = "date-night/customPrompts";
-const DEFAULT_REMOTE_COLLECTION = "customPrompts";
+const LOCAL_STORAGE_KEY = "customPrompts";
+const DEFAULT_REMOTE_COLLECTION = CUSTOM_PROMPTS_COLLECTION;
 
 const CATEGORY_SET = new Set(PROMPT_CATEGORIES);
 const INTENSITY_SET = new Set(PROMPT_INTENSITIES);
@@ -20,6 +26,41 @@ const HISTORY_LIMIT = 4;
 const isPlainObject = (value) =>
   typeof value === "object" && value !== null &&
   (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+
+const buildPromptKey = (category, intensity, text) => {
+  const normalizedText = text.trim().toLowerCase();
+  const normalizedCategory = category.trim().toLowerCase();
+  const normalizedIntensity = intensity ? intensity.trim().toLowerCase() : "default";
+  return `${normalizedCategory}::${normalizedIntensity}::${normalizedText}`;
+};
+
+const sortPrompts = (prompts) =>
+  [...prompts].sort((a, b) => a.id.localeCompare(b.id));
+
+const promptListsEqual = (a, b) => {
+  if (a === b) {
+    return true;
+  }
+  if (!Array.isArray(a) || !Array.isArray(b)) {
+    return false;
+  }
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let index = 0; index < a.length; index += 1) {
+    const current = a[index];
+    const other = b[index];
+    if (
+      current.id !== other.id ||
+      current.category !== other.category ||
+      (current.intensity ?? null) !== (other.intensity ?? null) ||
+      current.text !== other.text
+    ) {
+      return false;
+    }
+  }
+  return true;
+};
 
 const sanitizeCategory = (value) => {
   if (typeof value !== "string") {
@@ -76,7 +117,7 @@ const createGeneratedId = ({ category, intensity, text, counter, existingIds }) 
   return candidate;
 };
 
-const normalizePromptEntry = (entry, { existingIds, counterRef }) => {
+const normalizePromptEntry = (entry, { existingIds, existingKeys, counterRef }) => {
   if (!isPlainObject(entry)) {
     return null;
   }
@@ -110,14 +151,20 @@ const normalizePromptEntry = (entry, { existingIds, counterRef }) => {
     });
   }
 
+  const promptKey = buildPromptKey(category, intensity ?? null, text);
+  if (existingKeys.has(promptKey)) {
+    return null;
+  }
+
   existingIds.add(id);
+  existingKeys.add(promptKey);
 
   return intensity
     ? { id, category, intensity, text }
     : { id, category, text };
 };
 
-const normalizePromptList = (entries, { existingIds }) => {
+const normalizePromptList = (entries, { existingIds, existingKeys }) => {
   const counterRef = { current: 0 };
   const normalized = [];
 
@@ -126,13 +173,13 @@ const normalizePromptList = (entries, { existingIds }) => {
   }
 
   entries.forEach((entry) => {
-    const normalizedEntry = normalizePromptEntry(entry, { existingIds, counterRef });
+    const normalizedEntry = normalizePromptEntry(entry, { existingIds, existingKeys, counterRef });
     if (normalizedEntry) {
       normalized.push(normalizedEntry);
     }
   });
 
-  return normalized;
+  return sortPrompts(normalized);
 };
 
 const getStorage = () => {
@@ -187,7 +234,13 @@ const updateHistory = (historyMap, key, promptId) => {
 
 const getHistorySet = (historyMap, key) => new Set(historyMap.get(key) ?? []);
 
-const usePromptGenerator = ({ remoteCollection = DEFAULT_REMOTE_COLLECTION } = {}) => {
+const usePromptGenerator = ({
+  playerId = null,
+  remoteCollection = null,
+  storageKey = LOCAL_STORAGE_KEY,
+} = {}) => {
+  const resolvedStorageKey = storageKey ?? LOCAL_STORAGE_KEY;
+
   const [localCustomPrompts, setLocalCustomPrompts] = useState([]);
   const [remoteCustomPrompts, setRemoteCustomPrompts] = useState([]);
   const [isLocalLoaded, setIsLocalLoaded] = useState(false);
@@ -196,6 +249,7 @@ const usePromptGenerator = ({ remoteCollection = DEFAULT_REMOTE_COLLECTION } = {
 
   const weightsRef = useRef(new Map());
   const historyRef = useRef(new Map());
+  const customPromptsRef = useRef([]);
 
   useEffect(() => {
     const storage = getStorage();
@@ -204,19 +258,53 @@ const usePromptGenerator = ({ remoteCollection = DEFAULT_REMOTE_COLLECTION } = {
       return;
     }
 
-    const storedValue = storage.getItem(LOCAL_STORAGE_KEY);
-    const parsed = parseStoredPrompts(storedValue);
-    setLocalCustomPrompts(parsed);
-    setIsLocalLoaded(true);
-  }, []);
+    try {
+      const storedValue = storage.getItem(resolvedStorageKey);
+      const parsed = parseStoredPrompts(storedValue);
+      const normalized = normalizePromptList(parsed, {
+        existingIds: new Set(),
+        existingKeys: new Set(),
+      });
+      setLocalCustomPrompts(normalized);
+    } catch (error) {
+      console.warn("Failed to load custom prompts from localStorage", error);
+      setLocalCustomPrompts([]);
+    } finally {
+      setIsLocalLoaded(true);
+    }
+  }, [resolvedStorageKey]);
+
+  const remoteConfig = useMemo(() => {
+    if (!db) {
+      return { type: "none", collectionRef: null, playerId: null };
+    }
+
+    if (playerId) {
+      const collectionRef = getPlayerCustomPromptsCollectionRef(playerId);
+      if (!collectionRef) {
+        return { type: "none", collectionRef: null, playerId: null };
+      }
+      return { type: "player", collectionRef, playerId };
+    }
+
+    const targetCollection = remoteCollection ?? DEFAULT_REMOTE_COLLECTION;
+    if (!targetCollection) {
+      return { type: "none", collectionRef: null, playerId: null };
+    }
+
+    const collectionRef = Array.isArray(targetCollection)
+      ? collection(db, ...targetCollection)
+      : collection(db, targetCollection);
+
+    return { type: "collection", collectionRef, playerId: null };
+  }, [playerId, remoteCollection, db]);
 
   useEffect(() => {
-    if (!db || !remoteCollection) {
+    const { collectionRef } = remoteConfig;
+    if (!collectionRef) {
       setIsRemoteLoaded(true);
       return undefined;
     }
-
-    const collectionRef = collection(db, remoteCollection);
 
     const unsubscribe = onSnapshot(
       collectionRef,
@@ -228,7 +316,6 @@ const usePromptGenerator = ({ remoteCollection = DEFAULT_REMOTE_COLLECTION } = {
       },
       (error) => {
         console.error("Failed to load custom prompts from Firestore", error);
-        setRemoteCustomPrompts([]);
         setIsRemoteLoaded(true);
         setLastError(error);
       }
@@ -237,13 +324,53 @@ const usePromptGenerator = ({ remoteCollection = DEFAULT_REMOTE_COLLECTION } = {
     return () => {
       unsubscribe();
     };
-  }, [remoteCollection, db]);
+  }, [remoteConfig]);
+
+  const normalizedCustomSources = useMemo(() => {
+    const existingIds = new Set();
+    const existingKeys = new Set();
+
+    const normalizedLocal = normalizePromptList(localCustomPrompts, { existingIds, existingKeys });
+    const normalizedRemote = normalizePromptList(remoteCustomPrompts, { existingIds, existingKeys });
+    const union = sortPrompts([...normalizedLocal, ...normalizedRemote]);
+
+    return { normalizedLocal, normalizedRemote, union };
+  }, [localCustomPrompts, remoteCustomPrompts]);
+
+  const customPrompts = normalizedCustomSources.union;
+
+  useEffect(() => {
+    customPromptsRef.current = customPrompts;
+  }, [customPrompts]);
+
+  useEffect(() => {
+    if (!isLocalLoaded) {
+      return;
+    }
+
+    const storage = getStorage();
+    if (!storage) {
+      return;
+    }
+
+    try {
+      storage.setItem(resolvedStorageKey, JSON.stringify(customPrompts));
+    } catch (error) {
+      console.warn("Failed to persist custom prompts to localStorage", error);
+    }
+  }, [customPrompts, isLocalLoaded, resolvedStorageKey]);
 
   const mergedPrompts = useMemo(() => {
-    const existingIds = new Set(defaultPrompts.map((prompt) => prompt.id));
+    const existingIds = new Set();
+    const existingKeys = new Set();
 
-    const normalizedLocal = normalizePromptList(localCustomPrompts, { existingIds });
-    const normalizedRemote = normalizePromptList(remoteCustomPrompts, { existingIds });
+    defaultPrompts.forEach((prompt) => {
+      existingIds.add(prompt.id);
+      existingKeys.add(buildPromptKey(prompt.category, prompt.intensity ?? null, prompt.text));
+    });
+
+    const normalizedLocal = normalizePromptList(localCustomPrompts, { existingIds, existingKeys });
+    const normalizedRemote = normalizePromptList(remoteCustomPrompts, { existingIds, existingKeys });
 
     const byId = new Map();
 
@@ -261,6 +388,65 @@ const usePromptGenerator = ({ remoteCollection = DEFAULT_REMOTE_COLLECTION } = {
 
     return Array.from(byId.values());
   }, [localCustomPrompts, remoteCustomPrompts]);
+
+  const persistCustomPromptList = useCallback(
+    async (promptsToPersist) => {
+      if (!remoteConfig.collectionRef) {
+        return;
+      }
+
+      try {
+        if (remoteConfig.type === "player") {
+          await persistCustomPromptsForPlayer(remoteConfig.playerId, promptsToPersist);
+        } else if (remoteConfig.type === "collection") {
+          await persistCustomPromptsToCollection(remoteConfig.collectionRef, promptsToPersist);
+        }
+        setLastError(null);
+      } catch (error) {
+        console.error("Failed to persist custom prompts to Firestore", error);
+        setLastError(error);
+      }
+    },
+    [remoteConfig]
+  );
+
+  const updateCustomPrompts = useCallback(
+    async (updates = []) => {
+      const current = customPromptsRef.current;
+      const nextInput = typeof updates === "function" ? updates(current) : updates;
+      const existingIds = new Set();
+      const existingKeys = new Set();
+      const normalizedNext = normalizePromptList(nextInput, { existingIds, existingKeys });
+
+      if (promptListsEqual(current, normalizedNext)) {
+        return current;
+      }
+
+      setLocalCustomPrompts(normalizedNext);
+      customPromptsRef.current = normalizedNext;
+
+      await persistCustomPromptList(normalizedNext);
+
+      return normalizedNext;
+    },
+    [persistCustomPromptList]
+  );
+
+  const addCustomPrompt = useCallback(
+    (entry) => updateCustomPrompts((current) => [...current, entry]),
+    [updateCustomPrompts]
+  );
+
+  const removeCustomPrompt = useCallback(
+    (promptId) =>
+      updateCustomPrompts((current) => current.filter((prompt) => prompt.id !== promptId)),
+    [updateCustomPrompts]
+  );
+
+  const replaceCustomPrompts = useCallback(
+    (entries = []) => updateCustomPrompts(entries),
+    [updateCustomPrompts]
+  );
 
   useEffect(() => {
     const validIds = new Set(mergedPrompts.map((prompt) => prompt.id));
@@ -360,10 +546,25 @@ const usePromptGenerator = ({ remoteCollection = DEFAULT_REMOTE_COLLECTION } = {
     () => ({
       isReady,
       prompts: mergedPrompts,
+      customPrompts,
       lastError,
       getPrompt,
+      updateCustomPrompts,
+      addCustomPrompt,
+      removeCustomPrompt,
+      replaceCustomPrompts,
     }),
-    [getPrompt, isReady, lastError, mergedPrompts]
+    [
+      addCustomPrompt,
+      customPrompts,
+      getPrompt,
+      isReady,
+      lastError,
+      mergedPrompts,
+      removeCustomPrompt,
+      replaceCustomPrompts,
+      updateCustomPrompts,
+    ]
   );
 };
 
