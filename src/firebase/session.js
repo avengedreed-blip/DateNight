@@ -1,7 +1,9 @@
 import {
   addDoc,
   collection,
+  doc,
   getDoc,
+  getDocs,
   increment,
   onSnapshot,
   serverTimestamp,
@@ -10,6 +12,7 @@ import {
 
 import { db } from "../config/firebase";
 import { getGameDocRef } from "./schema";
+import { ANALYTICS_COLLECTION, summarizeAnalyticsEvents } from "../hooks/useAnalytics";
 
 const STORAGE_PREFIX = "date-night/session-state";
 
@@ -61,6 +64,36 @@ const DEFAULT_STATUS = "idle";
 const DEFAULT_MESSAGE = null;
 
 const PROMPT_STATE_STORAGE_PREFIX = `${STORAGE_PREFIX}::prompt-state-marker`;
+
+const persistAnalyticsSummary = async (gameId) => {
+  if (!db) {
+    return { success: false, reason: "offline" };
+  }
+
+  try {
+    const analyticsRef = collection(db, "games", gameId, ANALYTICS_COLLECTION);
+    const analyticsSnapshot = await getDocs(analyticsRef);
+    const events = analyticsSnapshot.docs.map((docSnapshot) => ({
+      id: docSnapshot.id,
+      ...docSnapshot.data(),
+    }));
+
+    const summary = summarizeAnalyticsEvents(events);
+    const summaryPayload = {
+      ...summary,
+      generatedAt: serverTimestamp(),
+      version: 1,
+      source: "endGame",
+    };
+
+    await setDoc(doc(db, "games", gameId, "summary"), summaryPayload, { merge: true });
+
+    return { success: true, summary: summaryPayload };
+  } catch (error) {
+    console.error(`Failed to persist analytics summary for game "${gameId}"`, error);
+    return { success: false, error };
+  }
+};
 
 const getStorage = () => {
   if (typeof window === "undefined") {
@@ -1025,6 +1058,7 @@ const endGame = async (gameId, options = {}) => {
 
   try {
     await setDoc(getGameDocRef(normalizedGameId), payload, { merge: true });
+    await persistAnalyticsSummary(normalizedGameId);
     return {
       gameId: normalizedGameId,
       state: endedState,
