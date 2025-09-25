@@ -1,6 +1,7 @@
 .wheel {
   position: relative;
   --wheel-size: clamp(220px, 60vw, 320px);
+  --labelRadius: calc(var(--wheel-size) * 0.36);
   width: var(--wheel-size);
   aspect-ratio: 1 / 1;
   display: flex;
@@ -92,57 +93,40 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  -webkit-box-pack: center;
-  -webkit-box-align: center;
   text-align: center;
-  color: var(--label-color, #fff);
+  pointer-events: none;
   font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   font-weight: 600;
   font-size: clamp(12px, 2.2vw, 18px);
-  pointer-events: none;
-  text-shadow: var(--label-text-shadow, 0 1px 2px rgba(0, 0, 0, 0.35));
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  display: -webkit-box;
-  width: min(52%, 9.5rem);
-  --label-radius-multiplier: 0.61;
-  --label-radius: calc(var(--wheel-size) * var(--label-radius-multiplier) / 2);
+  color: var(--label-color, #ffffff);
+  max-width: calc(var(--wheel-size) * 0.44);
 }
 
 .wheel__label-text {
   display: flex;
   align-items: center;
   justify-content: center;
-  text-align: center;
   width: 100%;
-  padding: 0.2rem 0.5rem;
-  border-radius: 9999px;
-  transition: background-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
-  line-height: 1.25;
+  max-width: 100%;
+  text-align: center;
+  line-height: 1.1;
+  letter-spacing: 0.2px;
   overflow: hidden;
-  max-height: calc(1.25em * 2);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
   transform: rotate(var(--label-text-rotation, 0deg));
-  background-color: var(--label-background, transparent);
-  box-shadow: var(--label-box-shadow, none);
-  color: inherit;
+  text-shadow: none;
 }
 
 @supports (-webkit-line-clamp: 2) {
   .wheel__label-text {
     display: -webkit-box;
-    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     -webkit-box-pack: center;
     -webkit-box-align: center;
-  }
-}
-
-@media (min-width: 900px) {
-  .wheel__label {
-    font-size: clamp(14px, 1.6vw, 24px);
-    --label-radius-multiplier: 0.6;
-    --label-radius: calc(var(--wheel-size) * var(--label-radius-multiplier) / 2);
+    justify-content: center;
+    align-items: center;
   }
 }
 
