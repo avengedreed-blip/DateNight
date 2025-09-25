@@ -152,6 +152,7 @@ export default function App() {
       return null;
     }
   });
+  const isSingleDeviceMode = mode === "single-device";
   const [modeInitialized, setModeInitialized] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
   const [pendingExtremeSpin, setPendingExtremeSpin] = useState(false);
@@ -279,7 +280,7 @@ export default function App() {
     isLoading: promptsLoading,
     error: promptsError,
     retry: retryPrompts,
-  } = usePrompts(gameId);
+  } = usePrompts(isSingleDeviceMode ? null : gameId);
   const generatedPromptGroups = useMemo(
     () => buildPromptGroups(generatedPrompts),
     [generatedPrompts]
@@ -341,10 +342,16 @@ export default function App() {
     }
   }, [mode, modeInitialized]);
   useEffect(() => {
+    if (isSingleDeviceMode) {
+      remoteModeRef.current = null;
+      setModeInitialized(true);
+      return undefined;
+    }
+
     if (!db || !gameId) {
       remoteModeRef.current = null;
       setModeInitialized(true);
-      return;
+      return undefined;
     }
 
     setModeInitialized(false);
@@ -364,9 +371,15 @@ export default function App() {
       remoteModeRef.current = null;
       unsubscribe();
     };
-  }, [db, gameId]);
+  }, [db, gameId, isSingleDeviceMode]);
   useEffect(() => {
-    if (!modeInitialized || !db || !gameId || !mode) {
+    if (
+      isSingleDeviceMode ||
+      !modeInitialized ||
+      !db ||
+      !gameId ||
+      !mode
+    ) {
       return;
     }
 
@@ -375,7 +388,7 @@ export default function App() {
     }
 
     setSessionMode(db, gameId, mode).catch(() => {});
-  }, [db, gameId, mode, modeInitialized]);
+  }, [db, gameId, isSingleDeviceMode, mode, modeInitialized]);
   useEffect(() => {
     if (!gameId) {
       return;
@@ -1323,6 +1336,16 @@ export default function App() {
                 Reset
               </button>
             </div>
+            {isSingleDeviceMode && (
+              <div
+                className="badge-button"
+                role="status"
+                aria-live="polite"
+                style={{ justifySelf: "center", pointerEvents: "none", cursor: "default" }}
+              >
+                Single Device Mode
+              </div>
+            )}
             <button
               type="button"
               className="icon-button"
