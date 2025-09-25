@@ -1,22 +1,45 @@
-import React from 'react';
+import React, { memo, useEffect } from 'react';
+import confetti from 'canvas-confetti';
+import Modal from './Modal';
 
-const ExtremeRoundModal = ({ isOpen, onClose, content }) => {
-  if (!isOpen) return null;
+const ExtremeRoundModal = memo(({ isOpen, onClose, content }) => {
+  useEffect(() => {
+    if (isOpen) {
+      confetti({
+        particleCount: 150,
+        spread: 80,
+        origin: { y: 0.6 },
+      });
+    }
+  }, [isOpen]);
 
   return (
-    <div className="glass-modal fixed inset-0 flex items-center justify-center p-6">
-      <div className="bg-black/85 text-white rounded-3xl p-8 max-w-lg w-full space-y-5 border border-pink-500/50 shadow-[0_0_25px_rgba(255,71,126,0.6)]">
-        <h2 className="text-4xl font-black text-pink-400 drop-shadow">Extreme Round!</h2>
-        <p className="text-base text-white/85 leading-relaxed">{content}</p>
-        <button
-          onClick={onClose}
-          className="w-full px-4 py-3 rounded-full bg-pink-600 hover:bg-pink-500 text-white font-semibold text-lg"
-        >
-          Bring it on
-        </button>
-      </div>
-    </div>
+    <Modal
+      title="🔥 Extreme Round! 🔥"
+      isOpen={isOpen}
+      onClose={onClose}
+      buttons={[
+        {
+          label: "Let's Go!",
+          onClick: onClose,
+          style:
+            'bg-gradient-to-r from-teal-500 to-cyan-600 text-white shadow-md hover:from-teal-400 hover:to-cyan-500',
+          sound: 'fanfare',
+          haptic: 'medium',
+        },
+        {
+          label: 'Not Yet',
+          onClick: onClose,
+          style: 'bg-gray-600 text-white hover:bg-gray-500',
+          sound: 'boo',
+          haptic: 'light',
+        },
+      ]}
+    >
+      <p className="font-bold text-lg text-theme-text">{content}</p>
+    </Modal>
   );
-};
+});
 
 export default ExtremeRoundModal;
+

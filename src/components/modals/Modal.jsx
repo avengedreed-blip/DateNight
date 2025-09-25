@@ -5,7 +5,6 @@ const Modal = memo(({ title, isOpen, onClose, buttons, children }) => {
 
   useEffect(() => {
     if (isOpen) {
-      // Focus the modal when it opens for accessibility
       modalRef.current?.focus();
     }
   }, [isOpen]);
@@ -16,9 +15,7 @@ const Modal = memo(({ title, isOpen, onClose, buttons, children }) => {
     }
   };
 
-  if (!isOpen) {
-    return null;
-  }
+  if (!isOpen) return null;
 
   return (
     <div
@@ -33,11 +30,13 @@ const Modal = memo(({ title, isOpen, onClose, buttons, children }) => {
         ref={modalRef}
         className="glass-modal w-full max-w-md p-6 rounded-3xl shadow-2xl text-center backdrop-blur-xl border border-white/20"
       >
-        <h2 id="modal-title" className="text-2xl font-bold mb-4 text-theme-text">{title}</h2>
+        <h2 id="modal-title" className="text-2xl font-bold mb-4 text-theme-text">
+          {title}
+        </h2>
         <div className="text-theme-text/80 text-lg">
           {children}
         </div>
-        {buttons && buttons.length > 0 && (
+        {buttons?.length > 0 && (
           <div className="mt-6 flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
             {buttons.map((btn, index) => (
               <button
@@ -58,3 +57,4 @@ const Modal = memo(({ title, isOpen, onClose, buttons, children }) => {
 });
 
 export default Modal;
+
