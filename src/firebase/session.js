@@ -9,22 +9,6 @@ import {
 } from "firebase/firestore";
 
 const SESSION_COLLECTION = "sessions";
-const MODE_STORAGE_KEY = "dateNightMode";
-
-const readStoredMode = () => {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const stored = window.localStorage?.getItem(MODE_STORAGE_KEY);
-    return stored ?? null;
-  } catch (error) {
-    console.warn("Failed to read stored mode", error);
-    return null;
-  }
-};
-
 const ensureTimestampedPayload = (payload = {}) => ({
   ...payload,
   timestamp: payload.timestamp ?? Date.now(),
@@ -51,33 +35,32 @@ export async function createOrJoinSession(
     typeof options?.mode === "string" && options.mode
       ? options.mode
       : null;
-  const resolvedMode = providedMode ?? readStoredMode();
 
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(sessionRef);
 
     if (!snapshot.exists()) {
-      transaction.set(sessionRef, {
+      const sessionData = {
         roundCount: 0,
         lastSpin: null,
         currentPrompt: null,
         currentConsequence: null,
         spinLock: null,
-        mode: resolvedMode ?? null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+
+      if (providedMode) {
+        sessionData.mode = providedMode;
+      }
+
+      transaction.set(sessionRef, sessionData);
       return;
     }
 
     const updates = {
       updatedAt: serverTimestamp(),
     };
-
-    const currentData = snapshot.data() ?? {};
-    if (resolvedMode && currentData.mode !== resolvedMode) {
-      updates.mode = resolvedMode;
-    }
 
     transaction.update(sessionRef, updates);
   });
