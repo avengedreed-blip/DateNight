@@ -968,13 +968,6 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (!timerActive && activeModal === "prompt" && timerExpiredRef.current) {
-      timerExpiredRef.current = false;
-      handleRefuse("timeout");
-    }
-  }, [activeModal, handleRefuse, timerActive]);
-
-  useEffect(() => {
     if (timerActive) {
       console.log("Round timer:", roundTimer);
     }
@@ -1509,6 +1502,13 @@ export default function App() {
       stopRoundTimer,
     ]
   );
+
+  useEffect(() => {
+    if (!timerActive && activeModal === "prompt" && timerExpiredRef.current) {
+      timerExpiredRef.current = false;
+      handleRefuse("timeout");
+    }
+  }, [activeModal, handleRefuse, timerActive]);
 
   useEffect(() => {
     if (activeModal === "announcement") {
