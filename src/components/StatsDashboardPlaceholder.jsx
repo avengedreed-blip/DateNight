@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { useStatsDashboard } from "../hooks/useStatsDashboard.js";
-import { useLifetimeStats } from "../hooks/useLifetimeStats.js";
 
 const placeholderStyle = {
   fontFamily: "monospace",
@@ -34,15 +33,43 @@ const toggleButtonStyle = (active) => ({
   transition: "background 160ms ease, color 160ms ease",
 });
 
-const StatsDashboardPlaceholder = ({ gameId, mode, playerId, db, profileId }) => {
+const EMPTY_TOTALS = {
+  rounds: 0,
+  refusals: 0,
+  timeouts: 0,
+  triviaCorrect: 0,
+  triviaIncorrect: 0,
+  extremes: 0,
+};
+
+const buildDefaultLifetime = (mode) => ({
+  totals: { ...EMPTY_TOTALS },
+  longestStreak: 0,
+  longestTriviaStreak: 0,
+  maxAdrenaline: 0,
+  milestoneBadges: [],
+  updatedAt: 0,
+  source: {
+    mode: mode ?? "unknown",
+    remoteEnabled: false,
+    remoteReady: false,
+    remoteError: null,
+    profileId: null,
+    collection: null,
+    storageKey: null,
+  },
+});
+
+const StatsDashboardPlaceholder = ({
+  gameId,
+  mode,
+  playerId,
+  db,
+  lifetime: lifetimeProp,
+}) => {
   const [view, setView] = useState("session");
   const dashboard = useStatsDashboard({ gameId, mode, playerId, db });
-  const lifetime = useLifetimeStats({
-    mode,
-    playerId,
-    profileId,
-    db,
-  });
+  const lifetime = lifetimeProp ?? buildDefaultLifetime(mode);
 
   const sessionPayload = dashboard;
   const lifetimePayload = {
