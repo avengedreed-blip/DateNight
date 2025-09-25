@@ -21,10 +21,13 @@ import {
 } from "./components/icons/Icons.jsx";
 import { useBackgroundMusic } from "./hooks/useBackgroundMusic.js";
 import { useAnalytics } from "./hooks/useAnalytics.js";
+import { usePlayerStats } from "./hooks/usePlayerStats.js";
 import { usePersistentState } from "./hooks/usePersistentState.js";
 import { usePrompts } from "./hooks/usePrompts.js";
 import { useSound } from "./hooks/useSound.js";
 import { db } from "./config/firebase.js";
+import AdrenalineBar from "./components/HUD/AdrenalineBar.jsx";
+import PlayerBadges from "./components/HUD/PlayerBadges.jsx";
 import { setSessionMode, subscribeToSessionMode } from "./firebase/session.js";
 import {
   buildPromptGroups,
@@ -320,6 +323,12 @@ export default function App() {
     trackTimer: logTimerEvent,
     trackExtremeMeter: logExtremeMeterEvent,
   } = useAnalytics(gameId, { mode, playerId });
+
+  const {
+    badges: playerBadges,
+    adrenaline: playerAdrenaline,
+    recordEvent: recordPlayerEvent,
+  } = usePlayerStats({ gameId, playerId, mode, db });
 
   const {
     prompts,
@@ -858,6 +867,11 @@ export default function App() {
           : "random"
         : null;
 
+      recordPlayerEvent("round-start", {
+        promptType: segment.id,
+        isExtreme: flags.isExtreme,
+      });
+
       setCurrentPrompt({
         title: segment.title,
         text: promptText,
@@ -914,6 +928,7 @@ export default function App() {
       extremeMeter,
       logAnalyticsEvent,
       logExtremeMeterEvent,
+      recordPlayerEvent,
       recordPromptHistory,
       roundCount,
       setExtremeMeter,
@@ -1267,6 +1282,14 @@ export default function App() {
         round: roundCount,
       });
 
+      if (reason === "timeout") {
+        recordPlayerEvent("timeout", { promptType: currentPrompt.type });
+      } else if (currentPrompt.type === "trivia") {
+        recordPlayerEvent("trivia-incorrect", { promptType: currentPrompt.type });
+      } else {
+        recordPlayerEvent("refusal", { promptType: currentPrompt.type });
+      }
+
       timerStopReasonRef.current =
         outcomeResult === "timeout" ? "skip" : outcomeResult;
     },
@@ -1274,6 +1297,7 @@ export default function App() {
       currentPrompt.intensity,
       currentPrompt.type,
       logOutcomeEvent,
+      recordPlayerEvent,
       promptGroups,
       roundCount,
       stopRoundTimer,
@@ -1418,6 +1442,11 @@ export default function App() {
       promptIntensity: currentPrompt.intensity,
       round: roundCount,
     });
+    if (currentPrompt.type === "trivia") {
+      recordPlayerEvent("trivia-correct", { promptType: currentPrompt.type });
+    } else {
+      recordPlayerEvent("round-success", { promptType: currentPrompt.type });
+    }
     timerStopReasonRef.current = outcomeResult;
     closeModal();
   }, [
@@ -1425,6 +1454,7 @@ export default function App() {
     currentPrompt.intensity,
     currentPrompt.type,
     logOutcomeEvent,
+    recordPlayerEvent,
     roundCount,
   ]);
 
@@ -1531,11 +1561,11 @@ export default function App() {
               >
                 Reset
               </button>
-            </div>
-            {isSingleDeviceMode && (
-              <div
-                className="badge-button"
-                role="status"
+        </div>
+          {isSingleDeviceMode && (
+            <div
+              className="badge-button"
+              role="status"
                 aria-live="polite"
                 style={{ justifySelf: "center", pointerEvents: "none", cursor: "default" }}
               >
@@ -1552,6 +1582,11 @@ export default function App() {
             >
               <SettingsIcon />
             </button>
+          </div>
+
+          <div className="app-hud">
+            <AdrenalineBar value={playerAdrenaline} />
+            <PlayerBadges badges={playerBadges} />
           </div>
 
           <header className="app-heading">

@@ -395,6 +395,8 @@ export function useAnalytics(gameId, options = {}) {
       trackTimer,
       trackExtremeMeter,
       downloadReport,
+      mode: normalizedMode,
+      playerId,
     }),
     [
       acknowledgeReward,
@@ -410,6 +412,8 @@ export function useAnalytics(gameId, options = {}) {
       trackOutcome,
       trackSpin,
       trackTimer,
+      normalizedMode,
+      playerId,
     ]
   );
 }
