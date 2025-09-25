@@ -1,52 +1,41 @@
-import React, { useCallback } from "react";
+import React, { memo, useCallback } from 'react';
+import './BottomNav.css'; // Glass style import
 
-const BottomNav = React.memo(function BottomNav({
-  onToggleMode = () => {},
-  onOpenThemes = () => {},
-  onOpenHelp = () => {},
-  extremeOnly = false,
-}) {
-  const handleModeClick = useCallback(() => {
-    onToggleMode();
-  }, [onToggleMode]);
+// Icon placeholders (use simple emoji for now; can be swapped later if needed)
+const ModesIcon = () => <span className="text-xl">🎲</span>;
+const ThemesIcon = () => <span className="text-xl">🎨</span>;
+const HelpIcon = () => <span className="text-xl">❓</span>;
 
-  const handleThemeClick = useCallback(() => {
-    onOpenThemes();
-  }, [onOpenThemes]);
+const navItems = [
+  { label: 'Modes', icon: ModesIcon },
+  { label: 'Themes', icon: ThemesIcon },
+  { label: 'Help', icon: HelpIcon },
+];
 
-  const handleHelpClick = useCallback(() => {
-    onOpenHelp();
-  }, [onOpenHelp]);
+const BottomNav = memo(({ onNavigate }) => {
+  const handleNavigation = useCallback((item) => {
+    if (onNavigate) {
+      onNavigate(item.label);
+    }
+  }, [onNavigate]);
 
   return (
-    <nav className="bottom-nav" aria-label="Primary navigation">
-      <button
-        type="button"
-        className="bottom-nav__action"
-        onClick={handleModeClick}
-        aria-pressed={extremeOnly}
-      >
-        <span className="bottom-nav__label">Modes</span>
-        <span className="bottom-nav__meta">
-          {extremeOnly ? "Extreme" : "Classic"}
-        </span>
-      </button>
-      <button
-        type="button"
-        className="bottom-nav__action"
-        onClick={handleThemeClick}
-      >
-        <span className="bottom-nav__label">Themes</span>
-        <span className="bottom-nav__meta">Live</span>
-      </button>
-      <button
-        type="button"
-        className="bottom-nav__action"
-        onClick={handleHelpClick}
-      >
-        <span className="bottom-nav__label">Help</span>
-        <span className="bottom-nav__meta">FAQ</span>
-      </button>
+    <nav className="bottom-nav fixed bottom-0 left-0 w-full z-40 p-2">
+      <div className="glass flex justify-around items-center h-20 rounded-xl px-2 py-1 max-w-lg mx-auto">
+        {navItems.map((item) => (
+          <button
+            key={item.label}
+            className="flex flex-col items-center text-center text-theme-text-light font-medium transition-transform duration-200 active:scale-[0.95] hover:scale-[1.05] focus:outline-none"
+            onClick={() => handleNavigation(item)}
+            aria-label={`Go to ${item.label} screen`}
+            data-sound="click"
+            data-haptic="light"
+          >
+            <item.icon />
+            <span className="text-xs mt-1">{item.label}</span>
+          </button>
+        ))}
+      </div>
     </nav>
   );
 });
