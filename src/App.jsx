@@ -1456,8 +1456,7 @@ export default function App() {
         recordPlayerEvent("refusal", { promptType: currentPrompt.type });
       }
 
-      timerStopReasonRef.current =
-        outcomeResult === "timeout" ? "skip" : outcomeResult;
+      timerStopReasonRef.current = outcomeResult;
     },
     [
       currentPrompt.intensity,
