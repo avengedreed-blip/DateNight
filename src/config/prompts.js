@@ -1,6 +1,6 @@
-export const defaultPrompts = {
-  truthPrompts: {
-    normal: [
+const RAW_PROMPTS = Object.freeze({
+  truth: Object.freeze({
+    normal: Object.freeze([
       "Would you remarry if your partner died?",
       "Do you ever regret marrying your partner?",
       "What's your biggest regret? Explain.",
@@ -12,8 +12,8 @@ export const defaultPrompts = {
       "Describe a dream you've had about me.",
       "If you could change one thing about our history, what would it be?",
       "What's the most childish thing you still do?",
-    ],
-    spicy: [
+    ]),
+    spicy: Object.freeze([
       "What's your favorite part of your partner's body?",
       "Describe a time they turned you on without even realizing it.",
       "Tell me a sexual fantasy involving us you've never shared.",
@@ -27,8 +27,8 @@ export const defaultPrompts = {
       "What's the naughtiest thought you've had about me this week?",
       "Rank your top three favorite positions.",
       "What's one thing you want me to do to you in bed more often?",
-    ],
-    extreme: [
+    ]),
+    extreme: Object.freeze([
       "Describe your partner's genitals in great detail.",
       "Which ex would you most likely allow to have a threesome with you and your partner?",
       "Which ex looked the best naked?",
@@ -40,10 +40,10 @@ export const defaultPrompts = {
       "Have you ever considered leaving me? If so, why?",
       "Describe the most intense orgasm you've ever had, with or without me.",
       "What is something you've never told anyone about your sexual history?",
-    ],
-  },
-  darePrompts: {
-    normal: [
+    ]),
+  }),
+  dare: Object.freeze({
+    normal: Object.freeze([
       "Take a cute selfie with your partner.",
       "Give your best impression of your partner.",
       "Let your partner tickle you for 30 seconds.",
@@ -55,8 +55,8 @@ export const defaultPrompts = {
       "Let your partner draw a temporary tattoo on you with a pen.",
       "Serenade your partner with a love song, even if you can't sing.",
       "Do your best runway walk for your partner.",
-    ],
-    spicy: [
+    ]),
+    spicy: Object.freeze([
       "Give me a passionate kiss, as if we haven't seen each other in a month.",
       "Whisper what you want to do to me later tonight in my ear.",
       "Gently remove one item of my clothing.",
@@ -70,8 +70,8 @@ export const defaultPrompts = {
       "Let me choose an item of your clothing for you to remove.",
       "Give your partner a hickey somewhere they can hide it.",
       "Describe how you would tease me if we were in public right now.",
-    ],
-    extreme: [
+    ]),
+    extreme: Object.freeze([
       "Give your partner a hand job for 3 minutes.",
       "Sit on your partner's face, or let them sit on your face for 3 minutes.",
       "Soak for 5 minutes.",
@@ -84,42 +84,40 @@ export const defaultPrompts = {
       "Let your partner tie you up for 5 minutes and do what they want.",
       "Roleplay a fantasy of your partner's choosing for 5 minutes.",
       "Take a nude photo and send it to your partner right now.",
-    ],
-  },
-  triviaQuestions: {
-    normal: [
-      "What is your partner's birthday?",
-      "What is your partner's favorite show?",
-      "What is their biggest insecurity?",
-      "What is your partner's biggest fear?",
-      "What is their dream job if money were no object?",
-      "What is one thing your partner has always wanted to try but hasn't yet?",
-      "What is the first gift you gave each other?",
-      "What is your partner's favorite childhood cartoon?",
-      "What is the name of your partner's first pet?",
-      "What is your partner's favorite board game?",
-      "Would you rather go into the past and meet your ancestors or go into the future and meet your great-great grandchildren?",
-      "What was their favorite band in high school?",
-      "What do they love most about themselves?",
-      "What do they love the most about you?",
-      "What's my favorite animal?",
-      "If they could haunt anyone as a ghost, who would it be?",
-      "What is their dream vacation?",
-      "What accomplishment are they most proud of?",
-      "What historical figure would they most want to have lunch with?",
-      "What is their least favorite food?",
-    ],
-  },
-  consequences: {
-    normal: [
+    ]),
+  }),
+  trivia: Object.freeze([
+    "What is your partner's birthday?",
+    "What is your partner's favorite show?",
+    "What is their biggest insecurity?",
+    "What is your partner's biggest fear?",
+    "What is their dream job if money were no object?",
+    "What is one thing your partner has always wanted to try but hasn't yet?",
+    "What is the first gift you gave each other?",
+    "What is your partner's favorite childhood cartoon?",
+    "What is the name of your partner's first pet?",
+    "What is your partner's favorite board game?",
+    "Would you rather go into the past and meet your ancestors or go into the future and meet your great-great grandchildren?",
+    "What was their favorite band in high school?",
+    "What do they love most about themselves?",
+    "What do they love the most about you?",
+    "What's my favorite animal?",
+    "If they could haunt anyone as a ghost, who would it be?",
+    "What is their dream vacation?",
+    "What accomplishment are they most proud of?",
+    "What historical figure would they most want to have lunch with?",
+    "What is their least favorite food?",
+  ]),
+  consequence: Object.freeze({
+    normal: Object.freeze([
       "You have to call your partner a name of their choosing for the rest of the game.",
       "Every wrong answer for the rest of the game gets you tickled for 20 seconds.",
       "Go get your partner a drink.",
       "Make your partner a snack.",
       "You have to end every sentence with 'my love' for the next 3 rounds.",
       "Give your partner your phone and let them send one playful text to anyone.",
-    ],
-    spicy: [
+    ]),
+    spicy: Object.freeze([
       "Play the next 3 rounds topless.",
       "For the next 5 rounds, every time it's your turn, you have to start by kissing your partner.",
       "Your partner gets to give you one command, and you must obey.",
@@ -129,14 +127,67 @@ export const defaultPrompts = {
       "Do ten jumping jacks completely naked.",
       "Swap clothes with your partner for the remainder of the game.",
       "Your partner gets to spank you, as hard as they want, 5 times.",
-    ],
-    extreme: [
+    ]),
+    extreme: Object.freeze([
       "Wear a butt plug for the remainder of the game.",
       "Record yourself masturbating right now and send it to your partner.",
       "Use a sex toy of your partner's choosing for the remainder of the game.",
       "Edge yourself for the remainder of the game.",
       "Allow your partner to act out a fantasy of theirs, and you can't say no.",
       "You must perform any sexual act your partner demands, right now.",
-    ],
-  },
+    ]),
+  }),
+});
+
+export const PROMPT_CATEGORIES = Object.freeze([
+  "truth",
+  "dare",
+  "trivia",
+  "consequence",
+]);
+
+export const PROMPT_INTENSITIES = Object.freeze([
+  "normal",
+  "spicy",
+  "extreme",
+]);
+
+const createPromptId = (category, intensity, index) => {
+  const base = `${category}-${intensity ?? "default"}-${index + 1}`;
+  return `default:${base}`;
 };
+
+const buildDefaultPrompts = () => {
+  const entries = [];
+
+  PROMPT_CATEGORIES.forEach((category) => {
+    if (category === "trivia") {
+      const prompts = RAW_PROMPTS.trivia;
+      prompts.forEach((text, index) => {
+        entries.push({
+          id: createPromptId(category, null, index),
+          category,
+          text,
+        });
+      });
+      return;
+    }
+
+    const intensities = RAW_PROMPTS[category];
+    PROMPT_INTENSITIES.forEach((intensity) => {
+      const prompts = intensities[intensity] ?? [];
+      prompts.forEach((text, index) => {
+        entries.push({
+          id: createPromptId(category, intensity, index),
+          category,
+          intensity,
+          text,
+        });
+      });
+    });
+  });
+
+  return entries;
+};
+
+export const defaultPrompts = Object.freeze(buildDefaultPrompts());
