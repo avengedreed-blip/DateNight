@@ -35,6 +35,7 @@ export async function createOrJoinSession(
     typeof options?.mode === "string" && options.mode
       ? options.mode
       : null;
+  const skipPlayerDoc = Boolean(options?.skipPlayerDoc);
 
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(sessionRef);
@@ -65,6 +66,10 @@ export async function createOrJoinSession(
     transaction.update(sessionRef, updates);
   });
 
+  if (skipPlayerDoc) {
+    return { sessionRef, playerRef: null };
+  }
+
   const playerRef = getPlayerRef(db, gameId, playerId);
 
   await setDoc(
@@ -82,12 +87,13 @@ export async function createOrJoinSession(
   return { sessionRef, playerRef };
 }
 
-export function subscribeToSession(db, gameId, callback) {
+export function subscribeToSession(db, gameId, callback, options = {}) {
   if (!db || !gameId || typeof callback !== "function") {
     return () => {};
   }
 
   const sessionRef = getSessionRef(db, gameId);
+  const includePlayers = options?.includePlayers !== false;
 
   let latestSession = null;
   let latestPlayers = [];
@@ -104,20 +110,21 @@ export function subscribeToSession(db, gameId, callback) {
     emit();
   });
 
-  const unsubscribePlayers = onSnapshot(
-    collection(sessionRef, "players"),
-    (snapshot) => {
-      latestPlayers = snapshot.docs.map((docSnapshot) => ({
-        id: docSnapshot.id,
-        ...docSnapshot.data(),
-      }));
-      emit();
-    }
-  );
+  const unsubscribePlayers = includePlayers
+    ? onSnapshot(collection(sessionRef, "players"), (snapshot) => {
+        latestPlayers = snapshot.docs.map((docSnapshot) => ({
+          id: docSnapshot.id,
+          ...docSnapshot.data(),
+        }));
+        emit();
+      })
+    : null;
 
   return () => {
     unsubscribeSession();
-    unsubscribePlayers();
+    if (unsubscribePlayers) {
+      unsubscribePlayers();
+    }
   };
 }
 
@@ -230,21 +237,26 @@ export async function releaseSpinLock(db, gameId, playerId) {
   });
 }
 
-export async function publishSpin(db, gameId, payload) {
+export async function publishSpin(db, gameId, payload, options = {}) {
   if (!db || !gameId || !payload) {
     return;
   }
 
   const sessionRef = getSessionRef(db, gameId);
-  const spinPayload = ensureTimestampedPayload(payload);
+  const { skipSpinLock: payloadSkipSpinLock, ...restPayload } = payload ?? {};
+  const skipSpinLock = Boolean(options?.skipSpinLock ?? payloadSkipSpinLock);
+  const spinPayload = ensureTimestampedPayload(restPayload);
   const updateData = {
     lastSpin: spinPayload,
-    spinLock: {
-      lockedBy: spinPayload.playerId,
-      timestamp: spinPayload.lockTimestamp ?? Date.now(),
-    },
     updatedAt: serverTimestamp(),
   };
+
+  if (!skipSpinLock) {
+    updateData.spinLock = {
+      lockedBy: spinPayload.playerId,
+      timestamp: spinPayload.lockTimestamp ?? Date.now(),
+    };
+  }
 
   if (spinPayload.round !== undefined && spinPayload.round !== null) {
     updateData.roundCount = spinPayload.round;
@@ -301,13 +313,18 @@ async function updatePlayerStreak(db, gameId, playerId, result) {
   return streakState;
 }
 
-export async function publishPrompt(db, gameId, payload) {
+export async function publishPrompt(db, gameId, payload, options = {}) {
   if (!db || !gameId || !payload) {
     return null;
   }
 
   const sessionRef = getSessionRef(db, gameId);
-  const promptPayload = ensureTimestampedPayload(payload);
+  const { skipPlayerTracking: payloadSkipTracking, ...restPayload } =
+    payload ?? {};
+  const skipPlayerTracking = Boolean(
+    options?.skipPlayerTracking ?? payloadSkipTracking
+  );
+  const promptPayload = ensureTimestampedPayload(restPayload);
 
   const updateData = {
     currentPrompt: promptPayload.prompt ?? null,
@@ -326,12 +343,14 @@ export async function publishPrompt(db, gameId, payload) {
 
   await updateDoc(sessionRef, updateData);
 
-  const streak = await updatePlayerStreak(
-    db,
-    gameId,
-    promptPayload.playerId,
-    promptPayload.result
-  );
+  const streak = skipPlayerTracking
+    ? null
+    : await updatePlayerStreak(
+        db,
+        gameId,
+        promptPayload.playerId,
+        promptPayload.result
+      );
 
   return { streak };
 }

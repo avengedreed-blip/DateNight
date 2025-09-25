@@ -35,6 +35,8 @@ export function useMultiplayer({
   enabled,
   onRemoteSpin,
   onRemotePrompt,
+  skipPlayerTracking = false,
+  skipSpinLock = false,
 }) {
   const [playerId] = useState(readStoredPlayerId);
   const [connectedCount, setConnectedCount] = useState(1);
@@ -66,56 +68,64 @@ export function useMultiplayer({
     let cancelled = false;
     setSessionReady(false);
 
-    createOrJoinSession(db, gameId, playerId)
+    createOrJoinSession(db, gameId, playerId, {
+      skipPlayerDoc: skipPlayerTracking,
+    })
       .then(() => {
         if (cancelled) {
           return;
         }
 
         setSessionReady(true);
-        touchPlayerPresence(db, gameId, playerId).catch(() => {});
+        if (!skipPlayerTracking) {
+          touchPlayerPresence(db, gameId, playerId).catch(() => {});
+        }
 
-        unsubscribeRef.current = subscribeToSession(db, gameId, ({
-          session,
-          players,
-        }) => {
-          if (players) {
-            setConnectedCount(Math.max(players.length, 1));
-            const self = players.find((player) => player.id === playerId);
-            if (self) {
-              setPlayerStreak({
-                accepts: self.accepts ?? 0,
-                refusals: self.refusals ?? 0,
-              });
-            }
-          }
-
-          if (session) {
-            const { lastSpin, promptEvent } = session;
-
-            if (lastSpin?.id && lastSpin.id !== lastSpinIdRef.current) {
-              lastSpinIdRef.current = lastSpin.id;
-
-              if (lastSpin.playerId && lastSpin.playerId !== playerId) {
-                onRemoteSpin?.(lastSpin);
+        unsubscribeRef.current = subscribeToSession(
+          db,
+          gameId,
+          ({ session, players }) => {
+            if (players) {
+              setConnectedCount(Math.max(players.length, 1));
+              const self = players.find((player) => player.id === playerId);
+              if (self) {
+                setPlayerStreak({
+                  accepts: self.accepts ?? 0,
+                  refusals: self.refusals ?? 0,
+                });
               }
             }
 
-            if (
-              promptEvent?.id &&
-              promptEvent.id !== lastPromptIdRef.current
-            ) {
-              lastPromptIdRef.current = promptEvent.id;
+            if (session) {
+              const { lastSpin, promptEvent } = session;
+
+              if (lastSpin?.id && lastSpin.id !== lastSpinIdRef.current) {
+                lastSpinIdRef.current = lastSpin.id;
+
+                if (lastSpin.playerId && lastSpin.playerId !== playerId) {
+                  onRemoteSpin?.(lastSpin);
+                }
+              }
 
               if (
-                promptEvent.playerId &&
-                promptEvent.playerId !== playerId
+                promptEvent?.id &&
+                promptEvent.id !== lastPromptIdRef.current
               ) {
-                onRemotePrompt?.(promptEvent);
+                lastPromptIdRef.current = promptEvent.id;
+
+                if (
+                  promptEvent.playerId &&
+                  promptEvent.playerId !== playerId
+                ) {
+                  onRemotePrompt?.(promptEvent);
+                }
               }
             }
+          },
+          {
+            includePlayers: !skipPlayerTracking,
           }
-        });
+        );
       })
       .catch((error) => {
         console.warn("Failed to join multiplayer session", error);
@@ -130,7 +140,14 @@ export function useMultiplayer({
         unsubscribeRef.current = null;
       }
     };
-  }, [gameId, isActive, onRemotePrompt, onRemoteSpin, playerId]);
+  }, [
+    gameId,
+    isActive,
+    onRemotePrompt,
+    onRemoteSpin,
+    playerId,
+    skipPlayerTracking,
+  ]);
 
   const publishLocalSpin = useCallback(
     async (payload) => {
@@ -139,17 +156,22 @@ export function useMultiplayer({
       }
 
       try {
-        await publishSpin(db, gameId, {
-          ...payload,
-          playerId,
-          lockTimestamp:
-            lockTimestampRef.current ?? payload.lockTimestamp ?? Date.now(),
-        });
+        await publishSpin(
+          db,
+          gameId,
+          {
+            ...payload,
+            playerId,
+            lockTimestamp:
+              lockTimestampRef.current ?? payload.lockTimestamp ?? Date.now(),
+          },
+          { skipSpinLock }
+        );
       } catch (error) {
         console.warn("Failed to publish spin", error);
       }
     },
-    [gameId, isActive, playerId, sessionReady]
+    [gameId, isActive, playerId, sessionReady, skipSpinLock]
   );
 
   const publishLocalPrompt = useCallback(
@@ -159,10 +181,15 @@ export function useMultiplayer({
       }
 
       try {
-        const result = await publishPrompt(db, gameId, {
-          ...payload,
-          playerId,
-        });
+        const result = await publishPrompt(
+          db,
+          gameId,
+          {
+            ...payload,
+            playerId,
+          },
+          { skipPlayerTracking }
+        );
 
         if (result?.streak) {
           setPlayerStreak(result.streak);
@@ -178,11 +205,11 @@ export function useMultiplayer({
         return null;
       }
     },
-    [gameId, isActive, playerId, sessionReady]
+    [gameId, isActive, playerId, sessionReady, skipPlayerTracking]
   );
 
   const acquireLock = useCallback(async () => {
-    if (!isActive) {
+    if (!isActive || skipSpinLock) {
       return true;
     }
 
@@ -191,10 +218,10 @@ export function useMultiplayer({
       lockTimestampRef.current = Date.now();
     }
     return locked;
-  }, [gameId, isActive, playerId]);
+  }, [gameId, isActive, playerId, skipSpinLock]);
 
   const releaseLock = useCallback(async () => {
-    if (!isActive) {
+    if (!isActive || skipSpinLock) {
       return;
     }
 
@@ -205,7 +232,7 @@ export function useMultiplayer({
     } finally {
       lockTimestampRef.current = null;
     }
-  }, [gameId, isActive, playerId]);
+  }, [gameId, isActive, playerId, skipSpinLock]);
 
   useEffect(() => {
     if (!isActive || typeof window === "undefined") {
@@ -213,13 +240,15 @@ export function useMultiplayer({
     }
 
     const interval = window.setInterval(() => {
-      touchPlayerPresence(db, gameId, playerId).catch(() => {});
+      if (!skipPlayerTracking) {
+        touchPlayerPresence(db, gameId, playerId).catch(() => {});
+      }
     }, 15000);
 
     return () => {
       window.clearInterval(interval);
     };
-  }, [gameId, isActive, playerId]);
+  }, [gameId, isActive, playerId, skipPlayerTracking]);
 
   return useMemo(
     () => ({
