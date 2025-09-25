@@ -49,6 +49,33 @@ const SPIN_TURNS = 4; // full rotations before easing out
 const SPIN_DURATION = 3800; // ms
 const SPIN_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 
+function relativeLuminance(hexColor) {
+  if (!hexColor) {
+    return 1;
+  }
+
+  let hex = hexColor.replace("#", "");
+  if (hex.length === 3) {
+    hex = hex
+      .split("")
+      .map((char) => char + char)
+      .join("");
+  }
+
+  if (hex.length !== 6) {
+    return 1;
+  }
+
+  const r = parseInt(hex.slice(0, 2), 16) / 255;
+  const g = parseInt(hex.slice(2, 4), 16) / 255;
+  const b = parseInt(hex.slice(4, 6), 16) / 255;
+
+  const channel = (value) =>
+    value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
 function Wheel() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedPrompt, setSelectedPrompt] = useState("");
@@ -142,19 +169,23 @@ function Wheel() {
         {categories.map((category, index) => {
           const angle = index * sliceSize + sliceSize / 2;
           const isActive = selectedCategory === category.key;
-          const labelOffset = 104;
+          const sliceColor = isActive
+            ? category.highlightColor
+            : category.baseColor;
+          const isDarkBackground = !isActive && relativeLuminance(sliceColor) < 0.5;
 
           return (
             <div
               key={category.key}
               className="wheel__label"
               style={{
-                transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(-${labelOffset}px)`,
-                width: "50%",
-                maxWidth: "9rem",
-                "--label-color": isActive
-                  ? "#1f2933"
-                  : category.textColor,
+                transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(calc(-1 * var(--label-radius)))`,
+                width: "52%",
+                maxWidth: "9.5rem",
+                textShadow: isDarkBackground
+                  ? "0 1px 2px rgba(0,0,0,.35)"
+                  : "none",
+                "--label-color": isActive ? "#1f2933" : category.textColor,
               }}
             >
               <span
@@ -162,7 +193,7 @@ function Wheel() {
                 style={{
                   transform: `rotate(-${angle}deg)`,
                   backgroundColor: isActive
-                    ? "rgba(255, 255, 255, 0.7)"
+                    ? "rgba(255, 255, 255, 0.82)"
                     : "transparent",
                   boxShadow: isActive
                     ? "0 6px 20px rgba(17, 24, 39, 0.18)"
