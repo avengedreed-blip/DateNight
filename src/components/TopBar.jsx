@@ -1,8 +1,7 @@
 import React, { memo, useCallback } from 'react';
+import './TopBar.css'; // NEW glass style import
 
 const TopBar = memo(({ onSettingsClick }) => {
-  // Stabilize the handler function passed from the parent component.
-  // This ensures that the function reference is stable across renders.
   const handleSettingsClick = useCallback(() => {
     if (onSettingsClick) {
       onSettingsClick();
@@ -10,18 +9,15 @@ const TopBar = memo(({ onSettingsClick }) => {
   }, [onSettingsClick]);
 
   return (
-    // Locked Spec: Slim height, fixed position, uses glass style
-    <header className="fixed top-0 left-0 w-full z-40 h-16 px-4 flex items-center justify-between bg-theme-surface/20 backdrop-blur-md border-b border-white/10">
+    <header className="top-bar glass fixed top-0 left-0 w-full z-40 h-16 px-4 flex items-center justify-between">
       <div className="flex items-center space-x-2">
-        {/* Left side: Logo + Title (Clutter-free center) */}
         <svg
-          className="h-8 w-8 text-theme-primary" // Uses theme token
+          className="h-8 w-8 text-theme-primary"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
           aria-hidden="true"
         >
-          {/* Clock Icon Placeholder */}
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -34,24 +30,20 @@ const TopBar = memo(({ onSettingsClick }) => {
         </h1>
       </div>
 
-      {/* Right side: Gear/Settings icon */}
       <button
-        // Use the memoized handler
-        onClick={handleSettingsClick} 
+        onClick={handleSettingsClick}
         aria-label="Settings"
         data-sound="click"
         data-haptic="light"
-        // Smooth transition for hover/active, using theme-primary ring
         className="p-2 rounded-full transition-transform hover:scale-110 active:scale-95 duration-200 focus:outline-none focus:ring-2 focus:ring-theme-primary"
       >
         <svg
-          className="h-6 w-6 text-theme-text" // Uses theme token
+          className="h-6 w-6 text-theme-text"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
           aria-hidden="true"
         >
-          {/* Gear Icon */}
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
