@@ -9,6 +9,7 @@ import StartScreen from './screens/Start';
 import ParticleCanvas from './components/ParticleCanvas';
 import themes from './theme/themes';
 import './theme/tokens.css';
+import useProfile, { DEFAULT_PROFILE } from './hooks/useProfile';
 
 // Lazy-load modal components
 const HelpModal = lazy(() => import('./components/modals/HelpModal').catch(() => ({ default: () => null })));
@@ -18,7 +19,57 @@ const TriviaModal = lazy(() => import('./components/modals/TriviaModal').catch((
 const ConsequenceModal = lazy(() => import('./components/modals/ConsequenceModal').catch(() => ({ default: () => null })));
 const ExtremeRoundModal = lazy(() => import('./components/modals/ExtremeRoundModal').catch(() => ({ default: () => null })));
 
+const arraysEqual = (a = [], b = []) => {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  return a.every((value, index) => value === b[index]);
+};
+
+const particlesEqual = (a = {}, b = {}) => {
+  if (a === b) return true;
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return (a.type ?? '') === (b.type ?? '') && (a.color ?? '') === (b.color ?? '');
+};
+
+const themesEqual = (a, b) => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    arraysEqual(a.bg ?? [], b.bg ?? []) &&
+    arraysEqual(a.colors ?? [], b.colors ?? []) &&
+    (a.labels ?? '') === (b.labels ?? '') &&
+    (a.meterBg ?? '') === (b.meterBg ?? '') &&
+    particlesEqual(a.particles ?? {}, b.particles ?? {})
+  );
+};
+
+const resolveThemeFromProfile = (profile) => {
+  if (profile?.themeId === 'custom' && profile?.customTheme) {
+    return profile.customTheme;
+  }
+  if (profile?.themeId && themes[profile.themeId]) {
+    return themes[profile.themeId];
+  }
+  return themes[DEFAULT_PROFILE.themeId];
+};
+
+const applyProfileAttributes = (profile) => {
+  if (typeof document === 'undefined') {
+    return;
+  }
+  const root = document.documentElement;
+  if (!root) {
+    return;
+  }
+  const username = profile?.username ?? DEFAULT_PROFILE.username;
+  const avatar = profile?.avatar ?? DEFAULT_PROFILE.avatar;
+  root.dataset.playerName = username;
+  root.dataset.playerAvatar = avatar;
+};
+
 const App = () => {
+  const { profile, updateProfile } = useProfile();
   const [currentScreen, setCurrentScreen] = useState('start');
   const [isHelpModalOpen, setHelpModalOpen] = useState(false);
   const [isThemeModalOpen, setThemeModalOpen] = useState(false);
@@ -29,8 +80,14 @@ const App = () => {
   const [isSpinning, setIsSpinning] = useState(false);
   const [extremeMeterFill, setExtremeMeterFill] = useState(0);
 
-  const [currentTheme, setCurrentTheme] = useState(themes['classic-dark']);
+  const [currentTheme, setCurrentTheme] = useState(() => resolveThemeFromProfile(profile));
   const labels = ['Truth', 'Dare', 'Trivia', 'Consequence'];
+
+  useEffect(() => {
+    const nextTheme = resolveThemeFromProfile(profile);
+    setCurrentTheme((prev) => (themesEqual(prev, nextTheme) ? prev : nextTheme));
+    applyProfileAttributes(profile);
+  }, [profile]);
 
   // Centralized meter config
   const meterConfig = {
@@ -44,7 +101,7 @@ const App = () => {
       rawColor: currentTheme.colors[index],
     }));
   }, [currentTheme]);
-  
+
 
   // Apply CSS variables on theme change
   useEffect(() => {
@@ -76,8 +133,15 @@ const App = () => {
     // Trigger the Extreme Round modal and confetti/fanfare logic
     setExtremeRoundModalOpen(true);
     // Reset meter for the next round or phase transition logic goes here.
-    setExtremeMeterFill(0); 
+    setExtremeMeterFill(0);
   }, []);
+
+  const handleThemeSelection = useCallback(
+    (themeId) => {
+      updateProfile({ themeId });
+    },
+    [updateProfile]
+  );
 
 
   // Placeholder for spinning and modals
@@ -129,10 +193,10 @@ const App = () => {
               >
                 Spin
               </button>
-              <ExtremeMeter 
-                fillLevel={extremeMeterFill} 
+              <ExtremeMeter
+                fillLevel={extremeMeterFill}
                 meterName={meterConfig.name}
-                onExtremeTrigger={handleExtremeTrigger} 
+                onExtremeTrigger={handleExtremeTrigger}
               />
             </main>
             <BottomNav onNavClick={handleNavClick} />
@@ -149,7 +213,7 @@ const App = () => {
         <ParticleCanvas theme={currentTheme} />
         {renderScreen()}
         <HelpModal isOpen={isHelpModalOpen} onClose={() => setHelpModalOpen(false)} />
-        <ThemeModal isOpen={isThemeModalOpen} onClose={() => setThemeModalOpen(false)} onThemeChange={(name) => setCurrentTheme(themes[name])} />
+        <ThemeModal isOpen={isThemeModalOpen} onClose={() => setThemeModalOpen(false)} onThemeChange={handleThemeSelection} />
         <TruthDareModal isOpen={isTruthDareModalOpen} onClose={() => setTruthDareModalOpen(false)} content="Placeholder for your truth or dare!" />
         <TriviaModal isOpen={isTriviaModalOpen} onClose={() => setTriviaModalOpen(false)} content="Placeholder for your trivia question!" />
         <ConsequenceModal isOpen={isConsequenceModalOpen} onClose={() => setConsequenceModalOpen(false)} content="Placeholder for the consequence!" />
