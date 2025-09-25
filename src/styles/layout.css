@@ -1,14 +1,32 @@
+@import "../theme/tokens.css";
+
 :root {
-  color-scheme: light;
+  --labelRadius: 60%;
+}
+
+@media (max-width: 420px) {
+  :root {
+    --labelRadius: 61%;
+  }
+}
+
+@media (min-width: 900px) {
+  :root {
+    --labelRadius: 58%;
+  }
+}
+
+:root {
+  color-scheme: dark;
   font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
     Arial, sans-serif;
-  background-color: #f3f4f6;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at top, #f9fafb 0%, #e5e7eb 65%, #d1d5db 100%);
+  background-color: var(--bg1);
+  color: var(--label-color);
 }
 
 #root {
@@ -16,11 +34,45 @@ body {
 }
 
 .app-shell {
+  position: relative;
+  isolation: isolate;
   min-height: 100vh;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  background: transparent;
-  color: #111827;
+  color: var(--label-color);
+}
+
+.app-shell::before,
+.app-shell::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  transition: opacity var(--dur-medium) var(--easing-standard);
+}
+
+.app-shell::before {
+  background: radial-gradient(
+    140% 120% at 25% -20%,
+    color-mix(in srgb, var(--bg2) 70%, transparent 30%) 0%,
+    var(--bg1) 65%
+  );
+  opacity: 1;
+}
+
+.app-shell::after {
+  z-index: -1;
+  background: radial-gradient(
+    140% 120% at 25% -20%,
+    color-mix(in srgb, var(--bg-overlay2) 70%, transparent 30%) 0%,
+    var(--bg-overlay1) 65%
+  );
+  opacity: var(--bg-overlay-opacity, 0);
+}
+
+html[data-theme-animating="true"] .app-shell::after {
+  will-change: opacity;
 }
 
 .top-bar {
@@ -43,6 +95,7 @@ body {
   font-size: clamp(1.35rem, 2.8vw, 2rem);
   font-weight: 700;
   letter-spacing: 0.02em;
+  color: var(--label-color);
 }
 
 .top-bar__action {
@@ -53,15 +106,16 @@ body {
   height: 44px;
   border-radius: 14px;
   border: none;
-  background: rgba(15, 23, 42, 0.08);
-  color: #111827;
+  background: color-mix(in srgb, var(--ring) 15%, transparent 85%);
+  color: var(--label-color);
   cursor: pointer;
-  transition: background 180ms ease, transform 180ms ease;
+  transition: background var(--dur-small) var(--easing-standard),
+    transform var(--dur-small) var(--easing-standard);
 }
 
 .top-bar__action:hover,
 .top-bar__action:focus-visible {
-  background: rgba(15, 23, 42, 0.18);
+  background: color-mix(in srgb, var(--ring) 25%, transparent 75%);
   transform: translateY(-1px);
 }
 
@@ -112,9 +166,9 @@ body {
   gap: clamp(1.5rem, 8vw, 3.5rem);
   padding: 0 clamp(1.25rem, 5vw, 3rem)
     calc(0.75rem + env(safe-area-inset-bottom));
-  background: rgba(17, 25, 40, 0.68);
+  background: color-mix(in srgb, var(--bg1) 78%, transparent 22%);
   backdrop-filter: blur(18px) saturate(150%);
-  box-shadow: 0 -10px 40px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 -10px 40px var(--shadow-weak);
   width: 100%;
 }
 
@@ -129,20 +183,21 @@ body {
   border: none;
   border-radius: 16px;
   background: transparent;
-  color: rgba(243, 244, 246, 0.86);
+  color: color-mix(in srgb, var(--label-color) 92%, transparent 8%);
   font-family: inherit;
   font-size: 0.85rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: background 180ms ease, transform 180ms ease;
+  transition: background var(--dur-small) var(--easing-standard),
+    transform var(--dur-small) var(--easing-standard);
 }
 
 .bottom-nav__action[aria-pressed="true"],
 .bottom-nav__action:hover,
 .bottom-nav__action:focus-visible {
-  background: rgba(255, 255, 255, 0.12);
+  background: color-mix(in srgb, var(--ring) 20%, transparent 80%);
   transform: translateY(-1px);
 }
 
@@ -154,7 +209,7 @@ body {
   font-size: 0.7rem;
   font-weight: 500;
   letter-spacing: 0.08em;
-  opacity: 0.7;
+  opacity: 0.82;
 }
 
 @media (max-width: 640px) {
