@@ -2,6 +2,256 @@ import React, { useMemo } from "react";
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
+const colorVarCache = typeof Map !== "undefined" ? new Map() : undefined;
+
+const cssVarPattern = /^var\((--[^,\s)]+)(?:,\s*([^)]*))?\)$/;
+
+const resolveCssValue = (token) => {
+  if (!token || typeof token !== "string") {
+    return null;
+  }
+
+  const trimmed = token.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const match = trimmed.match(cssVarPattern);
+  if (!match) {
+    return trimmed;
+  }
+
+  if (typeof window === "undefined") {
+    return match[2]?.trim() ?? null;
+  }
+
+  const [, varName, fallback] = match;
+  const cached = colorVarCache?.get(varName);
+  if (cached) {
+    return cached;
+  }
+
+  const resolved =
+    getComputedStyle(document.documentElement).getPropertyValue(varName)?.trim() ||
+    fallback?.trim() ||
+    null;
+
+  if (resolved) {
+    colorVarCache?.set(varName, resolved);
+  }
+
+  return resolved;
+};
+
+const clamp01 = (value) => {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  if (value < 0) {
+    return 0;
+  }
+  if (value > 1) {
+    return 1;
+  }
+  return value;
+};
+
+const parseHexColor = (input) => {
+  if (!input || typeof input !== "string") {
+    return null;
+  }
+  const hex = input.replace("#", "").trim();
+  if (!(hex.length === 3 || hex.length === 6 || hex.length === 8)) {
+    return null;
+  }
+
+  const normalized =
+    hex.length === 3
+      ? hex
+          .split("")
+          .map((char) => char + char)
+          .join("")
+      : hex.slice(0, 6);
+
+  const intVal = Number.parseInt(normalized, 16);
+  if (!Number.isFinite(intVal)) {
+    return null;
+  }
+
+  return {
+    r: (intVal >> 16) & 255,
+    g: (intVal >> 8) & 255,
+    b: intVal & 255,
+  };
+};
+
+const parseRgbComponent = (component) => {
+  if (typeof component !== "string") {
+    return null;
+  }
+  const value = component.trim();
+  if (!value) {
+    return null;
+  }
+  if (value.endsWith("%")) {
+    const percentage = Number.parseFloat(value.slice(0, -1));
+    if (!Number.isFinite(percentage)) {
+      return null;
+    }
+    return clamp(Math.round((percentage / 100) * 255), 0, 255);
+  }
+  const numeric = Number.parseFloat(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  return clamp(Math.round(numeric), 0, 255);
+};
+
+const parseRgbColor = (input) => {
+  const match = input.match(/^rgba?\(([^)]+)\)$/i);
+  if (!match) {
+    return null;
+  }
+  const parts = match[1]
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length < 3) {
+    return null;
+  }
+  const r = parseRgbComponent(parts[0]);
+  const g = parseRgbComponent(parts[1]);
+  const b = parseRgbComponent(parts[2]);
+  if (
+    r === null ||
+    g === null ||
+    b === null
+  ) {
+    return null;
+  }
+  return { r, g, b };
+};
+
+const parseHslColor = (input) => {
+  const match = input.match(/^hsla?\(([^)]+)\)$/i);
+  if (!match) {
+    return null;
+  }
+  const parts = match[1]
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length < 3) {
+    return null;
+  }
+
+  const h = Number.parseFloat(parts[0]);
+  const sRaw = parts[1];
+  const lRaw = parts[2];
+  if (!Number.isFinite(h)) {
+    return null;
+  }
+
+  const toFraction = (raw) => {
+    if (typeof raw !== "string") {
+      return null;
+    }
+    const value = raw.trim();
+    if (value.endsWith("%")) {
+      const numeric = Number.parseFloat(value.slice(0, -1));
+      if (!Number.isFinite(numeric)) {
+        return null;
+      }
+      return clamp01(numeric / 100);
+    }
+    const numeric = Number.parseFloat(value);
+    if (!Number.isFinite(numeric)) {
+      return null;
+    }
+    return clamp01(numeric);
+  };
+
+  const s = toFraction(sRaw);
+  const l = toFraction(lRaw);
+  if (s === null || l === null) {
+    return null;
+  }
+
+  const hue = ((h % 360) + 360) % 360;
+  const chroma = (1 - Math.abs(2 * l - 1)) * s;
+  const hPrime = hue / 60;
+  const x = chroma * (1 - Math.abs((hPrime % 2) - 1));
+
+  let r1 = 0;
+  let g1 = 0;
+  let b1 = 0;
+
+  if (hPrime >= 0 && hPrime < 1) {
+    r1 = chroma;
+    g1 = x;
+  } else if (hPrime >= 1 && hPrime < 2) {
+    r1 = x;
+    g1 = chroma;
+  } else if (hPrime >= 2 && hPrime < 3) {
+    g1 = chroma;
+    b1 = x;
+  } else if (hPrime >= 3 && hPrime < 4) {
+    g1 = x;
+    b1 = chroma;
+  } else if (hPrime >= 4 && hPrime < 5) {
+    r1 = x;
+    b1 = chroma;
+  } else if (hPrime >= 5 && hPrime < 6) {
+    r1 = chroma;
+    b1 = x;
+  }
+
+  const m = l - chroma / 2;
+
+  return {
+    r: clamp(Math.round((r1 + m) * 255), 0, 255),
+    g: clamp(Math.round((g1 + m) * 255), 0, 255),
+    b: clamp(Math.round((b1 + m) * 255), 0, 255),
+  };
+};
+
+const toRgb = (value) => {
+  if (!value || typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return (
+    parseHexColor(trimmed) ??
+    parseRgbColor(trimmed) ??
+    parseHslColor(trimmed)
+  );
+};
+
+const relativeLuminance = (value) => {
+  const resolved = resolveCssValue(value);
+  const rgb = toRgb(resolved ?? value);
+  if (!rgb) {
+    return null;
+  }
+
+  const transform = (channel) => {
+    const normalized = channel / 255;
+    return normalized <= 0.03928
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  };
+
+  const r = transform(rgb.r);
+  const g = transform(rgb.g);
+  const b = transform(rgb.b);
+
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
 const responsiveFontSize = (
   sliceAngle,
   normalizedLength,
@@ -167,16 +417,26 @@ const Wheel = ({
         segment?.label ?? segment?.title ?? segment?.id ?? `Segment ${index + 1}`;
       const midpointDeg = index * sliceAngle + sliceAngle / 2;
       const typography = deriveLabelTypography(sliceAngle, label);
+      const sliceColorToken =
+        (typeof segment?.color === "string" && segment.color) ||
+        (typeof segment?.background === "string" && segment.background) ||
+        (typeof segment?.fill === "string" && segment.fill) ||
+        null;
+      const luminanceValue =
+        relativeLuminance(sliceColorToken) ??
+        relativeLuminance(segment?.labelColor ?? null);
+      const needsShadow = typeof luminanceValue === "number" ? luminanceValue < 0.5 : false;
+      const shadowStrength = needsShadow ? 0.38 : 0;
 
       return {
         id,
         label,
         midpointDeg,
         color: segment?.labelColor ?? "#FFFFFF",
-        fontSize: typography.fontSize,
-        lineClamp: typography.lineClamp,
-        letterSpacing: typography.letterSpacing,
+        lineClamp: Math.min(2, typography.lineClamp),
         lineHeight: typography.lineHeight,
+        luminance: luminanceValue,
+        shadowStrength,
       };
     });
   }, [segments]);
@@ -258,16 +518,17 @@ const Wheel = ({
                   transform: `rotate(${totalAngle}deg) translateY(-60%)`,
                   transformOrigin: "center",
                   width: "min(58%, 320px)",
-                  color: item.color,
+                  color: "var(--label-color, #fff)",
+                  "--slice-luminance":
+                    typeof item.luminance === "number" ? item.luminance : undefined,
                 }}
               >
                 <span
                   className="wheel__label-text wheel-label"
                   style={{
                     transform: `rotate(${-totalAngle}deg)`,
-                    fontSize: item.fontSize,
-                    letterSpacing: item.letterSpacing,
                     lineHeight: item.lineHeight,
+                    "--label-shadow-strength": item.shadowStrength,
                   }}
                 >
                   <span

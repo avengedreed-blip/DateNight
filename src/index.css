@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -41,6 +43,7 @@
     --wheel-label-font: var(--app-font-display);
     --wheel-label-shadow: 0 1px 3px rgba(3, 7, 18, 0.42),
       0 0 1px rgba(15, 23, 42, 0.6);
+    --label-color: #fff;
     --transition-fast: 150ms ease;
     --panel-highlight: linear-gradient(
       120deg,
@@ -648,6 +651,8 @@
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     transition: transform 220ms ease;
+    color: var(--label-color, #fff) !important;
+    --label-shadow-strength: 0;
   }
 
   .wheel__label-text {
@@ -656,13 +661,16 @@
     align-items: center;
     justify-content: center;
     text-align: center;
-    font-family: var(--wheel-label-font, var(--app-font-display));
-    font-weight: 800;
-    line-height: 1.08;
+    font-family: "Inter", "Inter var", "system-ui", -apple-system, BlinkMacSystemFont,
+      "Segoe UI", sans-serif;
+    font-weight: 600;
+    line-height: 1.15;
+    font-size: clamp(12px, 2.2vw, 18px);
     transition: opacity 220ms ease, transform 220ms ease;
     text-transform: uppercase;
-    text-shadow: var(--wheel-label-shadow, 0 1px 2px rgba(15, 23, 42, 0.42));
-    letter-spacing: 0.08em;
+    text-shadow: 0 1.4px 3px rgba(11, 17, 32, var(--label-shadow-strength, 0));
+    letter-spacing: 0.06em;
+    color: inherit;
   }
 
   .wheel__label-text-inner {
@@ -674,6 +682,14 @@
     overflow-wrap: anywhere;
     hyphens: auto;
     width: 100%;
+    -webkit-line-clamp: 2 !important;
+    line-clamp: 2 !important;
+  }
+
+  @media (min-width: 900px) {
+    .wheel__label-text {
+      font-size: clamp(12px, 2.2vw, 24px);
+    }
   }
 
   @supports not (-webkit-line-clamp: 1) {
