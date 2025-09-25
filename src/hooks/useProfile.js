@@ -273,6 +273,8 @@ const useProfile = ({
   const unsubscribeRef = useRef(null);
   const mountedRef = useRef(true);
   const hasBootstrappedRemoteRef = useRef(false);
+  const pendingWriteRef = useRef(null);
+  const isFlushingPendingWriteRef = useRef(false);
 
   useEffect(() => () => {
     mountedRef.current = false;
@@ -303,6 +305,52 @@ const useProfile = ({
     }
     return stored;
   }, [storageKey]);
+
+  const queuePendingWrite = useCallback((nextProfile) => {
+    pendingWriteRef.current = {
+      profile: nextProfile,
+      signature: serializeProfile(nextProfile),
+      timestamp: Date.now(),
+    };
+  }, []);
+
+  const clearPendingWrite = useCallback(() => {
+    pendingWriteRef.current = null;
+  }, []);
+
+  const flushPendingWrite = useCallback(async () => {
+    if (
+      !remoteDocRef ||
+      !pendingWriteRef.current ||
+      isFlushingPendingWriteRef.current ||
+      !mountedRef.current
+    ) {
+      return false;
+    }
+
+    isFlushingPendingWriteRef.current = true;
+    const pending = pendingWriteRef.current;
+
+    try {
+      await setDoc(remoteDocRef, prepareProfileForWrite(pending.profile), { merge: true });
+      if (!mountedRef.current) {
+        return false;
+      }
+      clearPendingWrite();
+      setIsSynced(true);
+      setLastError(null);
+      return true;
+    } catch (error) {
+      if (mountedRef.current) {
+        console.error("Failed to flush pending profile to Firestore", error);
+        setLastError(error);
+        setIsSynced(false);
+      }
+      return false;
+    } finally {
+      isFlushingPendingWriteRef.current = false;
+    }
+  }, [clearPendingWrite, remoteDocRef]);
 
   useEffect(() => {
     if (unsubscribeRef.current) {
@@ -348,20 +396,35 @@ const useProfile = ({
                 hasBootstrappedRemoteRef.current = false;
                 console.error("Failed to bootstrap profile to Firestore", error);
                 setLastError(error);
+                setIsSynced(false);
               });
           }
           return;
         }
 
         const remoteProfile = normalizeProfile(snapshot.data());
+        const remoteSignature = serializeProfile(remoteProfile);
+        const localSignature = profileSignatureRef.current;
+        const pending = pendingWriteRef.current;
+
+        if (pending && pending.signature === localSignature && remoteSignature !== localSignature) {
+          setIsLoading(false);
+          setIsSynced(false);
+          flushPendingWrite();
+          return;
+        }
+
         if (!profilesEqual(remoteProfile, profileRef.current)) {
           profileRef.current = remoteProfile;
-          profileSignatureRef.current = serializeProfile(remoteProfile);
+          profileSignatureRef.current = remoteSignature;
           setProfile(remoteProfile);
           persistToStorage(remoteProfile);
         }
+
+        clearPendingWrite();
         setIsLoading(false);
         setIsSynced(true);
+        setLastError(null);
       },
       (error) => {
         if (!mountedRef.current) {
@@ -370,6 +433,10 @@ const useProfile = ({
         console.error("Failed to subscribe to player profile", error);
         setLastError(error);
         setIsLoading(false);
+        setIsSynced(false);
+        const fallback = reloadFromStorage();
+        profileRef.current = fallback;
+        profileSignatureRef.current = serializeProfile(fallback);
       }
     );
 
@@ -379,7 +446,7 @@ const useProfile = ({
       unsubscribe();
       unsubscribeRef.current = null;
     };
-  }, [persistToStorage, remoteDocRef]);
+  }, [clearPendingWrite, flushPendingWrite, persistToStorage, reloadFromStorage, remoteDocRef]);
 
   const updateProfile = useCallback(
     async (updates = {}, options = {}) => {
@@ -407,18 +474,21 @@ const useProfile = ({
           if (mountedRef.current) {
             setIsSynced(true);
             setLastError(null);
+            clearPendingWrite();
           }
         } catch (error) {
           if (mountedRef.current) {
             console.error("Failed to persist profile to Firestore", error);
             setLastError(error);
+            setIsSynced(false);
+            queuePendingWrite(nextProfile);
           }
         }
       }
 
       return nextProfile;
     },
-    [persistToStorage, remoteDocRef]
+    [clearPendingWrite, persistToStorage, queuePendingWrite, remoteDocRef]
   );
 
   const resetProfile = useCallback(
