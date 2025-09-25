@@ -211,11 +211,16 @@ export function useLifetimeStats({ mode, playerId, profileId, db } = {}) {
     let cancelled = false;
 
     const persist = async () => {
+      const writingSignature = localSignature;
+      const writingLifetime = ensureLifetimeShape(lifetimeRef.current);
+      remoteWriteInFlightRef.current = true;
+
       try {
-        remoteWriteInFlightRef.current = writeLifetimeStats(remoteDb, { ...remoteTarget }, lifetimeRef.current);
-        await remoteWriteInFlightRef.current;
+        await writeLifetimeStats(remoteDb, { ...remoteTarget }, writingLifetime);
         if (!cancelled) {
-          remoteLatestSignatureRef.current = signatureRef.current;
+          if (remoteLatestSignatureRef.current !== writingSignature) {
+            remoteLatestSignatureRef.current = writingSignature;
+          }
           setRemoteError(null);
         }
       } catch (error) {
@@ -223,7 +228,13 @@ export function useLifetimeStats({ mode, playerId, profileId, db } = {}) {
           setRemoteError(error);
         }
       } finally {
-        remoteWriteInFlightRef.current = null;
+        remoteWriteInFlightRef.current = false;
+        if (!cancelled) {
+          const currentSignature = signatureRef.current;
+          if (currentSignature !== writingSignature) {
+            setLifetime((current) => ({ ...current }));
+          }
+        }
       }
     };
 
