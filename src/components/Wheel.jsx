@@ -55,6 +55,43 @@ const Pointer = React.memo(function Pointer() {
   return <div className="wheel__pointer" aria-hidden="true" />;
 });
 
+const SeparatorOverlay = React.memo(function SeparatorOverlay({ count }) {
+  const lines = useMemo(() => {
+    if (!count || count < 2) {
+      return [];
+    }
+
+    const radius = 47;
+
+    return Array.from({ length: count }, (_, index) => {
+      const angle = (index * 360) / count;
+      const radians = ((angle - 90) * Math.PI) / 180;
+      const x = 50 + radius * Math.cos(radians);
+      const y = 50 + radius * Math.sin(radians);
+
+      return {
+        key: angle,
+        x: Number(x.toFixed(3)),
+        y: Number(y.toFixed(3)),
+      };
+    });
+  }, [count]);
+
+  if (lines.length === 0) {
+    return null;
+  }
+
+  return (
+    <svg className="wheel__separators" viewBox="0 0 100 100" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+      {lines.map(({ key, x, y }) => (
+        <line key={key} x1="50" y1="50" x2={x} y2={y} />
+      ))}
+    </svg>
+  );
+});
+
+const POINTER_APEX_OFFSET = 0;
+
 function Wheel({ extremeOnly = false }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedPrompt, setSelectedPrompt] = useState("");
@@ -121,7 +158,7 @@ function Wheel({ extremeOnly = false }) {
           transform: `translate(-50%, -50%) rotate(${rotation}deg) translateY(calc(-1 * var(--labelRadius)))`,
         },
         textStyle: {
-          "--label-text-rotation": `${rotation}deg`,
+          transform: `rotate(${-rotation}deg)`,
         },
       };
     });
@@ -169,8 +206,9 @@ function Wheel({ extremeOnly = false }) {
     });
 
     spinTimeoutRef.current = setTimeout(() => {
-      const finalAngle = ((targetRotation % 360) + 360) % 360;
-      const sliceIndex = Math.floor(finalAngle / anglePerSlice) % categorySnapshot.length;
+      const normalizedRotation = ((targetRotation % 360) + 360) % 360;
+      const pointerAngle = (360 - normalizedRotation + POINTER_APEX_OFFSET + 360) % 360;
+      const sliceIndex = Math.floor(pointerAngle / anglePerSlice) % categorySnapshot.length;
       const activeCategory = categorySnapshot[sliceIndex];
       const prompts = flattenPrompts(defaultPrompts[activeCategory.key]);
 
@@ -199,7 +237,7 @@ function Wheel({ extremeOnly = false }) {
 
   const discStyle = useMemo(() => {
     const baseStyle = {
-      background: wheelGradient,
+      "--wheel-slices": wheelGradient,
       transform: `rotate(${currentRotation}deg)`,
     };
 
@@ -220,6 +258,7 @@ function Wheel({ extremeOnly = false }) {
           style={discStyle}
           data-slice-count={visibleSliceCount || undefined}
         >
+          <SeparatorOverlay count={visibleSliceCount} />
           {labelConfigs.map(({ key, label, wrapperStyle, textStyle, sliceKey, isActive }) => (
             <Label
               key={key}
