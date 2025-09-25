@@ -117,45 +117,62 @@ const Wheel = ({
       return [];
     }
 
-    const sliceAngle = 360 / segments.length;
-    const radiansOffset = -90 * (Math.PI / 180);
-    const sliceAngleRadians = (sliceAngle * Math.PI) / 180;
-    const radiusRatioBase =
-      segments.length <= 2
-        ? 0.68
-        : clamp(0.57 + (sliceAngle / 360) * 0.22, 0.55, 0.68);
-    const baseRadius = 50 * radiusRatioBase;
+    const categories = segments.filter((segment) => segment);
+    if (!categories.length) {
+      return [];
+    }
 
-    return segments.map((segment, index) => {
-      const id = segment.id ?? segment.label ?? index;
+    const extremeOnlyMode = categories.some((segment) => {
+      if (!segment) {
+        return false;
+      }
+
+      if (segment.extremeOnly === true) {
+        return true;
+      }
+
+      if (typeof segment.mode === "string") {
+        return segment.mode === "extreme-only";
+      }
+
+      if (Array.isArray(segment.modes)) {
+        return segment.modes.includes("extreme-only");
+      }
+
+      return false;
+    });
+
+    const visibleCategoriesBase = extremeOnlyMode
+      ? categories.filter((segment) => {
+          const identifier = (segment?.id ?? segment?.label ?? "")
+            .toString()
+            .trim()
+            .toLowerCase();
+          return identifier !== "trivia";
+        })
+      : categories;
+
+    const visibleCategories =
+      visibleCategoriesBase.length > 0 ? visibleCategoriesBase : categories;
+
+    if (!visibleCategories.length) {
+      return [];
+    }
+
+    const sliceAngle = 360 / visibleCategories.length;
+
+    return visibleCategories.map((segment, index) => {
+      const id = segment?.id ?? segment?.label ?? index;
       const label =
-        segment.label ?? segment.title ?? segment.id ?? `Segment ${index + 1}`;
+        segment?.label ?? segment?.title ?? segment?.id ?? `Segment ${index + 1}`;
       const midpointDeg = index * sliceAngle + sliceAngle / 2;
-      const radians = midpointDeg * (Math.PI / 180) + radiansOffset;
       const typography = deriveLabelTypography(sliceAngle, label);
-      const radiusAdjustment = clamp(
-        1 - Math.max(0, typography.normalizedLength - 6) * 0.008,
-        0.84,
-        0.97
-      );
-      const radius = baseRadius * radiusAdjustment;
-      const x = 50 + radius * Math.cos(radians);
-      const y = 50 + radius * Math.sin(radians);
-      const arcWidth = 2 * radius * Math.sin(sliceAngleRadians / 2);
-      const width = clamp(
-        arcWidth * (typography.lineClamp > 1 ? 0.96 : 0.9),
-        24,
-        segments.length <= 2 ? 70 : 58
-      );
-      const color = "#FFFFFF";
 
       return {
         id,
         label,
-        x,
-        y,
-        width,
-        color,
+        midpointDeg,
+        color: segment?.labelColor ?? "#FFFFFF",
         fontSize: typography.fontSize,
         lineClamp: typography.lineClamp,
         letterSpacing: typography.letterSpacing,
@@ -230,38 +247,42 @@ const Wheel = ({
           }`}
           aria-hidden="true"
         >
-          {labels.map((item) => (
-            <div
-              key={item.id}
-              className="wheel__label"
-              style={{
-                top: `${item.y}%`,
-                left: `${item.x}%`,
-                width: `${item.width}%`,
-                transform: `translate(-50%, -50%) rotate(${-normalizedRotation}deg)`,
-                color: item.color,
-              }}
-            >
-              <span
-                className="wheel__label-text wheel-label"
+          {labels.map((item) => {
+            const totalAngle = item.midpointDeg + normalizedRotation;
+
+            return (
+              <div
+                key={item.id}
+                className="wheel__label"
                 style={{
-                  fontSize: item.fontSize,
-                  letterSpacing: item.letterSpacing,
-                  lineHeight: item.lineHeight,
+                  transform: `rotate(${totalAngle}deg) translateY(-60%)`,
+                  transformOrigin: "center",
+                  width: "min(58%, 320px)",
+                  color: item.color,
                 }}
               >
                 <span
-                  className="wheel__label-text-inner"
+                  className="wheel__label-text wheel-label"
                   style={{
-                    WebkitLineClamp: item.lineClamp,
-                    lineClamp: item.lineClamp,
+                    transform: `rotate(${-totalAngle}deg)`,
+                    fontSize: item.fontSize,
+                    letterSpacing: item.letterSpacing,
+                    lineHeight: item.lineHeight,
                   }}
                 >
-                  {item.label}
+                  <span
+                    className="wheel__label-text-inner"
+                    style={{
+                      WebkitLineClamp: item.lineClamp,
+                      lineClamp: item.lineClamp,
+                    }}
+                  >
+                    {item.label}
+                  </span>
                 </span>
-              </span>
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
       </div>
       <div
