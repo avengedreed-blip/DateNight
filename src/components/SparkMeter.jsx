@@ -29,4 +29,6 @@ const SparkMeter = memo(({ value }) => (
   </div>
 ));
 
+SparkMeter.displayName = "SparkMeter";
+
 export default SparkMeter;
