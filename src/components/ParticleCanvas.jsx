@@ -49,7 +49,16 @@ const ParticleCanvas = memo(({ theme }) => {
     raf = requestAnimationFrame(draw);
     return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", size); };
   }, [theme]);
-  return <canvas className="particles" ref={ref} />;
+  return (
+    <canvas
+      // FIX: ensure background particle canvas uses the class targeted by CSS so it
+      // sits behind the UI instead of covering it.
+      className="particle-canvas particles"
+      ref={ref}
+      style={{ pointerEvents: "none" }}
+      aria-hidden="true"
+    />
+  );
 });
 
 export default ParticleCanvas;
