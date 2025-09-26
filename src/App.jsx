@@ -14,13 +14,34 @@ import StartScreen from "./components/Screens/StartScreen";
 import ModeSelectionScreen from "./components/Screens/ModeSelectionScreen";
 import GameScreen from "./components/Screens/GameScreen";
 
-import { THEMES, getLuminance } from "./themeConfig";
+import { THEMES } from "./themeConfig";
+import useMusic from "./hooks/useMusic";
+import mockProfile from "./data/mockProfile";
+
+function getLuminance(hex) {
+  if (!hex || typeof hex !== "string") return 0;
+  const c = hex.replace("#", "");
+  const r = parseInt(c.substring(0, 2), 16) / 255;
+  const g = parseInt(c.substring(2, 4), 16) / 255;
+  const b = parseInt(c.substring(4, 6), 16) / 255;
+  const a = [r, g, b].map((v) =>
+    v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+  );
+  return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+}
 
 export default function App() {
   const [screen, setScreen] = useState("splash");
   const [mode, setMode] = useState(null);
   const [themeKey, setThemeKey] = useState("classic-dark");
-  const theme = THEMES[themeKey];
+  const theme = THEMES[themeKey] ?? THEMES["classic-dark"];
+
+  const music = useMusic();
+  const [profile, setProfile] = useState(() => ({
+    ...mockProfile,
+    avatar: mockProfile.avatar ?? "/avatars/avatar_1.png",
+    themeId: mockProfile.themeId ?? "classic-dark",
+  }));
 
   const [modalOpen, setModalOpen] = useState(null); // null | 'result' | 'help' | 'settings'
   const [screenFlash, setScreenFlash] = useState(false);
@@ -59,6 +80,29 @@ export default function App() {
   }, [theme]);
 
   const particleTheme = useMemo(() => theme, [theme]);
+
+  const handleThemeChange = useCallback(
+    (nextThemeKey) => {
+      if (!nextThemeKey || !Object.prototype.hasOwnProperty.call(THEMES, nextThemeKey)) {
+        return;
+      }
+      setThemeKey(nextThemeKey);
+      setProfile((prev) => ({
+        ...prev,
+        themeId: nextThemeKey,
+      }));
+      music.playTrack?.(nextThemeKey);
+    },
+    [music]
+  );
+
+  const handleAvatarChange = useCallback((nextAvatar) => {
+    if (!nextAvatar) return;
+    setProfile((prev) => ({
+      ...prev,
+      avatar: nextAvatar,
+    }));
+  }, []);
 
   const handlePickMode = useCallback((m) => {
     setMode(m);
@@ -188,7 +232,15 @@ export default function App() {
       </Modal>
 
       {modalOpen === "settings" && (
-        <SettingsModal open onClose={() => setModalOpen(false)} />
+        <SettingsModal
+          open
+          onClose={() => setModalOpen(null)}
+          themeKey={themeKey}
+          onThemeChange={handleThemeChange}
+          music={music}
+          profile={profile}
+          onAvatarChange={handleAvatarChange}
+        />
       )}
     </div>
   );

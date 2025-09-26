@@ -1,28 +1,96 @@
-import React from "react";
+import React, { useMemo, useState, useEffect } from "react";
 
-import AvatarSelector from "./AvatarSelector";
+import ThemesPanel from "./components/ThemesPanel";
+import MusicPanel from "./components/MusicPanel";
+import AvatarSelector from "./components/AvatarSelector";
 import Modal from "./Modal";
-import useMusic, { MUSIC_TRACK_OPTIONS } from "../hooks/useMusic";
+
+const TAB_DEFINITIONS = [
+  { id: "themes", label: "Themes" },
+  { id: "music", label: "Music" },
+  { id: "avatars", label: "Avatars" },
+  { id: "achievements", label: "Achievements" },
+];
 
 export default function SettingsModal({
   open,
   onClose,
   profile,
   onAvatarChange = () => {},
+  onThemeChange = () => {},
+  themeKey,
+  music,
 }) {
-  const { currentTrackId, setVolume, volume, isMuted, toggleMute, playTrack } =
-    useMusic();
+  const [activeTab, setActiveTab] = useState(TAB_DEFINITIONS[0].id);
 
-  const handleVolumeChange = (event) => {
-    const nextValue = Number(event.target.value);
-    if (Number.isNaN(nextValue)) {
-      return;
+  useEffect(() => {
+    if (open) {
+      setActiveTab(TAB_DEFINITIONS[0].id);
     }
-    setVolume(nextValue / 100);
-  };
+  }, [open]);
 
-  const handleTrackChange = (event) => {
-    playTrack(event.target.value);
+  const achievements = useMemo(() => profile?.achievements ?? [], [profile]);
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "themes":
+        return (
+          <ThemesPanel onThemeChange={onThemeChange} themeKey={themeKey} />
+        );
+      case "music":
+        return <MusicPanel music={music} />;
+      case "avatars":
+        return (
+          <div className="flex flex-col gap-6">
+            <AvatarSelector
+              selectedAvatar={profile?.avatar}
+              onAvatarSelect={onAvatarChange}
+            />
+          </div>
+        );
+      case "achievements":
+        return (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {achievements.length === 0 && (
+              <div className="rounded-2xl border border-white/15 bg-white/5 p-4 text-center text-white/70">
+                No achievements yet. Keep playing to unlock more!
+              </div>
+            )}
+            {achievements.map((achievement) => {
+              const isUnlocked = Boolean(achievement?.unlocked);
+              return (
+                <div
+                  key={achievement?.id ?? achievement?.title}
+                  className={`flex flex-col gap-3 rounded-2xl border p-4 transition-colors ${
+                    isUnlocked
+                      ? "border-[var(--theme-primary)] bg-white/10"
+                      : "border-white/10 bg-black/30 text-white/60"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl" aria-hidden="true">
+                      {achievement?.icon ?? "✨"}
+                    </span>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-semibold uppercase tracking-[0.2em] text-white/60">
+                        {isUnlocked ? "Unlocked" : "Locked"}
+                      </span>
+                      <span className="text-lg font-semibold text-white">
+                        {achievement?.title ?? "Unknown Achievement"}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-sm leading-relaxed text-white/80">
+                    {achievement?.description ?? "Play more to reveal this achievement."}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        );
+      default:
+        return null;
+    }
   };
 
   return (
@@ -36,57 +104,29 @@ export default function SettingsModal({
         </button>,
       ]}
     >
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 24,
-          textAlign: "left",
-        }}
-      >
-        <section>
-          <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>Audio</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <span style={{ fontWeight: 600 }}>Volume</span>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={Math.round(volume * 100)}
-                onChange={handleVolumeChange}
-              />
-            </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input
-                type="checkbox"
-                checked={isMuted}
-                onChange={toggleMute}
-              />
-              <span style={{ fontWeight: 600 }}>Mute</span>
-            </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <span style={{ fontWeight: 600 }}>Music Track</span>
-              <select value={currentTrackId} onChange={handleTrackChange}>
-                {MUSIC_TRACK_OPTIONS.map((track) => (
-                  <option key={track.id} value={track.id}>
-                    {track.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </section>
-        <section>
-          <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>Avatar</h3>
-          <AvatarSelector
-            selectedAvatar={profile?.avatar}
-            onAvatarSelect={(avatar) => {
-              localStorage.setItem("avatar", avatar);
-              onAvatarChange(avatar);
-            }}
-          />
-        </section>
+      <div className="flex flex-col gap-6 text-left">
+        <div className="flex flex-wrap justify-center gap-3">
+          {TAB_DEFINITIONS.map((tab) => {
+            const isActive = tab.id === activeTab;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`rounded-full px-5 py-2 text-sm font-semibold uppercase tracking-[0.2em] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-black/20 ${
+                  isActive
+                    ? "bg-[var(--theme-primary)] text-black"
+                    : "bg-white/10 text-white/70 hover:bg-white/20"
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="rounded-3xl border border-white/10 bg-black/40 p-6 shadow-[0_18px_36px_rgba(0,0,0,0.35)]">
+          {renderTabContent()}
+        </div>
       </div>
     </Modal>
   );
