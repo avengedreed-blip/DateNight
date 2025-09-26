@@ -1,11 +1,32 @@
-import React, { useState, useEffect, memo } from "react";
+import React, { memo, useEffect, useRef, useState } from "react";
 
 const Modal = memo(({ title, open, onClose, children, actions }) => {
   const [isEntering, setIsEntering] = useState(false);
+  const contentRef = useRef(null);
+
+  useEffect(() => {
+    if (!open || typeof document === "undefined") return;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        onClose?.();
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, onClose]);
 
   useEffect(() => {
     if (open) {
       const timer = setTimeout(() => setIsEntering(true), 50);
+      contentRef.current?.focus({ preventScroll: true });
       return () => clearTimeout(timer);
     } else {
       setIsEntering(false);
@@ -38,8 +59,15 @@ const Modal = memo(({ title, open, onClose, children, actions }) => {
           padding: 24,
           textAlign: "center",
         }}
+        ref={contentRef}
+        tabIndex={-1}
+        aria-labelledby="modal-title"
       >
-        <h2 className="brand-title" style={{ fontSize: 28, margin: "4px 0 12px" }}>
+        <h2
+          id="modal-title"
+          className="brand-title"
+          style={{ fontSize: 28, margin: "4px 0 12px" }}
+        >
           {title}
         </h2>
         <div style={{ opacity: 0.9, lineHeight: 1.6 }}>{children}</div>
