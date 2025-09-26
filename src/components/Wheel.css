@@ -1,84 +1,212 @@
-/*
-|--------------------------------------------------------------------------
-| Wheel.css: Visual Specs & Responsiveness
-|--------------------------------------------------------------------------
-*/
-
-/* |--- Container Styles (Locked Spec) ---| */
+:root {
+  --wheel-size: min(86vw, calc(100vh - 260px));
+  --labelRadius: calc(var(--wheel-size) / 2.6);
+}
 
 .wheel-container {
-  width: min(82vw, calc(100vh - 220px));
-  aspect-ratio: 1 / 1; 
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--wheel-size);
+  max-width: 520px;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  z-index: 0;
 }
 
-/* No drop shadows on slices */
+.wheel-container::before {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  background: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--ring) 35%, transparent) 0%,
+    color-mix(in srgb, var(--ring) 15%, transparent) 45%,
+    transparent 75%
+  );
+  filter: blur(24px);
+  opacity: 0.8;
+  z-index: -2;
+  pointer-events: none;
+}
+
+.wheel-container::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.18), transparent 60%);
+  opacity: 0.4;
+  z-index: -3;
+  pointer-events: none;
+}
+
 .wheel {
-  border: 2px solid rgba(255, 255, 255, 0.2);
-}
-
-/* |--- Responsive CSS Variables (Locked Spec) ---| */
-
-.wheel {
-  --labelRadius: 60%; 
-  --separator-color: rgba(255, 255, 255, 0.15);
-  --separator-thickness: 1.5px;
-  --label-font-size: clamp(12px, 2.2vw, 18px);
-  --ring-color: #FFFFFF; 
-}
-
-@media (max-width: 420px) {
-  .wheel {
-    --labelRadius: 61%;
-    --separator-thickness: 1.5px;
-  }
-}
-
-@media (min-width: 900px) {
-  .wheel {
-    --labelRadius: 58%;
-    --label-font-size: 24px; 
-    --separator-thickness: 2px;
-  }
-}
-
-/* |--- Slice Labels (Typography & Shadow) ---| */
-
-.wheel-label-text {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--label-font-size);
-  font-weight: 600;
-  text-align: center; 
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  padding: 0;
-  margin: 0;
+  background:
+    conic-gradient(
+      from -90deg,
+      color-mix(in srgb, var(--truth) 88%, white 12%) 0deg,
+      color-mix(in srgb, var(--truth) 78%, black 22%) 120deg,
+      color-mix(in srgb, var(--dare) 88%, white 12%) 120deg,
+      color-mix(in srgb, var(--dare) 78%, black 22%) 240deg,
+      color-mix(in srgb, var(--trivia) 88%, white 12%) 240deg,
+      color-mix(in srgb, var(--trivia) 78%, black 22%) 360deg
+    );
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 0 35px rgba(0, 0, 0, 0.45),
+    0 0 65px rgba(90, 148, 255, 0.18),
+    inset 0 0 18px rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(14px);
+  transition: transform 3s cubic-bezier(0.2, 0.7, 0.3, 1);
+  will-change: transform;
 }
 
-.wheel-label-text.has-shadow {
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+.wheel::before {
+  content: "";
+  position: absolute;
+  inset: 3%;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--ring) 40%, transparent);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--ring) 30%, transparent);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 1;
 }
 
-/* |--- Pointer ---| */
-
-.wheel-pointer {
-  width: 0; 
-  height: 0; 
-  border-left: 10px solid transparent; 
-  border-right: 10px solid transparent; 
-  border-bottom: 20px solid; /* color injected inline */
+.wheel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.25), transparent 60%);
+  mix-blend-mode: screen;
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 1;
 }
 
-/* |--- Slice Separators ---| */
+.wheel-bounce {
+  animation: wheel-bounce 0.5s ease;
+}
+
+@keyframes wheel-bounce {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.wheel-svg {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+}
+
+.wheel-svg g path {
+  fill: transparent;
+  stroke-width: 0.35px;
+  mix-blend-mode: lighten;
+}
+
+.wheel-svg g:nth-of-type(1) path {
+  stroke: color-mix(in srgb, var(--truth) 80%, white 20%);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--truth) 45%, transparent));
+}
+
+.wheel-svg g:nth-of-type(2) path {
+  stroke: color-mix(in srgb, var(--dare) 80%, white 20%);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--dare) 45%, transparent));
+}
+
+.wheel-svg g:nth-of-type(3) path {
+  stroke: color-mix(in srgb, var(--trivia) 80%, white 20%);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--trivia) 45%, transparent));
+}
 
 .wheel-separator {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform-origin: center center;
-  height: 100%; 
-  width: var(--separator-thickness);
-  background: var(--separator-color);
+  width: 1.5px;
+  height: calc(var(--labelRadius) * 2.1);
+  transform-origin: center top;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.45),
+    rgba(255, 255, 255, 0.05)
+  );
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+  z-index: 3;
 }
 
+.wheel-label-text {
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  fill: #fff !important;
+  font-size: clamp(14px, calc(var(--labelRadius) / 2.4), 28px);
+  letter-spacing: 0.12em;
+  text-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.45),
+    0 0 8px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.wheel-pointer {
+  position: absolute;
+  top: calc(50% - var(--wheel-size) / 2 - 18px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 16px solid transparent;
+  border-right: 16px solid transparent;
+  border-bottom: 26px solid var(--ring);
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--ring) 55%, transparent));
+  z-index: 5;
+}
+
+.wheel-pointer::after {
+  content: "";
+  position: absolute;
+  top: 70%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ring);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ring) 70%, transparent);
+}
+
+@media (max-width: 640px) {
+  :root {
+    --wheel-size: min(92vw, calc(100vh - 220px));
+  }
+
+  .wheel-pointer {
+    border-left-width: 14px;
+    border-right-width: 14px;
+    border-bottom-width: 22px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --wheel-size: min(460px, calc(100vh - 300px));
+  }
+}
