@@ -1,8 +1,9 @@
-import React, { useState, memo } from "react";
+import React, { memo, useState } from "react";
 
 const ModeSelectionScreen = memo(({ mode, onStart }) => {
   const [type, setType] = useState("couples");
   const [players, setPlayers] = useState(3);
+
   const title = mode ? `${mode[0].toUpperCase() + mode.slice(1)} Mode` : "Choose Mode";
 
   return (
@@ -56,7 +57,6 @@ const ModeSelectionScreen = memo(({ mode, onStart }) => {
             Party
           </button>
         </div>
-
         {type === "party" && (
           <div
             className="animate-in delay-2"
