@@ -1,6 +1,6 @@
-import React, { memo, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
-const Modal = memo(({ title, open, onClose, children, actions }) => {
+export default function Modal({ title, open, onClose, children, actions }) {
   const [isEntering, setIsEntering] = useState(false);
   const contentRef = useRef(null);
 
@@ -28,9 +28,9 @@ const Modal = memo(({ title, open, onClose, children, actions }) => {
       const timer = setTimeout(() => setIsEntering(true), 50);
       contentRef.current?.focus({ preventScroll: true });
       return () => clearTimeout(timer);
-    } else {
-      setIsEntering(false);
     }
+
+    setIsEntering(false);
   }, [open]);
 
   if (!open) return null;
@@ -39,7 +39,11 @@ const Modal = memo(({ title, open, onClose, children, actions }) => {
     <div
       role="dialog"
       aria-modal="true"
-      onClick={(e) => e.target === e.currentTarget && onClose?.()}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose?.();
+        }
+      }}
       style={{
         position: "fixed",
         inset: 0,
@@ -93,6 +97,4 @@ const Modal = memo(({ title, open, onClose, children, actions }) => {
       </div>
     </div>
   );
-});
-
-export default Modal;
+}
