@@ -1,9 +1,15 @@
 import React from "react";
 
+import AvatarSelector from "./AvatarSelector";
 import Modal from "./Modal";
 import useMusic, { MUSIC_TRACK_OPTIONS } from "../hooks/useMusic";
 
-export default function SettingsModal({ open, onClose }) {
+export default function SettingsModal({
+  open,
+  onClose,
+  profile,
+  onAvatarChange = () => {},
+}) {
   const { currentTrackId, setVolume, volume, isMuted, toggleMute, playTrack } =
     useMusic();
 
@@ -73,7 +79,13 @@ export default function SettingsModal({ open, onClose }) {
         </section>
         <section>
           <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>Avatar</h3>
-          <p style={{ opacity: 0.8 }}>Avatar picker (coming soon)</p>
+          <AvatarSelector
+            selectedAvatar={profile?.avatar}
+            onAvatarSelect={(avatar) => {
+              localStorage.setItem("avatar", avatar);
+              onAvatarChange(avatar);
+            }}
+          />
         </section>
       </div>
     </Modal>
