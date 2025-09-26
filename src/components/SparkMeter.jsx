@@ -1,33 +1,40 @@
 import React, { memo } from "react";
 
-const SparkMeter = memo(({ value }) => (
-  <div
-    className="meter"
-    role="progressbar"
-    aria-valuemin={0}
-    aria-valuemax={100}
-    aria-valuenow={value}
-  >
+const SparkMeter = memo(({ value }) => {
+  const numericValue = Number.isFinite(value) ? value : 0;
+  const clampedValue = Math.min(100, Math.max(0, numericValue));
+
+  return (
     <div
-      style={{
-        textAlign: "center",
-        fontWeight: 800,
-        letterSpacing: ".14em",
-        fontSize: 12,
-        opacity: 0.85,
-        marginBottom: 8,
-      }}
+      className="meter"
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={clampedValue}
     >
-      SPARK METER
-    </div>
-    <div className="meter-track">
       <div
-        className={`meter-fill ${value > 0 && value < 100 ? "pulsing" : ""}`}
-        style={{ width: `${value}%` }}
-      />
+        style={{
+          textAlign: "center",
+          fontWeight: 800,
+          letterSpacing: ".14em",
+          fontSize: 12,
+          opacity: 0.85,
+          marginBottom: 8,
+        }}
+      >
+        SPARK METER
+      </div>
+      <div className="meter-track">
+        <div
+          className={`meter-fill ${
+            clampedValue > 0 && clampedValue < 100 ? "pulsing" : ""
+          }`}
+          style={{ width: `${clampedValue}%` }}
+        />
+      </div>
     </div>
-  </div>
-));
+  );
+});
 
 SparkMeter.displayName = "SparkMeter";
 
