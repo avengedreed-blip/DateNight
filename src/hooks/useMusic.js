@@ -368,19 +368,29 @@ export function useMusic({ storageKey = LOCAL_STORAGE_KEY } = {}) {
     [firestoreDocRef]
   );
 
-  const playTrack = useCallback((themeKey) => {
-    const nextTrackId = Object.prototype.hasOwnProperty.call(
-      TRACK_SOURCES,
-      themeKey
-    )
-      ? themeKey
-      : DEFAULT_TRACK_ID;
+  const playTrack = useCallback(
+    (themeKey) => {
+      const nextTrackId = Object.prototype.hasOwnProperty.call(
+        TRACK_SOURCES,
+        themeKey
+      )
+        ? themeKey
+        : DEFAULT_TRACK_ID;
 
-    shouldPlayRef.current = true;
-    isManuallyStoppedRef.current = false;
-    updateSourceRef.current = "local";
-    setCurrentTrackId(nextTrackId);
-  }, []);
+      shouldPlayRef.current = true;
+      isManuallyStoppedRef.current = false;
+
+      if (trackIdRef.current === nextTrackId) {
+        updateSourceRef.current = null;
+        startPlayback(nextTrackId);
+        return;
+      }
+
+      updateSourceRef.current = "local";
+      setCurrentTrackId(nextTrackId);
+    },
+    [startPlayback]
+  );
 
   const stopTrack = useCallback(() => {
     shouldPlayRef.current = false;
