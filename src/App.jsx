@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import confetti from "canvas-confetti";
 
-import ParticleCanvas from "./components/ParticleCanvas";
-import Modal from "./components/Modal";
-import SettingsModal from "./components/SettingsModal";
-import StartScreen from "./screens/StartScreen";
-import ModeSelectionScreen from "./screens/ModeSelectionScreen";
-import GameScreen from "./screens/GameScreen";
+import ParticleCanvas from "./components/ParticleCanvas.jsx";
+import Modal from "./components/Modal.jsx";
+import SettingsModal from "./components/SettingsModal.jsx";
+import StartScreen from "./screens/StartScreen.jsx";
+import ModeSelectionScreen from "./screens/ModeSelectionScreen.jsx";
+import GameScreen from "./screens/GameScreen.jsx";
 
 import { THEMES } from "./constants/themes";
 import { mockProfile } from "./constants/mockProfile";
