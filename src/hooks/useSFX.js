@@ -46,7 +46,15 @@ function fadeOutAndStop(voice, ctx) {
   voice.gain.gain.cancelScheduledValues(now);
   voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
   voice.gain.gain.linearRampToValueAtTime(0, now + RELEASE_TIME);
-  voice.oscillator.stop(now + RELEASE_TIME);
+  if (typeof voice.stopScheduledAt !== 'number') {
+    const stopTime = now + RELEASE_TIME;
+    try {
+      voice.oscillator.stop(stopTime);
+      voice.stopScheduledAt = stopTime;
+    } catch (error) {
+      // Ignore if oscillator is already stopped.
+    }
+  }
 }
 
 function createVoice(ctx, type) {
@@ -55,7 +63,7 @@ function createVoice(ctx, type) {
   const gain = ctx.createGain();
   oscillator.connect(gain);
   gain.connect(ctx.destination);
-  const voice = { oscillator, gain };
+  const voice = { oscillator, gain, stopScheduledAt: null };
   registerVoice(voice, ctx);
   return voice;
 }
@@ -110,8 +118,14 @@ function scheduleTone({
     voice.oscillator.frequency.setValueAtTime(frequency, startTime);
   }
 
+  const stopTime = envelopeEnd + 0.01;
   voice.oscillator.start(startTime);
-  voice.oscillator.stop(envelopeEnd + 0.01);
+  try {
+    voice.oscillator.stop(stopTime);
+    voice.stopScheduledAt = stopTime;
+  } catch (error) {
+    voice.stopScheduledAt = null;
+  }
 }
 
 export function playModalOpen() {
