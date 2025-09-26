@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, memo } from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import Modal from "./Modal.jsx";
-import AvatarPanel from "./AvatarPanel.jsx";
+import AvatarSelector, { PRESET_AVATARS } from "./AvatarSelector.jsx";
 import { db } from "../config/firebase.js";
 import { THEMES } from "../theme/themes.js";
 
@@ -13,13 +13,19 @@ const SettingsModal = memo(({ open, onClose, onThemeChange, profile }) => {
     }
 
     if (typeof window !== "undefined") {
-      const stored = window.localStorage.getItem("avatar");
-      if (stored) {
-        return stored;
+      try {
+        const stored =
+          window.localStorage.getItem("selectedAvatar") ||
+          window.localStorage.getItem("avatar");
+        if (stored) {
+          return stored;
+        }
+      } catch (error) {
+        console.error("Failed to read stored avatar:", error);
       }
     }
 
-    return null;
+    return PRESET_AVATARS[0];
   });
   const achievements = profile?.achievements || [];
 
@@ -27,11 +33,22 @@ const SettingsModal = memo(({ open, onClose, onThemeChange, profile }) => {
     const storedAvatar =
       profile?.avatar ??
       (typeof window !== "undefined"
-        ? window.localStorage.getItem("avatar")
+        ? window.localStorage.getItem("selectedAvatar") ??
+          window.localStorage.getItem("avatar")
         : null);
 
     if (storedAvatar) {
       setSelectedAvatar((prev) => (prev === storedAvatar ? prev : storedAvatar));
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem("selectedAvatar", storedAvatar);
+          if (window.localStorage.getItem("avatar")) {
+            window.localStorage.removeItem("avatar");
+          }
+        } catch (error) {
+          console.error("Failed to persist avatar locally:", error);
+        }
+      }
     }
   }, [profile?.avatar]);
 
@@ -47,7 +64,10 @@ const SettingsModal = memo(({ open, onClose, onThemeChange, profile }) => {
 
       if (typeof window !== "undefined") {
         try {
-          window.localStorage.setItem("avatar", avatarPath);
+          window.localStorage.setItem("selectedAvatar", avatarPath);
+          if (window.localStorage.getItem("avatar")) {
+            window.localStorage.removeItem("avatar");
+          }
         } catch (error) {
           console.error("Failed to save avatar locally:", error);
         }
@@ -86,8 +106,20 @@ const SettingsModal = memo(({ open, onClose, onThemeChange, profile }) => {
         </button>,
       ]}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-        <AvatarPanel selectedAvatar={selectedAvatar} onSelect={onAvatarChange} />
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "1.5rem",
+          maxHeight: "65vh",
+          overflowY: "auto",
+          paddingRight: "0.5rem",
+        }}
+      >
+        <AvatarSelector
+          selectedAvatar={selectedAvatar}
+          onAvatarSelect={onAvatarChange}
+        />
         <div
           style={{
             padding: "0.25rem",
