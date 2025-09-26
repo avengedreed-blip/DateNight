@@ -1,6 +1,6 @@
 import React, { useState, memo } from "react";
-import Modal from "./Modal";
-import { THEMES } from "../constants/themes";
+import Modal from "./Modal.jsx";
+import { THEMES } from "../constants/themes.js";
 
 const SettingsModal = memo(({ open, onClose, onThemeChange, profile }) => {
   const [activeTab, setActiveTab] = useState("themes");
