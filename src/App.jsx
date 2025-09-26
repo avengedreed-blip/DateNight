@@ -12,7 +12,7 @@ import { THEMES } from "./constants/themes";
 import { mockProfile } from "./constants/mockProfile";
 import { SLICE_LABELS, SLICE_CENTERS } from "./components/Wheel";
 
-import "./styles/global.css";
+import "./styles/layout.css";
 
 export default function App() {
   const [screen, setScreen] = useState("start");
