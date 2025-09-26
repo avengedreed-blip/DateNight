@@ -1,10 +1,79 @@
-import React, { useState, memo } from "react";
+import React, { useState, useEffect, useCallback, memo } from "react";
+import { doc, updateDoc } from "firebase/firestore";
 import Modal from "./Modal.jsx";
+import AvatarPanel from "./AvatarPanel.jsx";
+import { db } from "../config/firebase.js";
 import { THEMES } from "../theme/themes.js";
 
 const SettingsModal = memo(({ open, onClose, onThemeChange, profile }) => {
   const [activeTab, setActiveTab] = useState("themes");
+  const [selectedAvatar, setSelectedAvatar] = useState(() => {
+    if (profile?.avatar) {
+      return profile.avatar;
+    }
+
+    if (typeof window !== "undefined") {
+      const stored = window.localStorage.getItem("avatar");
+      if (stored) {
+        return stored;
+      }
+    }
+
+    return null;
+  });
   const achievements = profile?.achievements || [];
+
+  useEffect(() => {
+    const storedAvatar =
+      profile?.avatar ??
+      (typeof window !== "undefined"
+        ? window.localStorage.getItem("avatar")
+        : null);
+
+    if (storedAvatar) {
+      setSelectedAvatar((prev) => (prev === storedAvatar ? prev : storedAvatar));
+    }
+  }, [profile?.avatar]);
+
+  const profileUid = profile?.uid;
+
+  const onAvatarChange = useCallback(
+    async (avatarPath) => {
+      if (!avatarPath || avatarPath === selectedAvatar) {
+        return;
+      }
+
+      setSelectedAvatar(avatarPath);
+
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem("avatar", avatarPath);
+        } catch (error) {
+          console.error("Failed to save avatar locally:", error);
+        }
+      }
+
+      if (!profileUid) {
+        return;
+      }
+
+      if (!db) {
+        console.warn(
+          "Firestore is not initialized. Avatar change persisted locally only."
+        );
+        return;
+      }
+
+      try {
+        await updateDoc(doc(db, "users", profileUid), {
+          avatar: avatarPath,
+        });
+      } catch (error) {
+        console.error("Failed to update avatar in Firestore:", error);
+      }
+    },
+    [profileUid, selectedAvatar]
+  );
 
   return (
     <Modal
@@ -17,7 +86,8 @@ const SettingsModal = memo(({ open, onClose, onThemeChange, profile }) => {
         </button>,
       ]}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+        <AvatarPanel selectedAvatar={selectedAvatar} onSelect={onAvatarChange} />
         <div
           style={{
             padding: "0.25rem",
