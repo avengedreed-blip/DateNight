@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import confetti from "canvas-confetti";
-import AppStyles from "./styles/AppStyles";
+import { AppStyles } from "./styles/AppStyles";
 
 import ParticleCanvas from "./components/ParticleCanvas";
 import Wheel, { SLICE_LABELS, SLICE_CENTERS } from "./components/Wheel";
