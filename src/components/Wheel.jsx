@@ -7,18 +7,21 @@ const Wheel = memo(({ isSpinning, rotation, onDone }) => {
   const wheelEl = useRef(null);
   const [bounce, setBounce] = useState(false);
 
-  const handleTransitionEnd = useCallback((ev) => {
-    if (ev.propertyName !== "transform") return;
-    setBounce(true);
-    setTimeout(() => setBounce(false), 500);
-    onDone?.();
-  }, [onDone]);
+  const handleTransitionEnd = useCallback(
+    (ev) => {
+      if (ev.propertyName !== "transform") return;
+      setBounce(true);
+      setTimeout(() => setBounce(false), 500);
+      onDone?.();
+    },
+    [onDone]
+  );
 
   useEffect(() => {
     const el = wheelEl.current;
     if (!el) return;
     if (isSpinning) {
-      el.addEventListener("transitionend", handleTransitionEnd, { once: true });
+      el.addEventListener("transitionend", handleTransitionEnd);
     }
     return () => el.removeEventListener("transitionend", handleTransitionEnd);
   }, [isSpinning, handleTransitionEnd]);
@@ -28,12 +31,18 @@ const Wheel = memo(({ isSpinning, rotation, onDone }) => {
       <div className="pointer" />
       <div
         ref={wheelEl}
-        className={`wheel ${bounce ? "wheel-bounce" : ""} ${isSpinning ? "spinning" : ""}`}
+        className={`wheel ${bounce ? "wheel-bounce" : ""} ${
+          isSpinning ? "spinning" : ""
+        }`}
         style={{ transform: `rotate(${rotation}deg)` }}
       >
         <div className="wheel-bg" />
         {[0, 120, 240].map((deg, i) => (
-          <div key={i} className="separator" style={{ transform: `rotate(${deg}deg)` }} />
+          <div
+            key={i}
+            className="separator"
+            style={{ transform: `rotate(${deg}deg)` }}
+          />
         ))}
         {SLICE_LABELS.map((label, i) => {
           const center = SLICE_CENTERS[i];
