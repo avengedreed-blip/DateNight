@@ -1,25 +1,27 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import confetti from "canvas-confetti";
+import AppStyles from "./styles/AppStyles";
 
-import ParticleCanvas from "./components/ParticleCanvas.jsx";
-import Modal from "./components/Modal.jsx";
-import SettingsModal from "./components/SettingsModal.jsx";
-import StartScreen from "./screens/StartScreen.jsx";
-import ModeSelectionScreen from "./screens/ModeSelectionScreen.jsx";
-import GameScreen from "./screens/GameScreen.jsx";
+import ParticleCanvas from "./components/ParticleCanvas";
+import Wheel, { SLICE_LABELS, SLICE_CENTERS } from "./components/Wheel";
+import SparkMeter from "./components/SparkMeter";
+import Modal from "./components/Modal";
+import TopBar from "./components/TopBar";
 
-import { THEMES } from "./constants/themes.js";
-import { mockProfile } from "./constants/mockProfile.js";
-import { SLICE_LABELS, SLICE_CENTERS } from "./components/Wheel.jsx";
+import SplashScreen from "./components/Screens/SplashScreen";
+import StartScreen from "./components/Screens/StartScreen";
+import ModeSelectionScreen from "./components/Screens/ModeSelectionScreen";
+import GameScreen from "./components/Screens/GameScreen";
 
-import "./styles/layout.css";
+import { THEMES, getLuminance } from "./themeConfig";
 
 export default function App() {
-  const [screen, setScreen] = useState("start");
+  const [screen, setScreen] = useState("splash");
   const [mode, setMode] = useState(null);
   const [themeKey, setThemeKey] = useState("classic-dark");
   const theme = THEMES[themeKey];
-  const [modal, setModal] = useState(null);
+
+  const [modalOpen, setModalOpen] = useState(null); // null | 'result' | 'help' | 'settings'
   const [screenFlash, setScreenFlash] = useState(false);
 
   const [rotation, setRotation] = useState(0);
@@ -27,6 +29,15 @@ export default function App() {
   const [spark, setSpark] = useState(0);
   const [lastResult, setLastResult] = useState(0);
 
+  // Splash timeout → start screen
+  useEffect(() => {
+    if (screen === "splash") {
+      const timer = setTimeout(() => setScreen("start"), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [screen]);
+
+  // Apply theme tokens to :root
   useEffect(() => {
     const r = document.documentElement;
     r.style.setProperty("--bg-start", theme.bg[0]);
@@ -36,8 +47,13 @@ export default function App() {
     r.style.setProperty("--trivia", theme.colors.trivia);
     r.style.setProperty("--meter-a", theme.meter[0]);
     r.style.setProperty("--meter-b", theme.meter[1]);
-    r.style.setProperty("--text", theme.label === "white" ? "#fff" : "#111");
-    r.style.setProperty("--ring", theme.label === "white" ? "#fff" : "#111");
+
+    const bgLuminance =
+      (getLuminance(theme.bg[0]) + getLuminance(theme.bg[1])) / 2;
+    const textColor = bgLuminance < 0.5 ? "#FFFFFF" : "#111111";
+
+    r.style.setProperty("--text", textColor);
+    r.style.setProperty("--ring", textColor);
     r.style.setProperty("--theme-primary", theme.colors.truth);
   }, [theme]);
 
@@ -85,15 +101,19 @@ export default function App() {
       }
       return newSpark;
     });
-    setModal("result");
+    setModalOpen("result");
   }, []);
 
   return (
-    <div className={screenFlash ? "screen-flash-active" : ""}>
+    <div className={`animated-background ${screenFlash ? "screen-flash-active" : ""}`}>
+      <style>{AppStyles}</style>
       <ParticleCanvas theme={particleTheme} />
 
+      <div className={`screen ${screen === "splash" ? "enter" : ""}`}>
+        {screen === "splash" && <SplashScreen />}
+      </div>
       <div className={`screen ${screen === "start" ? "enter" : ""}`}>
-        <StartScreen onPickMode={handlePickMode} />
+        {screen === "start" && <StartScreen onPickMode={handlePickMode} />}
       </div>
       <div className={`screen ${screen === "select" ? "enter" : ""}`}>
         {screen === "select" && (
@@ -108,18 +128,22 @@ export default function App() {
             spinning={spinning}
             spark={spark}
             onSpinDone={handleSpinDone}
-            onSettingsClick={() => setModal("settings")}
-            onHelpClick={() => setModal("help")}
+            onHelpClick={() => setModalOpen("help")}
+            onSettingsClick={() => setModalOpen("settings")}
           />
         )}
       </div>
 
       <Modal
         title="Result"
-        open={modal === "result"}
-        onClose={() => setModal(null)}
+        open={modalOpen === "result"}
+        onClose={() => setModalOpen(null)}
         actions={[
-          <button key="1" className="btn grad-pink" onClick={() => setModal(null)}>
+          <button
+            key="1"
+            className="btn grad-pink"
+            onClick={() => setModalOpen(null)}
+          >
             Continue
           </button>,
         ]}
@@ -130,12 +154,22 @@ export default function App() {
         </p>
       </Modal>
 
-      <SettingsModal
-        open={modal === "settings"}
-        onClose={() => setModal(null)}
-        onThemeChange={setThemeKey}
-        profile={mockProfile}
-      />
+      <Modal
+        title="Help"
+        open={modalOpen === "help"}
+        onClose={() => setModalOpen(null)}
+        actions={[
+          <button
+            key="1"
+            className="btn grad-pink"
+            onClick={() => setModalOpen(null)}
+          >
+            Got It!
+          </button>,
+        ]}
+      >
+        <p>This is the help text for the game!</p>
+      </Modal>
     </div>
   );
 }
