@@ -1,12 +1,12 @@
 import React, { memo } from "react";
-import TopBar from "../components/TopBar.jsx";
-import Wheel from "../components/Wheel.jsx";
-import SparkMeter from "../components/SparkMeter.jsx";
+import TopBar from "../components/TopBar";
+import Wheel from "../components/Wheel";
+import SparkMeter from "../components/SparkMeter";
 
 const GameScreen = memo(
   ({ rotation, onSpin, spinning, spark, onSpinDone, onSettingsClick, onHelpClick }) => (
     <div className="screen">
-      <TopBar title="Date Night" onHelp={onHelpClick} onSettings={onSettingsClick} />
+      <TopBar title="Date Night" onSettings={onSettingsClick} onHelp={onHelpClick} />
       <main
         style={{
           display: "grid",
