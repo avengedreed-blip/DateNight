@@ -1,7 +1,7 @@
 import React, { memo } from "react";
-import TopBar from "../components/TopBar";
-import Wheel from "../components/Wheel";
-import SparkMeter from "../components/SparkMeter";
+import TopBar from "../components/TopBar.jsx";
+import Wheel from "../components/Wheel.jsx";
+import SparkMeter from "../components/SparkMeter.jsx";
 
 const GameScreen = memo(
   ({ rotation, onSpin, spinning, spark, onSpinDone, onSettingsClick, onHelpClick }) => (

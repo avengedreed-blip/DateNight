@@ -8,9 +8,9 @@ import StartScreen from "./screens/StartScreen.jsx";
 import ModeSelectionScreen from "./screens/ModeSelectionScreen.jsx";
 import GameScreen from "./screens/GameScreen.jsx";
 
-import { THEMES } from "./constants/themes";
-import { mockProfile } from "./constants/mockProfile";
-import { SLICE_LABELS, SLICE_CENTERS } from "./components/Wheel";
+import { THEMES } from "./constants/themes.js";
+import { mockProfile } from "./constants/mockProfile.js";
+import { SLICE_LABELS, SLICE_CENTERS } from "./components/Wheel.jsx";
 
 import "./styles/layout.css";
 
