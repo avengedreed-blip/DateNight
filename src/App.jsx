@@ -6,6 +6,7 @@ import ParticleCanvas from "./components/ParticleCanvas";
 import Wheel, { SLICE_LABELS, SLICE_CENTERS } from "./components/Wheel";
 import SparkMeter from "./components/SparkMeter";
 import Modal from "./components/Modal";
+import SettingsModal from "./components/SettingsModal";
 import TopBar from "./components/TopBar";
 
 import SplashScreen from "./components/Screens/SplashScreen";
@@ -185,6 +186,10 @@ export default function App() {
       >
         <p>This is the help text for the game!</p>
       </Modal>
+
+      {modalOpen === "settings" && (
+        <SettingsModal open onClose={() => setModalOpen(false)} />
+      )}
     </div>
   );
 }

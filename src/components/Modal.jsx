@@ -5,15 +5,17 @@ export default function Modal({ title, open, onClose, children, actions }) {
   const contentRef = useRef(null);
 
   useEffect(() => {
-    if (!open || typeof document === "undefined") return;
+    if (!open || typeof document === "undefined") {
+      return;
+    }
 
+    const previousOverflow = document.body.style.overflow;
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         onClose?.();
       }
     };
 
-    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     document.addEventListener("keydown", handleKeyDown);
 
@@ -24,16 +26,22 @@ export default function Modal({ title, open, onClose, children, actions }) {
   }, [open, onClose]);
 
   useEffect(() => {
-    if (open) {
-      const timer = setTimeout(() => setIsEntering(true), 50);
-      contentRef.current?.focus({ preventScroll: true });
-      return () => clearTimeout(timer);
+    if (!open) {
+      setIsEntering(false);
+      return;
     }
 
-    setIsEntering(false);
+    const timer = setTimeout(() => setIsEntering(true), 50);
+    contentRef.current?.focus({ preventScroll: true });
+
+    return () => {
+      clearTimeout(timer);
+    };
   }, [open]);
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   return (
     <div
@@ -49,7 +57,7 @@ export default function Modal({ title, open, onClose, children, actions }) {
         inset: 0,
         display: "grid",
         placeItems: "center",
-        background: "rgba(0,0,0,.45)",
+        background: "rgba(0,0,0,0.45)",
         zIndex: 50,
         opacity: isEntering ? 1 : 0,
         transition: "opacity 0.2s ease",
@@ -75,7 +83,7 @@ export default function Modal({ title, open, onClose, children, actions }) {
           {title}
         </h2>
         <div style={{ opacity: 0.9, lineHeight: 1.6 }}>{children}</div>
-        {actions && (
+        {Array.isArray(actions) && actions.length > 0 && (
           <div
             style={{
               marginTop: 14,
@@ -85,7 +93,7 @@ export default function Modal({ title, open, onClose, children, actions }) {
               flexWrap: "wrap",
             }}
           >
-            {React.Children.map(actions, (action, index) =>
+            {actions.map((action, index) =>
               React.cloneElement(action, {
                 className: `${action.props.className || ""} btn delay-${
                   index + 1

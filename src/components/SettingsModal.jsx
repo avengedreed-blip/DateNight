@@ -1,79 +1,23 @@
-import React, { useState, useEffect, useCallback, memo } from "react";
-import { doc, updateDoc } from "firebase/firestore";
-import Modal from "./Modal.jsx";
-import AvatarPanel from "./AvatarPanel.jsx";
-import { db } from "../config/firebase.js";
-import { THEMES } from "../theme/themes.js";
+import React from "react";
 
-const SettingsModal = memo(({ open, onClose, onThemeChange, profile }) => {
-  const [activeTab, setActiveTab] = useState("themes");
-  const [selectedAvatar, setSelectedAvatar] = useState(() => {
-    if (profile?.avatar) {
-      return profile.avatar;
+import Modal from "./Modal";
+import useMusic, { MUSIC_TRACK_OPTIONS } from "../hooks/useMusic";
+
+export default function SettingsModal({ open, onClose }) {
+  const { currentTrackId, setVolume, volume, isMuted, toggleMute, playTrack } =
+    useMusic();
+
+  const handleVolumeChange = (event) => {
+    const nextValue = Number(event.target.value);
+    if (Number.isNaN(nextValue)) {
+      return;
     }
+    setVolume(nextValue / 100);
+  };
 
-    if (typeof window !== "undefined") {
-      const stored = window.localStorage.getItem("avatar");
-      if (stored) {
-        return stored;
-      }
-    }
-
-    return null;
-  });
-  const achievements = profile?.achievements || [];
-
-  useEffect(() => {
-    const storedAvatar =
-      profile?.avatar ??
-      (typeof window !== "undefined"
-        ? window.localStorage.getItem("avatar")
-        : null);
-
-    if (storedAvatar) {
-      setSelectedAvatar((prev) => (prev === storedAvatar ? prev : storedAvatar));
-    }
-  }, [profile?.avatar]);
-
-  const profileUid = profile?.uid;
-
-  const onAvatarChange = useCallback(
-    async (avatarPath) => {
-      if (!avatarPath || avatarPath === selectedAvatar) {
-        return;
-      }
-
-      setSelectedAvatar(avatarPath);
-
-      if (typeof window !== "undefined") {
-        try {
-          window.localStorage.setItem("avatar", avatarPath);
-        } catch (error) {
-          console.error("Failed to save avatar locally:", error);
-        }
-      }
-
-      if (!profileUid) {
-        return;
-      }
-
-      if (!db) {
-        console.warn(
-          "Firestore is not initialized. Avatar change persisted locally only."
-        );
-        return;
-      }
-
-      try {
-        await updateDoc(doc(db, "users", profileUid), {
-          avatar: avatarPath,
-        });
-      } catch (error) {
-        console.error("Failed to update avatar in Firestore:", error);
-      }
-    },
-    [profileUid, selectedAvatar]
-  );
+  const handleTrackChange = (event) => {
+    playTrack(event.target.value);
+  };
 
   return (
     <Modal
@@ -81,103 +25,57 @@ const SettingsModal = memo(({ open, onClose, onThemeChange, profile }) => {
       open={open}
       onClose={onClose}
       actions={[
-        <button key="1" className="btn grad-pink" onClick={onClose}>
+        <button key="close" type="button" className="btn grad-pink" onClick={onClose}>
           Close
         </button>,
       ]}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-        <AvatarPanel selectedAvatar={selectedAvatar} onSelect={onAvatarChange} />
-        <div
-          style={{
-            padding: "0.25rem",
-            borderRadius: "0.5rem",
-            background: "rgba(0,0,0,0.2)",
-            display: "flex",
-            justifyContent: "center",
-            gap: "0.5rem",
-          }}
-        >
-          <button
-            onClick={() => setActiveTab("themes")}
-            className={`px-4 py-2 font-bold rounded-lg transition-all duration-200 ${
-              activeTab === "themes"
-                ? "bg-white/90 text-black shadow-md"
-                : "bg-transparent text-white/70 hover:bg-white/10"
-            }`}
-          >
-            Themes
-          </button>
-          <button
-            onClick={() => setActiveTab("achievements")}
-            className={`px-4 py-2 font-bold rounded-lg transition-all duration-200 ${
-              activeTab === "achievements"
-                ? "bg-white/90 text-black shadow-md"
-                : "bg-transparent text-white/70 hover:bg-white/10"
-            }`}
-          >
-            Achievements
-          </button>
-        </div>
-
-        <div className="pt-4">
-          {activeTab === "themes" && (
-            <div className="animate-in grid grid-cols-2 gap-4">
-              {(Array.isArray(THEMES)
-                ? THEMES.map((theme) => [theme.id, theme])
-                : Object.entries(THEMES)
-              ).map(([key, theme]) => {
-                const truthColor =
-                  theme?.colors?.truth ??
-                  (Array.isArray(theme?.colors) ? theme.colors[0] : undefined) ??
-                  "#ffffff";
-                return (
-                  <button
-                    key={key}
-                    onClick={() => onThemeChange(key)}
-                    className="p-4 rounded-xl flex items-center justify-center text-center font-semibold transition-transform hover:scale-105 duration-200"
-                    style={{
-                      background: `linear-gradient(180deg, ${theme.bg[0]}, ${theme.bg[1]})`,
-                      color: "#fff",
-                      border: `2px solid ${truthColor}`,
-                    }}
-                  >
-                    {theme.name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {activeTab === "achievements" && (
-            <div className="animate-in">
-              {achievements.filter((a) => a.unlocked).length > 0 ? (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[50vh] overflow-y-auto pr-2">
-                  {achievements
-                    .filter((a) => a.unlocked)
-                    .map((ach) => (
-                      <div
-                        key={ach.id}
-                        className="relative group glass p-4 rounded-xl flex flex-col items-center justify-center text-center aspect-square transition-transform duration-200 hover:scale-105"
-                      >
-                        <span className="text-4xl mb-2">{ach.icon}</span>
-                        <h4 className="font-bold text-sm text-white">{ach.title}</h4>
-                        <div className="absolute bottom-full mb-2 w-max max-w-xs p-2 text-xs bg-black/80 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-                          {ach.description}
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              ) : (
-                <p className="text-white/60">
-                  Play some games to unlock your first achievement!
-                </p>
-              )}
-            </div>
-          )}
-        </div>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 24,
+          textAlign: "left",
+        }}
+      >
+        <section>
+          <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>Audio</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <span style={{ fontWeight: 600 }}>Volume</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={Math.round(volume * 100)}
+                onChange={handleVolumeChange}
+              />
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={isMuted}
+                onChange={toggleMute}
+              />
+              <span style={{ fontWeight: 600 }}>Mute</span>
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <span style={{ fontWeight: 600 }}>Music Track</span>
+              <select value={currentTrackId} onChange={handleTrackChange}>
+                {MUSIC_TRACK_OPTIONS.map((track) => (
+                  <option key={track.id} value={track.id}>
+                    {track.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </section>
+        <section>
+          <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>Avatar</h3>
+          <p style={{ opacity: 0.8 }}>Avatar picker (coming soon)</p>
+        </section>
       </div>
     </Modal>
   );
-});
-
-export default SettingsModal;
+}
