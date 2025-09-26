@@ -71,6 +71,12 @@ export default function App() {
     setScreen("select");
   }, []);
 
+  const modeSubtitle = useMemo(() => {
+    if (!mode) return undefined;
+    const capitalized = mode[0].toUpperCase() + mode.slice(1);
+    return `${capitalized} Mode`;
+  }, [mode]);
+
   const handleSpin = useCallback(() => {
     if (spinning) return;
 
@@ -130,6 +136,15 @@ export default function App() {
             onSpinDone={handleSpinDone}
             onHelpClick={() => setModalOpen("help")}
             onSettingsClick={() => setModalOpen("settings")}
+            topBar={
+              <TopBar
+                title="Date Night"
+                subtitle={modeSubtitle}
+                onHelp={() => setModalOpen("help")}
+                onSettings={() => setModalOpen("settings")}
+              />
+            }
+            sparkMeter={<SparkMeter value={spark} />}
           />
         )}
       </div>

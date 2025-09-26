@@ -4,9 +4,25 @@ import Wheel from "../components/Wheel";
 import SparkMeter from "../components/SparkMeter";
 
 const GameScreen = memo(
-  ({ rotation, onSpin, spinning, spark, onSpinDone, onSettingsClick, onHelpClick }) => (
+  ({
+    rotation,
+    onSpin,
+    spinning,
+    spark,
+    onSpinDone,
+    onSettingsClick,
+    onHelpClick,
+    topBar,
+    sparkMeter,
+  }) => (
     <div className="screen">
-      <TopBar title="Date Night" onSettings={onSettingsClick} onHelp={onHelpClick} />
+      {topBar ?? (
+        <TopBar
+          title="Date Night"
+          onSettings={onSettingsClick}
+          onHelp={onHelpClick}
+        />
+      )}
       <main
         style={{
           display: "grid",
@@ -24,7 +40,7 @@ const GameScreen = memo(
         >
           {spinning ? "Spinning…" : "Spin"}
         </button>
-        <SparkMeter value={spark} />
+        {sparkMeter ?? <SparkMeter value={spark} />}
       </main>
     </div>
   )
