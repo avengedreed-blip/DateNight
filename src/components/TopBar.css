@@ -1,13 +1,92 @@
-/*
-|--------------------------------------------------------------------------
-| TopBar.css: Glassmorphism Style for Header
-|--------------------------------------------------------------------------
-*/
+.topbar {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px clamp(16px, 5vw, 28px);
+  z-index: 30;
+}
 
-.top-bar.glass {
+.topbar.glass {
+  background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.08),
+      rgba(255, 255, 255, 0.02)
+    );
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.25);
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 64px;
+  justify-content: center;
+}
+
+.btn-icon {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text, #ffffff);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.btn-icon:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.btn-icon:disabled,
+.btn-icon[disabled] {
+  cursor: default;
+  opacity: 0.55;
   background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: none;
+}
+
+.topbar__icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.topbar__title {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.topbar__brand {
+  margin: 0;
+  font-size: clamp(1.25rem, 4vw, 2rem);
+}
+
+.topbar__subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-weak, rgba(255, 255, 255, 0.72));
+}
+
+@media (min-width: 768px) {
+  .btn-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .topbar__icon {
+    font-size: 1.35rem;
+  }
 }
