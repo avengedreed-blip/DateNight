@@ -14,6 +14,16 @@ const DEFAULT_TRACK_ID = "classic-dark";
 const LOCAL_STORAGE_KEY = "date-night/musicTrackId";
 const CROSSFADE_DURATION_MS = 1000;
 
+export const MUSIC_TRACK_OPTIONS = Object.freeze(
+  Object.keys(TRACK_SOURCES).map((trackId) => ({
+    id: trackId,
+    label: trackId
+      .split("-")
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(" "),
+  }))
+);
+
 const isBrowser = typeof window !== "undefined";
 
 const getStorage = () => {
