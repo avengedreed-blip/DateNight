@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback, memo } from "react";
+import "./Wheel.css";
 
 export const SLICE_LABELS = ["Truth", "Dare", "Trivia"];
 export const SLICE_CENTERS = [60, 180, 300];
@@ -24,8 +25,8 @@ const Wheel = memo(({ isSpinning, rotation, onDone }) => {
   }, [isSpinning, handleTransitionEnd]);
 
   return (
-    <div className="wheel-wrap" style={{ position: "relative" }}>
-      <div className="pointer" />
+    <div className="wheel-container" style={{ position: "relative" }}>
+      <div className="wheel-pointer" style={{ borderBottomColor: "var(--ring)" }} />
       <div
         ref={wheelEl}
         className={`wheel ${bounce ? "wheel-bounce" : ""}`}
@@ -33,16 +34,16 @@ const Wheel = memo(({ isSpinning, rotation, onDone }) => {
       >
         <div className="wheel-bg" />
         {[0, 120, 240].map((deg, i) => (
-          <div key={i} className="separator" style={{ transform: `rotate(${deg}deg)` }} />
+          <div key={i} className="wheel-separator" style={{ transform: `rotate(${deg}deg)` }} />
         ))}
         {SLICE_LABELS.map((label, i) => {
           const center = SLICE_CENTERS[i];
           return (
             <div
               key={label}
-              className="label"
+              className="wheel-label"
               style={{
-                transform: `rotate(${center}deg) translateY(calc(-1 * var(--labelRadius))) rotate(${-center}deg)`
+                transform: `rotate(${center}deg) translateY(calc(-1 * var(--labelRadius))) rotate(${-center}deg)`,
               }}
             >
               {label}

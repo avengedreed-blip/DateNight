@@ -51,9 +51,7 @@ const ParticleCanvas = memo(({ theme }) => {
   }, [theme]);
   return (
     <canvas
-      // FIX: ensure background particle canvas uses the class targeted by CSS so it
-      // sits behind the UI instead of covering it.
-      className="particle-canvas particles"
+      className="particle-canvas"
       ref={ref}
       style={{ pointerEvents: "none" }}
       aria-hidden="true"

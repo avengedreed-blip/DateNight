@@ -1,6 +1,6 @@
 import React, { useState, memo } from "react";
 import Modal from "./Modal.jsx";
-import { THEMES } from "../constants/themes.js";
+import { THEMES } from "../theme/themes.js";
 
 const SettingsModal = memo(({ open, onClose, onThemeChange, profile }) => {
   const [activeTab, setActiveTab] = useState("themes");
@@ -53,20 +53,29 @@ const SettingsModal = memo(({ open, onClose, onThemeChange, profile }) => {
         <div className="pt-4">
           {activeTab === "themes" && (
             <div className="animate-in grid grid-cols-2 gap-4">
-              {Object.entries(THEMES).map(([key, theme]) => (
-                <button
-                  key={key}
-                  onClick={() => onThemeChange(key)}
-                  className="p-4 rounded-xl flex items-center justify-center text-center font-semibold transition-transform hover:scale-105 duration-200"
-                  style={{
-                    background: `linear-gradient(180deg, ${theme.bg[0]}, ${theme.bg[1]})`,
-                    color: "#fff",
-                    border: `2px solid ${theme.colors.truth}`,
-                  }}
-                >
-                  {theme.name}
-                </button>
-              ))}
+              {(Array.isArray(THEMES)
+                ? THEMES.map((theme) => [theme.id, theme])
+                : Object.entries(THEMES)
+              ).map(([key, theme]) => {
+                const truthColor =
+                  theme?.colors?.truth ??
+                  (Array.isArray(theme?.colors) ? theme.colors[0] : undefined) ??
+                  "#ffffff";
+                return (
+                  <button
+                    key={key}
+                    onClick={() => onThemeChange(key)}
+                    className="p-4 rounded-xl flex items-center justify-center text-center font-semibold transition-transform hover:scale-105 duration-200"
+                    style={{
+                      background: `linear-gradient(180deg, ${theme.bg[0]}, ${theme.bg[1]})`,
+                      color: "#fff",
+                      border: `2px solid ${truthColor}`,
+                    }}
+                  >
+                    {theme.name}
+                  </button>
+                );
+              })}
             </div>
           )}
           {activeTab === "achievements" && (
