@@ -48,3 +48,4 @@ const StartScreen = memo(({ onPickMode }) => (
 ));
 
 export default StartScreen;
+
