@@ -213,3 +213,16 @@
 @media (min-width: 1024px) {
   :root { --wheel-size: min(460px, calc(100vh - 300px)); }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .wheel,
+  .wheel::before,
+  .wheel::after,
+  .wheel-pointer,
+  .wheel-pointer::before,
+  .wheel-pointer::after,
+  .wheel-svg g path {
+    animation: none !important;
+    transition: none !important;
+  }
+}
