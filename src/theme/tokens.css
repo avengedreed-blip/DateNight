@@ -87,6 +87,7 @@ body {
   height: 0;
   border-left: 10px solid transparent;
   border-right: 10px solid transparent;
+  /* Explicit border avoids tailwind-style border utilities */
   border-bottom: 20px solid white;
   transform: translateX(-50%);
   z-index: 50;
@@ -103,8 +104,14 @@ body {
 
 /* Subtle pulse for mid-level */
 @keyframes subtle-pulse {
-  0%, 100% { box-shadow: 0 0 4px color-mix(in srgb, var(--dare-color) 50%, transparent); }
-  50% { box-shadow: 0 0 8px color-mix(in srgb, var(--dare-color) 70%, transparent); }
+  0%, 100% {
+    box-shadow:
+      0 0 4px color-mix(in srgb, var(--dare-color) 50%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 8px color-mix(in srgb, var(--dare-color) 70%, transparent);
+  }
 }
 .pulse-subtle {
   animation: subtle-pulse 2s infinite ease-in-out;
@@ -113,11 +120,13 @@ body {
 /* Stronger pulse for near-full level */
 @keyframes strong-pulse {
   0%, 100% {
-    box-shadow: 0 0 6px var(--consequence-color),
+    box-shadow:
+      0 0 6px var(--consequence-color),
       0 0 10px color-mix(in srgb, var(--consequence-color) 50%, transparent);
   }
   50% {
-    box-shadow: 0 0 10px var(--dare-color),
+    box-shadow:
+      0 0 10px var(--dare-color),
       0 0 20px color-mix(in srgb, var(--dare-color) 80%, transparent);
   }
 }
