@@ -1,7 +1,8 @@
 import React, { useRef, useState, useEffect, useCallback, memo } from "react";
 
 export const SLICE_LABELS = ["Truth", "Dare", "Trivia"];
-export const SLICE_CENTERS = [60, 180, 300];
+export const SLICE_CENTERS = [330, 90, 210];
+export const POINTER_ANGLE = 270;
 
 const Wheel = memo(({ isSpinning, rotation, onDone }) => {
   const wheelEl = useRef(null);
