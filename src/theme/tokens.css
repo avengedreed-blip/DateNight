@@ -1,25 +1,45 @@
-/* Locked theme tokens and component-specific styles
-  All colors and layout properties are controlled by CSS variables
-*/
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rampart+One&display=swap');
 
 :root {
-  /* Dynamic Theme Variables - updated by App.jsx */
+  /* --- LOCKED THEME TOKENS (No changes here) --- */
   --bg-gradient-start: #0B0F14;
   --bg-gradient-end: #0E1320;
   --truth-color: #00E6D0;
   --dare-color: #FF477E;
   --trivia-color: #7AA2FF;
   --consequence-color: #FFD166;
-  --label-color: white;
-  --ring-color: white;
-  --particle-color: #FFD166;
-  --meter-bg: #1A1A1A; /* Theme-agnostic default dark background */
-  
-  /* Responsive Wheel Variables */
+  --label-color: #FFFFFF;
+  --ring-color: #FFFFFF;
+  --particle-color: var(--truth-color);
+  --meter-bg: #1A1F2A;
+
+  /* --- NEW DESIGN SYSTEM TOKENS --- */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-full: 999px;
+
+  --shadow-sm: 0 2px 5px rgba(0,0,0,0.2);
+  --shadow-md: 0 8px 15px rgba(0,0,0,0.25);
+  --shadow-lg: 0 15px 35px rgba(0,0,0,0.3);
+
+  --duration-fast: 0.15s;
+  --duration-medium: 0.3s;
+  --duration-slow: 0.5s;
+  --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-decelerate: cubic-bezier(0.0, 0.0, 0.2, 1);
+
+  /* --- RESPONSIVE WHEEL VARIABLES --- */
   --labelRadius: 60%;
-  --sliceSeparator: 1.5px;
+  --sliceSeparator: 2px;
 }
 
 @media (max-width: 420px) {
@@ -27,135 +47,4 @@
 }
 @media (min-width: 900px) {
   :root { --labelRadius: 58%; }
-}
-.wheel-container {
-  width: min(82vw, calc(100vh - 220px));
-}
-
-body {
-  font-family: 'Inter', sans-serif;
-  background: linear-gradient(180deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
-  color: var(--label-color);
-  transition: background 0.3s ease-in-out;
-}
-
-/* Glassmorphism for Modals */
-.glass-modal {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
-}
-
-/* Wheel Styles */
-.wheel {
-  position: relative;
-  width: 100%;
-  max-width: 500px;
-  aspect-ratio: 1 / 1;
-  border-radius: 50%;
-  overflow: hidden;
-  transition: transform 1s cubic-bezier(0.17, 0.67, 0.83, 0.67);
-}
-
-.wheel-slices {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  position: relative;
-  z-index: 10;
-}
-
-.wheel-label {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform-origin: 0 0;
-  font-size: clamp(12px, 2.2vw, 18px);
-  font-weight: 600;
-  max-width: 24px;
-  text-align: center;
-  line-height: 1.2;
-}
-
-.wheel-pointer {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-left: 10px solid transparent;
-  border-right: 10px solid transparent;
-  /* Explicit border avoids tailwind-style border utilities */
-  border-bottom: 20px solid white;
-  transform: translateX(-50%);
-  z-index: 50;
-}
-
-/* Extreme Meter Styles */
-
-/* This gradient creates a progression fill color: Truth -> Dare -> Trivia -> Consequence */
-.spark-meter-fill {
-  background: linear-gradient(90deg, var(--truth-color) 0%, var(--dare-color) 35%, var(--trivia-color) 65%, var(--consequence-color) 100%);
-  transition: width 500ms ease-out, box-shadow 300ms ease-in-out;
-  /* Performance Optimization: transition only width/shadow */
-}
-
-/* Subtle pulse for mid-level */
-@keyframes subtle-pulse {
-  0%, 100% {
-    box-shadow:
-      0 0 4px color-mix(in srgb, var(--dare-color) 50%, transparent);
-  }
-  50% {
-    box-shadow:
-      0 0 8px color-mix(in srgb, var(--dare-color) 70%, transparent);
-  }
-}
-.pulse-subtle {
-  animation: subtle-pulse 2s infinite ease-in-out;
-}
-
-/* Stronger pulse for near-full level */
-@keyframes strong-pulse {
-  0%, 100% {
-    box-shadow:
-      0 0 6px var(--consequence-color),
-      0 0 10px color-mix(in srgb, var(--consequence-color) 50%, transparent);
-  }
-  50% {
-    box-shadow:
-      0 0 10px var(--dare-color),
-      0 0 20px color-mix(in srgb, var(--dare-color) 80%, transparent);
-  }
-}
-.pulse-strong {
-  animation: strong-pulse 1s infinite alternate ease-in-out;
-}
-
-/* Max glow for full meter */
-.glow-full {
-  box-shadow: 0 0 15px var(--dare-color), 0 0 30px var(--dare-color);
-}
-
-/* Particle Animation Styles */
-.particle-canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -1;
-}
-
-/* Custom wheel styles that cannot be done with Tailwind */
-.wheel-separator {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 2px;
-  height: 50%;
-  transform-origin: top;
-  background-color: rgba(255,255,255,0.15);
 }
