@@ -1,4 +1,4 @@
-export const mockProfile = {
+const mockProfile = {
   username: "Player1",
   achievements: [
     {
@@ -45,3 +45,6 @@ export const mockProfile = {
     },
   ],
 };
+
+export default mockProfile;
+export { mockProfile };
