@@ -1,4 +1,21 @@
-import { THEMES as RAW_THEMES } from "./constants/themes";
+import { THEMES as THEME_DEFINITIONS } from "./theme/themes";
+
+const RAW_THEMES = THEME_DEFINITIONS.reduce((acc, theme) => {
+  acc[theme.id] = {
+    name: theme.name,
+    bg: theme.bg,
+    colors: {
+      truth: theme.colors.truth,
+      dare: theme.colors.dare,
+      trivia: theme.colors.trivia,
+      consequence: theme.colors.consequence,
+    },
+    label: theme.label,
+    particles: theme.particles,
+    meter: theme.meter,
+  };
+  return acc;
+}, {});
 
 export const THEMES = RAW_THEMES;
 
