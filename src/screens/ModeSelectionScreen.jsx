@@ -1,4 +1,4 @@
-import React, { memo, useState } from "react";
+import { memo, useState } from "react";
 
 const ModeSelectionScreen = memo(({ mode, onStart }) => {
   const [type, setType] = useState("couples");

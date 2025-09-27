@@ -1,5 +1,5 @@
-import React, { memo } from 'react';
-import Modal from './Modal';
+import { memo } from "react";
+import Modal from "./Modal";
 
 const ConsequenceModal = memo(({ isOpen, onClose, content }) => (
   <Modal

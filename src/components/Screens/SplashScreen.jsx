@@ -1,5 +1,3 @@
-import React from "react";
-
 const SplashScreen = () => (
   <div
     className="glass animate-in"

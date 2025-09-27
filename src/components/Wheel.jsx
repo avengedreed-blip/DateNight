@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback, memo } from "react";
+import { useRef, useState, useEffect, useCallback, memo } from "react";
 import "./Wheel.css";
 
 export const SLICE_LABELS = ["Truth", "Dare", "Trivia"];

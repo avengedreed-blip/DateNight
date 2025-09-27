@@ -1,5 +1,5 @@
-import React, { memo, useCallback } from 'react';
-import './BottomNav.css'; // Glass style import
+import { memo, useCallback } from "react";
+import "./BottomNav.css"; // Glass style import
 
 // Icon placeholders (use simple emoji for now; can be swapped later if needed)
 const ModesIcon = () => <span className="text-xl">🎲</span>;
@@ -7,9 +7,9 @@ const ThemesIcon = () => <span className="text-xl">🎨</span>;
 const HelpIcon = () => <span className="text-xl">❓</span>;
 
 const navItems = [
-  { label: 'Modes', icon: ModesIcon },
-  { label: 'Themes', icon: ThemesIcon },
-  { label: 'Help', icon: HelpIcon },
+  { label: "Modes", icon: ModesIcon },
+  { label: "Themes", icon: ThemesIcon },
+  { label: "Help", icon: HelpIcon },
 ];
 
 const BottomNav = memo(({ onNavigate }) => {

@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import { memo } from "react";
 
 const SparkMeter = memo(({ value }) => {
   const numericValue = Number.isFinite(value) ? value : 0;

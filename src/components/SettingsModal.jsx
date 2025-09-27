@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import AvatarSelector from "./AvatarSelector";
 import Modal from "./modals/Modal";

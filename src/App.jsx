@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import confetti from "canvas-confetti";
 import { AppStyles } from "./styles/AppStyles";
 import "./styles/layout.css";

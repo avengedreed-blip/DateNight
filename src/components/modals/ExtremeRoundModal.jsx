@@ -1,6 +1,6 @@
-import React, { memo, useEffect } from 'react';
-import confetti from 'canvas-confetti';
-import Modal from './Modal';
+import { memo, useEffect } from "react";
+import confetti from "canvas-confetti";
+import Modal from "./Modal";
 
 const ExtremeRoundModal = memo(({ isOpen, onClose, content }) => {
   useEffect(() => {
