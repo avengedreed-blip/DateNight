@@ -3,19 +3,22 @@ import { doc, onSnapshot, setDoc } from "firebase/firestore";
 
 import { db } from "../config/firebase";
 
-const TRACK_SOURCES = Object.freeze({
-  "classic-dark": "/audio/bgm/bgm_classic_dark.mp3",
-  "romantic-glow": "/audio/bgm/bgm_romantic_glow.mp3",
-  "playful-neon": "/audio/bgm/bgm_playful_neon.mp3",
-  "mystic-night": "/audio/bgm/bgm_mystic_night.mp3",
+const TRACK_FILE_MAP = Object.freeze({
+  "classic-dark": "bgm_classic_dark.mp3",
+  "romantic-glow": "bgm_romantic_glow.mp3",
+  "playful-neon": "bgm_playful_neon.mp3",
+  "mystic-night": "bgm_mystic_night.mp3",
 });
 
+const TRACK_IDS = Object.freeze(Object.keys(TRACK_FILE_MAP));
 const DEFAULT_TRACK_ID = "classic-dark";
+const BGM_PUBLIC_PATH = "/audio/bgm";
+const PLACEHOLDER_TRACK = "/audio/placeholder.mp3";
 const LOCAL_STORAGE_KEY = "date-night/musicTrackId";
 const CROSSFADE_DURATION_MS = 1000;
 
 export const MUSIC_TRACK_OPTIONS = Object.freeze(
-  Object.keys(TRACK_SOURCES).map((trackId) => ({
+  TRACK_IDS.map((trackId) => ({
     id: trackId,
     label: trackId
       .split("-")
@@ -25,6 +28,68 @@ export const MUSIC_TRACK_OPTIONS = Object.freeze(
 );
 
 const isBrowser = typeof window !== "undefined";
+
+const trackSourceCache = new Map();
+const trackCheckPromises = new Map();
+const missingTrackWarnings = new Set();
+let hasSuccessfulTrackResolution = false;
+let loggedMissingDirectoryWarning = false;
+
+const verifyFileAvailability = async (url) => {
+  if (!isBrowser || typeof fetch !== "function") {
+    return true;
+  }
+
+  try {
+    const response = await fetch(url, { method: "HEAD" });
+    return response.ok;
+  } catch (error) {
+    console.warn(`Failed to verify background music file "${url}"`, error);
+    return false;
+  }
+};
+
+const resolveTrackSource = async (trackId) => {
+  if (trackSourceCache.has(trackId)) {
+    return trackSourceCache.get(trackId);
+  }
+
+  const filename = TRACK_FILE_MAP[trackId];
+  if (!filename) {
+    console.warn(`Unknown music track: ${trackId}`);
+    trackSourceCache.set(trackId, PLACEHOLDER_TRACK);
+    return PLACEHOLDER_TRACK;
+  }
+
+  const candidatePath = `${BGM_PUBLIC_PATH}/${filename}`;
+
+  if (!trackCheckPromises.has(candidatePath)) {
+    trackCheckPromises.set(candidatePath, verifyFileAvailability(candidatePath));
+  }
+
+  const exists = await trackCheckPromises.get(candidatePath);
+
+  if (exists) {
+    hasSuccessfulTrackResolution = true;
+    trackSourceCache.set(trackId, candidatePath);
+    return candidatePath;
+  }
+
+  if (!hasSuccessfulTrackResolution && !loggedMissingDirectoryWarning) {
+    console.warn(
+      "No background music files found in /audio/bgm/. Using placeholder track."
+    );
+    loggedMissingDirectoryWarning = true;
+  } else if (!missingTrackWarnings.has(candidatePath)) {
+    console.warn(
+      `Background music file missing: ${candidatePath}. Falling back to placeholder.`
+    );
+    missingTrackWarnings.add(candidatePath);
+  }
+
+  trackSourceCache.set(trackId, PLACEHOLDER_TRACK);
+  return PLACEHOLDER_TRACK;
+};
 
 const getStorage = () => {
   if (!isBrowser) {
@@ -60,7 +125,7 @@ const loadTrackFromStorage = (key) => {
 
   try {
     const stored = storage.getItem(key);
-    if (stored && Object.prototype.hasOwnProperty.call(TRACK_SOURCES, stored)) {
+    if (stored && Object.prototype.hasOwnProperty.call(TRACK_FILE_MAP, stored)) {
       return stored;
     }
   } catch (error) {
@@ -118,6 +183,7 @@ export function useMusic({ storageKey = LOCAL_STORAGE_KEY } = {}) {
   const resumeListenerRef = useRef(null);
   const updateSourceRef = useRef("storage");
   const unsubscribeRef = useRef(null);
+  const startRequestIdRef = useRef(0);
 
   const cleanupAudio = useCallback((entry) => {
     if (!entry) {
@@ -324,41 +390,54 @@ export function useMusic({ storageKey = LOCAL_STORAGE_KEY } = {}) {
 
   const startPlayback = useCallback(
     (nextTrackId) => {
-      const source = TRACK_SOURCES[nextTrackId];
-      if (!source) {
-        console.warn(`Unknown music track: ${nextTrackId}`);
-        return;
-      }
+      const requestId = startRequestIdRef.current + 1;
+      startRequestIdRef.current = requestId;
 
-      const currentEntry = activeAudioRef.current;
-      if (currentEntry && currentEntry.id === nextTrackId) {
-        if (currentEntry.element.paused && shouldPlayRef.current) {
-          safePlay(currentEntry.element);
-        }
-        currentEntry.element.muted = isMutedRef.current;
-        currentEntry.element.volume = isMutedRef.current ? 0 : volumeRef.current;
-        return;
-      }
+      resolveTrackSource(nextTrackId)
+        .then((source) => {
+          if (startRequestIdRef.current !== requestId) {
+            return;
+          }
 
-      const audio = createAudioElement(source);
-      audio.muted = isMutedRef.current;
-      audio.volume = 0;
+          if (!source) {
+            console.warn(`Unable to resolve music source for track: ${nextTrackId}`);
+            return;
+          }
 
-      const loopHandler = () => {
-        audio.currentTime = 0;
-        safePlay(audio);
-      };
+          const currentEntry = activeAudioRef.current;
+          if (currentEntry && currentEntry.id === nextTrackId && currentEntry.src === source) {
+            if (currentEntry.element.paused && shouldPlayRef.current) {
+              safePlay(currentEntry.element);
+            }
+            currentEntry.element.muted = isMutedRef.current;
+            currentEntry.element.volume = isMutedRef.current ? 0 : volumeRef.current;
+            return;
+          }
 
-      audio.addEventListener("ended", loopHandler);
+          const audio = createAudioElement(source);
+          audio.muted = isMutedRef.current;
+          audio.volume = 0;
 
-      const nextEntry = {
-        id: nextTrackId,
-        element: audio,
-        loopHandler,
-      };
+          const loopHandler = () => {
+            audio.currentTime = 0;
+            safePlay(audio);
+          };
 
-      performCrossfade(currentEntry, nextEntry);
-      safePlay(audio);
+          audio.addEventListener("ended", loopHandler);
+
+          const nextEntry = {
+            id: nextTrackId,
+            element: audio,
+            loopHandler,
+            src: source,
+          };
+
+          performCrossfade(currentEntry, nextEntry);
+          safePlay(audio);
+        })
+        .catch((error) => {
+          console.error("Failed to start playback for background music", error);
+        });
     },
     [performCrossfade, safePlay]
   );
@@ -381,7 +460,7 @@ export function useMusic({ storageKey = LOCAL_STORAGE_KEY } = {}) {
   const playTrack = useCallback(
     (themeKey) => {
       const nextTrackId = Object.prototype.hasOwnProperty.call(
-        TRACK_SOURCES,
+        TRACK_FILE_MAP,
         themeKey
       )
         ? themeKey
@@ -535,7 +614,7 @@ export function useMusic({ storageKey = LOCAL_STORAGE_KEY } = {}) {
         }
 
         if (
-          Object.prototype.hasOwnProperty.call(TRACK_SOURCES, remoteTrackId) &&
+          Object.prototype.hasOwnProperty.call(TRACK_FILE_MAP, remoteTrackId) &&
           remoteTrackId !== trackIdRef.current
         ) {
           updateSourceRef.current = "remote";

@@ -17,7 +17,7 @@ const ExtremeMeter = memo(({ fillLevel, meterName, onExtremeTrigger }) => {
   // NOTE TO CODEX: This line provides the modal trigger logic when full.
   React.useEffect(() => {
     if (isFull) {
-      onExtremeTrigger();
+      onExtremeTrigger?.();
     }
   }, [isFull, onExtremeTrigger]);
 
