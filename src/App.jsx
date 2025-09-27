@@ -3,7 +3,11 @@ import confetti from "canvas-confetti";
 import { AppStyles } from "./styles/AppStyles";
 
 import ParticleCanvas from "./components/ParticleCanvas";
-import Wheel, { SLICE_LABELS, SLICE_CENTERS } from "./components/Wheel";
+import Wheel, {
+  SLICE_LABELS,
+  SLICE_CENTERS,
+  POINTER_ANGLE,
+} from "./components/Wheel";
 import SparkMeter from "./components/SparkMeter";
 import Modal from "./components/Modal";
 import SettingsModal from "./components/SettingsModal";
@@ -215,9 +219,10 @@ export default function App() {
 
     const index = Math.floor(Math.random() * 3);
     const center = SLICE_CENTERS[index];
-    const wantMod = ((360 - center) % 360 + 360) % 360;
+    const pointerTarget =
+      ((POINTER_ANGLE - center) % 360 + 360) % 360;
     const baseMod = ((rotation % 360) + 360) % 360;
-    let extra = wantMod - baseMod;
+    let extra = pointerTarget - baseMod;
     if (extra < 0) extra += 360;
 
     const spins = 4 + Math.floor(Math.random() * 3);
