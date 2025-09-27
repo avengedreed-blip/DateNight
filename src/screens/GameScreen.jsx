@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import { memo } from "react";
 import TopBar from "../components/TopBar";
 import Wheel from "../components/Wheel";
 import SparkMeter from "../components/SparkMeter";

@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 const toPercent = (value) => Math.round(clamp(value, 0, 1) * 100);

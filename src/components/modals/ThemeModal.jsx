@@ -1,6 +1,6 @@
-import React, { memo } from 'react';
-import Modal from './Modal';
-import themes from '../../theme/themes';
+import { memo } from "react";
+import Modal from "./Modal";
+import themes from "../../theme/themes";
 
 const ThemeModal = memo(({ isOpen, onClose, onThemeChange }) => {
   const handleThemeChange = (themeName) => {

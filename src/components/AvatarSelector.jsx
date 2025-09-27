@@ -1,9 +1,15 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import "../assets/avatars.svg";
 
 const AVATAR_IDS = [
-  "avatar-bolt","avatar-heart","avatar-controller","avatar-star",
-  "avatar-note","avatar-rocket","avatar-diamond","avatar-mask"
+  "avatar-bolt",
+  "avatar-heart",
+  "avatar-controller",
+  "avatar-star",
+  "avatar-note",
+  "avatar-rocket",
+  "avatar-diamond",
+  "avatar-mask",
 ];
 
 export default function AvatarSelector({ selectedAvatar, onAvatarSelect }) {
@@ -18,9 +24,12 @@ export default function AvatarSelector({ selectedAvatar, onAvatarSelect }) {
 
   return (
     <div className="avatar-grid">
-      {AVATAR_IDS.map(id => (
-        <button key={id} className={`avatar-btn ${current === id ? "selected" : ""}`}
-          onClick={() => setCurrent(id)}>
+      {AVATAR_IDS.map((id) => (
+        <button
+          key={id}
+          className={`avatar-btn ${current === id ? "selected" : ""}`}
+          onClick={() => setCurrent(id)}
+        >
           <svg viewBox="0 0 200 200" className="avatar-icon">
             <use href={`#${id}`} />
           </svg>
