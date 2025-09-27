@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import confetti from "canvas-confetti";
 import { AppStyles } from "./styles/AppStyles";
+import "./styles/layout.css";
 
 import ParticleCanvas from "./components/ParticleCanvas";
 import Wheel, {
@@ -153,7 +154,7 @@ export default function App() {
         !nextThemeKey ||
         !Object.prototype.hasOwnProperty.call(THEMES, nextThemeKey)
       ) {
-        return;
+        // removed erroneous return;
       }
       setThemeKey(nextThemeKey);
       setProfile((prev) => ({
