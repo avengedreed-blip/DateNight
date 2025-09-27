@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback, memo } from "react";
+import "./Wheel.css";
 
 export const SLICE_LABELS = ["Truth", "Dare", "Trivia"];
 export const SLICE_CENTERS = [330, 90, 210];
