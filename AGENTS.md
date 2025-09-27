@@ -1,4 +1,3 @@
-cat > docs/AGENTS.md << 'EOF'
 # ULTIMATE BACKLOG SPEC (Finalized)
 
 This is the single source of truth.  
@@ -116,5 +115,4 @@ Never remove or disable these features:
 - Multiplayer sync.  
 - PWA install support.  
 
-If adding new features, all existing features above must remain fully functional.  
-EOF
+If adding new features, all existing features above must remain fully functional.
