@@ -72,7 +72,7 @@ export default function App() {
   }, [manager]);
   const [profile, setProfile] = useState(() => ({
     ...mockProfile,
-    avatar: mockProfile.avatar ?? "/avatars/avatar_1.svg",
+    avatar: mockProfile.avatar ?? "avatar-bolt",
     themeId: mockProfile.themeId ?? "classic-dark",
   }));
 

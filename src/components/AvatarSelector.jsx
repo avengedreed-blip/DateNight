@@ -1,18 +1,47 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import avatarsSpriteUrl from "../assets/avatars.svg?url";
 
 const LOCAL_STORAGE_KEY = "selectedAvatar";
 const LEGACY_STORAGE_KEY = "avatar";
 
 const PRESET_AVATARS = [
-  { id: "aurora", src: "/avatars/avatar_1.svg", label: "Aurora Glow" },
-  { id: "ember", src: "/avatars/avatar_2.svg", label: "Crimson Ember" },
-  { id: "lumen", src: "/avatars/avatar_3.svg", label: "Lumen Pulse" },
-  { id: "nebula", src: "/avatars/avatar_4.svg", label: "Nebula Drift" },
-  { id: "nova", src: "/avatars/avatar_5.svg", label: "Nova Spark" },
-  { id: "serene", src: "/avatars/avatar_6.svg", label: "Serene Bloom" },
-  { id: "zenith", src: "/avatars/avatar_7.svg", label: "Zenith Crest" },
-  { id: "prism", src: "/avatars/avatar_8.svg", label: "Prism Burst" },
+  { id: "avatar-bolt", label: "Neon Bolt" },
+  { id: "avatar-heart", label: "Pulse Heart" },
+  { id: "avatar-controller", label: "Arcade Spark" },
+  { id: "avatar-star", label: "Nova Star" },
+  { id: "avatar-note", label: "Melody Drop" },
+  { id: "avatar-rocket", label: "Rocket Rush" },
+  { id: "avatar-diamond", label: "Crystal Prism" },
+  { id: "avatar-mask", label: "Mystic Mask" },
 ];
+
+const LEGACY_AVATAR_MAP = (() => {
+  const map = new Map();
+
+  PRESET_AVATARS.forEach((avatar, index) => {
+    const legacyIndex = index + 1;
+    map.set(`/avatars/avatar_${legacyIndex}.svg`, avatar.id);
+    map.set(`/avatars/avatar_${legacyIndex}.png`, avatar.id);
+  });
+
+  return map;
+})();
+
+const isValidAvatarId = (value) =>
+  PRESET_AVATARS.some((avatar) => avatar.id === value);
+
+const resolveAvatarId = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  if (isValidAvatarId(value)) {
+    return value;
+  }
+
+  return LEGACY_AVATAR_MAP.get(value) ?? null;
+};
 
 const readStoredAvatar = () => {
   if (typeof window === "undefined") {
@@ -20,23 +49,24 @@ const readStoredAvatar = () => {
   }
 
   try {
-    return (
+    const storedValue =
       window.localStorage.getItem(LOCAL_STORAGE_KEY) ||
-      window.localStorage.getItem(LEGACY_STORAGE_KEY)
-    );
+      window.localStorage.getItem(LEGACY_STORAGE_KEY);
+
+    return resolveAvatarId(storedValue);
   } catch (error) {
     console.error("Failed to read avatar from localStorage", error);
     return null;
   }
 };
 
-const writeStoredAvatar = (avatarPath) => {
+const writeStoredAvatar = (avatarId) => {
   if (typeof window === "undefined") {
     return;
   }
 
   try {
-    window.localStorage.setItem(LOCAL_STORAGE_KEY, avatarPath);
+    window.localStorage.setItem(LOCAL_STORAGE_KEY, avatarId);
     if (window.localStorage.getItem(LEGACY_STORAGE_KEY)) {
       window.localStorage.removeItem(LEGACY_STORAGE_KEY);
     }
@@ -45,18 +75,81 @@ const writeStoredAvatar = (avatarPath) => {
   }
 };
 
-const AvatarSelector = ({ selectedAvatar, onAvatarSelect }) => {
-  const fallbackAvatar = PRESET_AVATARS[0]?.src;
+const AvatarGlyph = React.memo(function AvatarGlyph({
+  id,
+  label,
+  className,
+  ariaHidden = false,
+}) {
+  if (!id) {
+    return null;
+  }
+
+  const symbolHref = `${avatarsSpriteUrl}#${id}`;
+  const accessibilityProps = ariaHidden
+    ? { "aria-hidden": true, role: "presentation" }
+    : { role: "img", "aria-label": label };
+
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 200 200"
+      focusable="false"
+      preserveAspectRatio="xMidYMid meet"
+      {...accessibilityProps}
+    >
+      <use href={symbolHref} />
+    </svg>
+  );
+});
+
+const AvatarSelector = ({
+  selectedAvatar,
+  onAvatarSelect,
+  avatars = PRESET_AVATARS,
+}) => {
+  const availableAvatars = useMemo(() => avatars, [avatars]);
+  const fallbackAvatar = availableAvatars[0]?.id;
+
+  const normalizeAvatarId = useCallback(
+    (value) => {
+      if (!value) {
+        return null;
+      }
+
+      if (availableAvatars.some((avatar) => avatar.id === value)) {
+        return value;
+      }
+
+      const legacyResolved = resolveAvatarId(value);
+      if (
+        legacyResolved &&
+        availableAvatars.some((avatar) => avatar.id === legacyResolved)
+      ) {
+        return legacyResolved;
+      }
+
+      return null;
+    },
+    [availableAvatars]
+  );
+
   const [currentAvatar, setCurrentAvatar] = useState(() => {
-    return selectedAvatar || readStoredAvatar() || fallbackAvatar;
+    return (
+      normalizeAvatarId(selectedAvatar) ||
+      normalizeAvatarId(readStoredAvatar()) ||
+      fallbackAvatar
+    );
   });
   const hasHydratedFromStorage = useRef(false);
 
   useEffect(() => {
-    if (selectedAvatar && selectedAvatar !== currentAvatar) {
-      setCurrentAvatar(selectedAvatar);
+    const resolvedAvatar = normalizeAvatarId(selectedAvatar);
+
+    if (resolvedAvatar && resolvedAvatar !== currentAvatar) {
+      setCurrentAvatar(resolvedAvatar);
     }
-  }, [selectedAvatar, currentAvatar]);
+  }, [selectedAvatar, currentAvatar, normalizeAvatarId]);
 
   useEffect(() => {
     if (hasHydratedFromStorage.current) {
@@ -70,12 +163,12 @@ const AvatarSelector = ({ selectedAvatar, onAvatarSelect }) => {
       return;
     }
 
-    const storedAvatar = readStoredAvatar();
+    const storedAvatar = normalizeAvatarId(readStoredAvatar());
     if (storedAvatar && storedAvatar !== currentAvatar) {
       setCurrentAvatar(storedAvatar);
       onAvatarSelect?.(storedAvatar, { silent: true });
     }
-  }, [currentAvatar, onAvatarSelect, selectedAvatar]);
+  }, [currentAvatar, normalizeAvatarId, onAvatarSelect, selectedAvatar]);
 
   useEffect(() => {
     if (!currentAvatar) {
@@ -85,15 +178,15 @@ const AvatarSelector = ({ selectedAvatar, onAvatarSelect }) => {
     writeStoredAvatar(currentAvatar);
   }, [currentAvatar]);
 
-  const presetAvatars = useMemo(() => PRESET_AVATARS, []);
+  const presetAvatars = useMemo(() => availableAvatars, [availableAvatars]);
 
-  const handleSelect = (avatarPath) => {
-    if (!avatarPath || avatarPath === currentAvatar) {
+  const handleSelect = (avatarId) => {
+    if (!avatarId || avatarId === currentAvatar) {
       return;
     }
 
-    setCurrentAvatar(avatarPath);
-    onAvatarSelect?.(avatarPath);
+    setCurrentAvatar(avatarId);
+    onAvatarSelect?.(avatarId);
   };
 
   return (
@@ -104,11 +197,10 @@ const AvatarSelector = ({ selectedAvatar, onAvatarSelect }) => {
         </span>
         <div className="relative">
           <div className="h-28 w-28 overflow-hidden rounded-full border-4 border-[var(--theme-primary)] bg-black/40 shadow-[0_0_30px_rgba(0,0,0,0.35)]">
-            <img
-              src={currentAvatar}
-              alt="Selected avatar"
-              className="h-full w-full object-cover"
-              draggable={false}
+            <AvatarGlyph
+              id={currentAvatar}
+              label="Selected avatar"
+              className="h-full w-full"
             />
           </div>
           <div className="pointer-events-none absolute inset-0 rounded-full shadow-[0_0_22px_color-mix(in_srgb,var(--theme-primary)_65%,transparent)]" />
@@ -117,13 +209,13 @@ const AvatarSelector = ({ selectedAvatar, onAvatarSelect }) => {
 
       <div className="grid grid-cols-4 gap-4">
         {presetAvatars.map((avatar) => {
-          const isSelected = avatar.src === currentAvatar;
+          const isSelected = avatar.id === currentAvatar;
 
           return (
             <button
               key={avatar.id}
               type="button"
-              onClick={() => handleSelect(avatar.src)}
+              onClick={() => handleSelect(avatar.id)}
               aria-pressed={isSelected}
               className={`group relative flex h-16 w-16 items-center justify-center rounded-full border border-white/15 bg-black/35 transition-transform duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)] ${
                 isSelected
@@ -132,12 +224,14 @@ const AvatarSelector = ({ selectedAvatar, onAvatarSelect }) => {
               }`}
             >
               <span className="absolute inset-0 rounded-full bg-white/10 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-              <img
-                src={avatar.src}
-                alt={avatar.label}
-                className="relative z-10 h-14 w-14 rounded-full object-cover"
-                draggable={false}
-              />
+              <div className="relative z-10 flex h-14 w-14 items-center justify-center rounded-full">
+                <AvatarGlyph
+                  id={avatar.id}
+                  label={avatar.label}
+                  ariaHidden
+                  className="h-14 w-14"
+                />
+              </div>
               <span className="sr-only">{avatar.label}</span>
             </button>
           );
@@ -148,4 +242,4 @@ const AvatarSelector = ({ selectedAvatar, onAvatarSelect }) => {
 };
 
 export default AvatarSelector;
-export { PRESET_AVATARS, LOCAL_STORAGE_KEY };
+export { PRESET_AVATARS, LOCAL_STORAGE_KEY, AvatarGlyph };
