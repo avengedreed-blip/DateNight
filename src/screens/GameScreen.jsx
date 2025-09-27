@@ -15,7 +15,7 @@ const GameScreen = memo(
     topBar,
     sparkMeter,
   }) => (
-    <div className="screen">
+    <div>
       {topBar ?? (
         <TopBar
           title="Date Night"

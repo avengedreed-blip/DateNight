@@ -7,7 +7,7 @@ const ModeSelectionScreen = memo(({ mode, onStart }) => {
   const title = mode ? `${mode[0].toUpperCase() + mode.slice(1)} Mode` : "Choose Mode";
 
   return (
-    <div className="screen">
+    <div>
       <div
         className="glass"
         style={{

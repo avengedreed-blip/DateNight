@@ -1,7 +1,7 @@
 import React, { memo } from "react";
 
 const StartScreen = memo(({ onPickMode }) => (
-  <div className="screen">
+  <div>
     <div
       className="glass"
       style={{
