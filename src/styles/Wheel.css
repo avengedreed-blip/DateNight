@@ -80,6 +80,22 @@
   will-change: transform;
 }
 
+@supports not ((backdrop-filter: blur(16px)) or (-webkit-backdrop-filter: blur(16px))) {
+  .wheel {
+    background:
+      radial-gradient(circle at center, rgba(255, 255, 255, 0.15), transparent 60%),
+      conic-gradient(
+        from -90deg,
+        var(--truth) 0deg,
+        var(--truth) 120deg,
+        var(--dare) 120deg,
+        var(--dare) 240deg,
+        var(--trivia) 240deg,
+        var(--trivia) 360deg
+      );
+  }
+}
+
 .wheel::before {
   content: "";
   position: absolute;
