@@ -8,7 +8,115 @@ const TAB_DEFINITIONS = [
   { id: "themes", label: "Themes" },
   { id: "avatars", label: "Avatars" },
   { id: "music", label: "Music" },
+  { id: "custom", label: "Custom" },
 ];
+
+const CUSTOM_THEME_STORAGE_KEY = "date-night/custom-theme";
+const CUSTOM_THEME_NAME = "Custom";
+
+const getStorage = () => {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage ?? null;
+  } catch (error) {
+    console.warn("localStorage unavailable", error);
+    return null;
+  }
+};
+
+const isHexColor = (value) =>
+  typeof value === "string" && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value);
+
+const normalizeTrackId = (trackId) =>
+  typeof trackId === "string" ? trackId.replace(/_/g, "-") : trackId;
+
+const denormalizeTrackId = (trackId) =>
+  typeof trackId === "string" ? trackId.replace(/-/g, "_") : trackId;
+
+const sanitizeCustomThemeRecord = (raw) => {
+  if (!raw || typeof raw !== "object") return null;
+
+  const themeSource = raw.theme ?? raw;
+  const bgStart = themeSource?.bg?.[0];
+  const bgEnd = themeSource?.bg?.[1];
+  const truth = themeSource?.colors?.truth ?? themeSource?.truth;
+  const dare = themeSource?.colors?.dare ?? themeSource?.dare;
+  const trivia = themeSource?.colors?.trivia ?? themeSource?.trivia;
+  const meterStart = themeSource?.meter?.[0] ?? themeSource?.meterStart;
+  const meterEnd = themeSource?.meter?.[1] ?? themeSource?.meterEnd;
+
+  if (
+    !isHexColor(bgStart) ||
+    !isHexColor(bgEnd) ||
+    !isHexColor(truth) ||
+    !isHexColor(dare) ||
+    !isHexColor(trivia) ||
+    !isHexColor(meterStart) ||
+    !isHexColor(meterEnd)
+  ) {
+    return null;
+  }
+
+  const normalizedTrack = normalizeTrackId(raw.track ?? raw.music ?? null);
+
+  const theme = {
+    name: CUSTOM_THEME_NAME,
+    bg: [bgStart, bgEnd],
+    colors: { truth, dare, trivia },
+    meter: [meterStart, meterEnd],
+    label: "white",
+    particles: {
+      type:
+        (themeSource?.particles && themeSource.particles.type) || "custom",
+      color:
+        (themeSource?.particles && themeSource.particles.color &&
+          isHexColor(themeSource.particles.color)
+          ? themeSource.particles.color
+          : truth),
+    },
+  };
+
+  return {
+    theme,
+    track: normalizedTrack,
+    isActive: raw.isActive !== false,
+  };
+};
+
+const loadInitialCustomTheme = () => {
+  const storage = getStorage();
+  if (!storage) return null;
+
+  try {
+    const raw = storage.getItem(CUSTOM_THEME_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return sanitizeCustomThemeRecord(parsed);
+  } catch (error) {
+    console.warn("Failed to parse custom theme from storage", error);
+    return null;
+  }
+};
+
+const persistCustomTheme = (record) => {
+  const storage = getStorage();
+  if (!storage) return;
+  if (!record) {
+    storage.removeItem(CUSTOM_THEME_STORAGE_KEY);
+    return;
+  }
+  try {
+    storage.setItem(CUSTOM_THEME_STORAGE_KEY, JSON.stringify(record));
+  } catch (error) {
+    console.warn("Failed to persist custom theme", error);
+  }
+};
+
+const INITIAL_CUSTOM_THEME_RECORD = loadInitialCustomTheme();
+
+if (INITIAL_CUSTOM_THEME_RECORD?.theme) {
+  THEMES.custom = INITIAL_CUSTOM_THEME_RECORD.theme;
+}
 
 const BASE_TRACK_IDS = [
   "classic-dark",
@@ -16,12 +124,6 @@ const BASE_TRACK_IDS = [
   "playful-neon",
   "mystic-night",
 ];
-
-const normalizeTrackId = (trackId) =>
-  typeof trackId === "string" ? trackId.replace(/_/g, "-") : trackId;
-
-const denormalizeTrackId = (trackId) =>
-  typeof trackId === "string" ? trackId.replace(/-/g, "_") : trackId;
 
 const extractTrackId = (entry) => {
   if (!entry) return null;
@@ -42,6 +144,22 @@ const formatTrackLabel = (trackId) => {
     .join(" ");
 };
 
+const DEFAULT_THEME_FALLBACK = THEMES?.["classic-dark"] ?? {
+  bg: ["#0B0F14", "#0E1320"],
+  colors: { truth: "#00E6D0", dare: "#FF477E", trivia: "#7AA2FF" },
+  meter: ["#00E6D0", "#FF477E"],
+};
+
+const buildFormStateFromTheme = (theme = DEFAULT_THEME_FALLBACK) => ({
+  bgStart: theme?.bg?.[0] ?? DEFAULT_THEME_FALLBACK.bg[0],
+  bgEnd: theme?.bg?.[1] ?? DEFAULT_THEME_FALLBACK.bg[1],
+  truth: theme?.colors?.truth ?? DEFAULT_THEME_FALLBACK.colors.truth,
+  dare: theme?.colors?.dare ?? DEFAULT_THEME_FALLBACK.colors.dare,
+  trivia: theme?.colors?.trivia ?? DEFAULT_THEME_FALLBACK.colors.trivia,
+  meterStart: theme?.meter?.[0] ?? DEFAULT_THEME_FALLBACK.meter[0],
+  meterEnd: theme?.meter?.[1] ?? DEFAULT_THEME_FALLBACK.meter[1],
+});
+
 export default function SettingsModal({
   open,
   onClose,
@@ -58,11 +176,60 @@ export default function SettingsModal({
   const controlState = controls?.state ?? {};
 
   const resolvedThemeKey = themeKey ?? profile?.themeId ?? "classic-dark";
-  const themeOptions = useMemo(() => Object.entries(THEMES ?? {}), []);
-
   const rawCurrentTrackId = extractTrackId(controlState.track);
   const normalizedCurrentTrack =
     normalizeTrackId(rawCurrentTrackId) ?? BASE_TRACK_IDS[0];
+
+  const [customThemeRecord, setCustomThemeRecord] = useState(
+    () => INITIAL_CUSTOM_THEME_RECORD
+  );
+
+  const [customFormState, setCustomFormState] = useState(() => {
+    const baseTheme =
+      INITIAL_CUSTOM_THEME_RECORD?.theme ??
+      THEMES[resolvedThemeKey] ??
+      DEFAULT_THEME_FALLBACK;
+    return buildFormStateFromTheme(baseTheme);
+  });
+
+  const [customTrack, setCustomTrack] = useState(() => {
+    if (INITIAL_CUSTOM_THEME_RECORD?.track) {
+      return INITIAL_CUSTOM_THEME_RECORD.track;
+    }
+    const extracted = normalizeTrackId(extractTrackId(controlState.track));
+    return extracted ?? BASE_TRACK_IDS[0];
+  });
+
+  useEffect(() => {
+    if (customThemeRecord?.theme) {
+      THEMES.custom = customThemeRecord.theme;
+      const nextForm = buildFormStateFromTheme(customThemeRecord.theme);
+      setCustomFormState((prev) => {
+        const keys = Object.keys(nextForm);
+        const isSame = keys.every((key) => prev?.[key] === nextForm[key]);
+        return isSame ? prev : nextForm;
+      });
+      setCustomTrack((prev) =>
+        customThemeRecord.track && customThemeRecord.track !== prev
+          ? customThemeRecord.track
+          : prev
+      );
+    } else if (Object.prototype.hasOwnProperty.call(THEMES, "custom")) {
+      delete THEMES.custom;
+    }
+  }, [customThemeRecord]);
+
+  useEffect(() => {
+    if (
+      customThemeRecord?.isActive &&
+      customThemeRecord?.theme &&
+      resolvedThemeKey !== "custom"
+    ) {
+      onThemeChange("custom");
+    }
+  }, [customThemeRecord?.isActive, customThemeRecord?.theme, resolvedThemeKey, onThemeChange]);
+
+  const themeOptions = Object.entries(THEMES ?? {});
 
   const availableTrackIds = useMemo(() => {
     const ids = new Set(BASE_TRACK_IDS);
@@ -90,9 +257,27 @@ export default function SettingsModal({
     addFromCollection(controlState?.tracks);
     addFromCollection(controlState?.availableTracks);
     addTrack(controlState.track);
+    if (customThemeRecord?.track) {
+      ids.add(normalizeTrackId(customThemeRecord.track));
+    }
+    if (customTrack) {
+      ids.add(normalizeTrackId(customTrack));
+    }
 
     return Array.from(ids);
-  }, [controlState, controls]);
+  }, [controlState, controls, customThemeRecord?.track, customTrack]);
+
+  useEffect(() => {
+    if (!availableTrackIds.length) {
+      return;
+    }
+    if (!customTrack || !availableTrackIds.includes(customTrack)) {
+      const fallback = availableTrackIds.includes(normalizedCurrentTrack)
+        ? normalizedCurrentTrack
+        : availableTrackIds[0];
+      setCustomTrack(fallback);
+    }
+  }, [availableTrackIds, customTrack, normalizedCurrentTrack]);
 
   const isMuted = Boolean(controlState.muted);
   const volumeValue = (() => {
@@ -122,6 +307,68 @@ export default function SettingsModal({
     const targetId = denormalizeTrackId(normalizedId);
     if (!targetId || targetId === rawCurrentTrackId) return;
     controls?.playTrack?.(targetId);
+  };
+
+  const handleCustomFieldChange = (field) => (event) => {
+    const nextValue = event?.target?.value;
+    if (typeof nextValue !== "string") return;
+    setCustomFormState((prev) => ({ ...prev, [field]: nextValue }));
+  };
+
+  const handleCustomTrackChange = (event) => {
+    const nextValue = normalizeTrackId(event?.target?.value);
+    if (!nextValue) return;
+    setCustomTrack(nextValue);
+  };
+
+  const isCustomThemeValid = useMemo(() => {
+    if (!customFormState) return false;
+    const { bgStart, bgEnd, truth, dare, trivia, meterStart, meterEnd } =
+      customFormState;
+    return [bgStart, bgEnd, truth, dare, trivia, meterStart, meterEnd].every(
+      isHexColor
+    );
+  }, [customFormState]);
+
+  const handleCustomThemeSave = () => {
+    if (!isCustomThemeValid) return;
+
+    const theme = {
+      name: CUSTOM_THEME_NAME,
+      bg: [customFormState.bgStart, customFormState.bgEnd],
+      colors: {
+        truth: customFormState.truth,
+        dare: customFormState.dare,
+        trivia: customFormState.trivia,
+      },
+      meter: [customFormState.meterStart, customFormState.meterEnd],
+      label: "white",
+      particles: {
+        type: "custom",
+        color: customFormState.truth,
+      },
+    };
+
+    const selectedTrack =
+      normalizeTrackId(customTrack) ?? normalizedCurrentTrack ?? BASE_TRACK_IDS[0];
+
+    const record = {
+      theme,
+      track: selectedTrack,
+      isActive: true,
+    };
+
+    persistCustomTheme(record);
+    setCustomThemeRecord(record);
+
+    onThemeChange("custom");
+
+    const denormalized = denormalizeTrackId(selectedTrack);
+    if (denormalized && denormalized !== rawCurrentTrackId) {
+      controls?.playTrack?.(denormalized);
+    }
+
+    setActiveTab("themes");
   };
 
   const handleVolumeChange = (event) => {
@@ -279,6 +526,106 @@ export default function SettingsModal({
                 </button>
               </div>
             </div>
+          </div>
+        );
+      case "custom":
+        return (
+          <div className="flex flex-col gap-6">
+            <p className="text-sm text-white/70">
+              Craft your own vibe with bespoke colors and a soundtrack. Save it
+              to instantly apply it across the experience.
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {[
+                { field: "bgStart", label: "Background Gradient Start" },
+                { field: "bgEnd", label: "Background Gradient End" },
+                { field: "truth", label: "Truth Color" },
+                { field: "dare", label: "Dare Color" },
+                { field: "trivia", label: "Trivia Color" },
+                { field: "meterStart", label: "Meter Start" },
+                { field: "meterEnd", label: "Meter End" },
+              ].map(({ field, label }) => (
+                <label key={field} className="flex flex-col gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+                    {label}
+                  </span>
+                  <input
+                    type="color"
+                    value={customFormState?.[field] ?? "#000000"}
+                    onChange={handleCustomFieldChange(field)}
+                    className="h-12 w-full cursor-pointer rounded-xl border border-white/10 bg-white/10 p-1 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-black/20"
+                  />
+                  <span className="text-xs uppercase tracking-[0.2em] text-white/40">
+                    {customFormState?.[field] ?? "#000000"}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-3">
+                <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+                  Music Track
+                </span>
+                <select
+                  value={customTrack}
+                  onChange={handleCustomTrackChange}
+                  className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-black/20"
+                >
+                  {availableTrackIds.map((trackId) => (
+                    <option key={trackId} value={trackId}>
+                      {formatTrackLabel(trackId)}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs uppercase tracking-[0.2em] text-white/40">
+                  {formatTrackLabel(customTrack)}
+                </span>
+              </div>
+              <div className="flex flex-col gap-3">
+                <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+                  Preview
+                </span>
+                <div
+                  className="h-24 w-full rounded-2xl border border-white/10"
+                  style={{
+                    background: `linear-gradient(135deg, ${
+                      customFormState?.bgStart ?? "#000000"
+                    }, ${customFormState?.bgEnd ?? "#111111"})`,
+                  }}
+                  aria-hidden="true"
+                />
+                <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-white/60">
+                  {[
+                    { label: "Truth", color: customFormState?.truth },
+                    { label: "Dare", color: customFormState?.dare },
+                    { label: "Trivia", color: customFormState?.trivia },
+                    { label: "Meter A", color: customFormState?.meterStart },
+                    { label: "Meter B", color: customFormState?.meterEnd },
+                  ].map(({ label, color }) => (
+                    <span key={label} className="flex items-center gap-2">
+                      <span
+                        className="h-3 w-3 rounded-full"
+                        style={{ background: color ?? "#000000" }}
+                        aria-hidden="true"
+                      />
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleCustomThemeSave}
+              disabled={!isCustomThemeValid}
+              className={`rounded-full px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-black/20 ${
+                isCustomThemeValid
+                  ? "bg-[var(--theme-primary)] text-black hover:bg-[var(--theme-primary)]/90"
+                  : "cursor-not-allowed bg-white/10 text-white/40"
+              }`}
+            >
+              Save Custom Theme
+            </button>
           </div>
         );
       default:
