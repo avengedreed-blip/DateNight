@@ -15,9 +15,9 @@ import SettingsModal from "./components/SettingsModal";
 import TopBar from "./components/TopBar";
 
 import SplashScreen from "./components/Screens/SplashScreen";
-import StartScreen from "./components/Screens/StartScreen";
-import ModeSelectionScreen from "./components/Screens/ModeSelectionScreen";
-import GameScreen from "./components/Screens/GameScreen";
+import StartScreen from "./screens/StartScreen.jsx";
+import ModeSelectionScreen from "./screens/ModeSelectionScreen.jsx";
+import GameScreen from "./screens/GameScreen.jsx";
 
 import { THEMES } from "./themeConfig";
 import AudioManager from "./audio/AudioManager";
