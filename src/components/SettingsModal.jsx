@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-import AvatarSelector from "./components/AvatarSelector";
-import Modal from "./Modal";
+import AvatarSelector from "./AvatarSelector";
+import Modal from "./modals/Modal";
 import { THEMES } from "../themeConfig";
 
 const TAB_DEFINITIONS = [

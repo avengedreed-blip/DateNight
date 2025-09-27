@@ -10,7 +10,7 @@ import Wheel, {
   POINTER_ANGLE,
 } from "./components/Wheel";
 import SparkMeter from "./components/SparkMeter";
-import Modal from "./components/Modal";
+import Modal from "./components/modals/Modal";
 import SettingsModal from "./components/SettingsModal";
 import TopBar from "./components/TopBar";
 
@@ -21,7 +21,7 @@ import GameScreen from "./screens/GameScreen.jsx";
 
 import { THEMES } from "./themeConfig";
 import AudioManager from "./audio/AudioManager";
-import mockProfile from "./data/mockProfile";
+import mockProfile from "./constants/mockProfile";
 
 const THEME_TRACK_MAP = {
   "classic-dark": "classic_dark",
