@@ -86,4 +86,3 @@ Modal-triggered sounds.
 Multiplayer sync.
 PWA install support.
 If adding new features, all existing features above must remain fully functional.
-EOF
