@@ -154,7 +154,7 @@ export default function App() {
         !nextThemeKey ||
         !Object.prototype.hasOwnProperty.call(THEMES, nextThemeKey)
       ) {
-        // removed erroneous return;
+        // removed erroneous return; (caused blank screen)
       }
       setThemeKey(nextThemeKey);
       setProfile((prev) => ({
