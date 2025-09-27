@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import confetti from "canvas-confetti";
 import { AppStyles } from "./styles/AppStyles";
 
@@ -15,8 +15,26 @@ import ModeSelectionScreen from "./components/Screens/ModeSelectionScreen";
 import GameScreen from "./components/Screens/GameScreen";
 
 import { THEMES } from "./themeConfig";
-import useAudio, { MUSIC_TRACKS } from "./hooks/useAudio";
+import AudioManager from "./audio/AudioManager";
 import mockProfile from "./data/mockProfile";
+
+const THEME_TRACK_MAP = {
+  "classic-dark": "classic_dark",
+  "romantic-glow": "romantic_glow",
+  "playful-neon": "playful_neon",
+  "mystic-night": "mystic_night",
+  "custom-1-chillwave": "custom_1_chillwave",
+  "custom-2-arcade": "custom_2_arcade",
+  "custom-3-ambient": "custom_3_ambient",
+};
+
+const DEFAULT_AUDIO_STATE = {
+  volume: 0.8,
+  musicVolume: 0.8,
+  sfxVolume: 0.8,
+  muted: false,
+  track: null,
+};
 
 function getLuminance(hex) {
   if (!hex || typeof hex !== "string") return 0;
@@ -36,7 +54,22 @@ export default function App() {
   const [themeKey, setThemeKey] = useState("classic-dark");
   const theme = THEMES[themeKey] ?? THEMES["classic-dark"];
 
-  const audio = useAudio(themeKey);
+  const audioManagerRef = useRef(null);
+  if (!audioManagerRef.current && typeof window !== "undefined") {
+    audioManagerRef.current = new AudioManager();
+  }
+  const manager = audioManagerRef.current;
+  const [audioState, setAudioState] = useState(
+    () => manager?.getState?.() ?? DEFAULT_AUDIO_STATE
+  );
+
+  useEffect(() => {
+    if (!manager) return undefined;
+    const unsubscribe = manager.subscribe((state) => {
+      setAudioState(state);
+    });
+    return unsubscribe;
+  }, [manager]);
   const [profile, setProfile] = useState(() => ({
     ...mockProfile,
     avatar: mockProfile.avatar ?? "/avatars/avatar_1.svg",
@@ -81,16 +114,34 @@ export default function App() {
 
   const particleTheme = useMemo(() => theme, [theme]);
 
-  const setTrackForTheme = useCallback(
-    (nextThemeKey) => {
-      if (!nextThemeKey) return;
-      if (!Object.prototype.hasOwnProperty.call(MUSIC_TRACKS, nextThemeKey)) {
-        return;
-      }
-      audio.music?.setTrackId?.(nextThemeKey);
-    },
-    [audio]
-  );
+  const setTrackForTheme = useCallback((nextThemeKey) => {
+    if (!nextThemeKey) return;
+    const trackId = THEME_TRACK_MAP[nextThemeKey] ?? THEME_TRACK_MAP["classic-dark"];
+    audioManagerRef.current?.playTrack(trackId);
+  }, []);
+
+  useEffect(() => {
+    setTrackForTheme(themeKey);
+  }, [themeKey, setTrackForTheme]);
+
+  const playSfx = useCallback((name) => {
+    audioManagerRef.current?.playSFX(name);
+  }, []);
+
+  const audioControls = useMemo(() => {
+    const fallbackTrack =
+      audioState.track ?? THEME_TRACK_MAP[themeKey] ?? THEME_TRACK_MAP["classic-dark"];
+    return {
+      state: { ...audioState, track: fallbackTrack },
+      playSFX: (name) => audioManagerRef.current?.playSFX(name),
+      playTrack: (trackId) => audioManagerRef.current?.playTrack(trackId),
+      stopTrack: () => audioManagerRef.current?.stopTrack(),
+      setMusicVolume: (value) => audioManagerRef.current?.setMusicVolume(value),
+      setSfxVolume: (value) => audioManagerRef.current?.setSfxVolume(value),
+      setVolume: (value) => audioManagerRef.current?.setVolume(value),
+      toggleMute: () => audioManagerRef.current?.toggleMute(),
+    };
+  }, [audioState, themeKey]);
 
   const handleThemeChange = useCallback(
     (nextThemeKey) => {
@@ -118,14 +169,14 @@ export default function App() {
         avatar: nextAvatar,
       }));
       if (!options.silent) {
-        audio.sfx?.play?.("click");
+        playSfx("click");
       }
     },
-    [audio]
+    [playSfx]
   );
 
   const handlePickMode = useCallback((m) => {
-    audio.sfx?.play?.("click");
+    playSfx("click");
     setMode(m);
     const nextTheme =
       m === "together"
@@ -136,7 +187,7 @@ export default function App() {
     setThemeKey(nextTheme);
     setTrackForTheme(nextTheme);
     setScreen("select");
-  }, [audio, setTrackForTheme]);
+  }, [playSfx, setTrackForTheme]);
 
   const modeSubtitle = useMemo(() => {
     if (!mode) return undefined;
@@ -147,20 +198,20 @@ export default function App() {
   const handleOpenModal = useCallback(
     (nextModal) => {
       setModalOpen(nextModal);
-      audio.sfx?.play?.("modal_open");
+      playSfx("modal_open");
     },
-    [audio]
+    [playSfx]
   );
 
   const handleCloseModal = useCallback(() => {
     setModalOpen(null);
-    audio.sfx?.play?.("modal_close");
-  }, [audio]);
+    playSfx("modal_close");
+  }, [playSfx]);
 
   const handleSpin = useCallback(() => {
     if (spinning) return;
 
-    audio.sfx?.play?.("spin_start");
+    playSfx("spin_start");
 
     const index = Math.floor(Math.random() * 3);
     const center = SLICE_CENTERS[index];
@@ -175,33 +226,33 @@ export default function App() {
     setLastResult(index);
     setRotation(target);
     setSpinning(true);
-  }, [audio, spinning, rotation]);
+  }, [playSfx, spinning, rotation]);
 
   const handleSpinDone = useCallback(() => {
     setSpinning(false);
-    audio.sfx?.play?.("spin_end");
+    playSfx("spin_end");
 
     const nextSpark = Math.min(100, spark + 34);
     const triggeredExtreme = nextSpark >= 100;
 
     if (triggeredExtreme) {
       confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
-      audio.sfx?.play?.("extreme_fanfare");
+      playSfx("extreme_fanfare");
       setScreenFlash(true);
       setTimeout(() => setScreenFlash(false), 600);
       setSpark(0);
     } else {
-      audio.sfx?.play?.("success");
+      playSfx("success");
       setSpark(nextSpark);
     }
 
     handleOpenModal("result");
-  }, [audio, spark, handleOpenModal]);
+  }, [playSfx, spark, handleOpenModal]);
 
   const handleStartGame = useCallback(() => {
-    audio.sfx?.play?.("success");
+    playSfx("success");
     setScreen("game");
-  }, [audio]);
+  }, [playSfx]);
 
   return (
     <div className={`animated-background ${screenFlash ? "screen-flash-active" : ""}`}>
@@ -251,7 +302,7 @@ export default function App() {
             key="1"
             className="btn grad-pink"
             onClick={() => {
-              audio.sfx?.play?.("click");
+              playSfx("click");
               handleCloseModal();
             }}
           >
@@ -274,7 +325,7 @@ export default function App() {
             key="1"
             className="btn grad-pink"
             onClick={() => {
-              audio.sfx?.play?.("click");
+              playSfx("click");
               handleCloseModal();
             }}
           >
@@ -291,7 +342,7 @@ export default function App() {
           onClose={handleCloseModal}
           themeKey={themeKey}
           onThemeChange={handleThemeChange}
-          audio={audio}
+          audio={audioControls}
           profile={profile}
           onAvatarChange={handleAvatarChange}
         />

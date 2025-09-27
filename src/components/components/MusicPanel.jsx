@@ -1,38 +1,47 @@
 import React, { useMemo } from "react";
 
-import { MUSIC_TRACKS } from "../../hooks/useAudio";
-
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 const toPercent = (value) => Math.round(clamp(value, 0, 1) * 100);
 
 const formatTrackLabel = (id) =>
   id
+    .replace(/_/g, "-")
     .split("-")
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
 
+const TRACK_LABELS = {
+  classic_dark: "Classic Dark",
+  romantic_glow: "Romantic Glow",
+  playful_neon: "Playful Neon",
+  mystic_night: "Mystic Night",
+  custom_1_chillwave: "Custom 1 Chillwave",
+  custom_2_arcade: "Custom 2 Arcade",
+  custom_3_ambient: "Custom 3 Ambient",
+};
+
 const MusicPanel = ({ audio }) => {
   const trackOptions = useMemo(
     () =>
-      Object.keys(MUSIC_TRACKS).map((trackId) => ({
+      Object.keys(TRACK_LABELS).map((trackId) => ({
         id: trackId,
-        label: formatTrackLabel(trackId),
+        label: TRACK_LABELS[trackId] ?? formatTrackLabel(trackId),
       })),
     []
   );
 
   const currentTrackId =
-    audio?.music?.trackId ?? trackOptions[0]?.id ?? "classic-dark";
-  const musicVolumePercent = toPercent(audio?.music?.volume ?? 0.8);
-  const sfxVolumePercent = toPercent(audio?.sfx?.volume ?? 0.8);
-  const isMuted = Boolean(audio?.muted);
+    audio?.state?.track ?? trackOptions[0]?.id ?? "classic_dark";
+  const musicVolumePercent = toPercent(audio?.state?.musicVolume ?? 0.8);
+  const sfxVolumePercent = toPercent(audio?.state?.sfxVolume ?? 0.8);
+  const isMuted = Boolean(audio?.state?.muted);
 
   const handleMusicVolumeChange = (event) => {
     const nextValue = Number(event.target.value);
     if (Number.isNaN(nextValue)) {
       return;
     }
-    audio?.music?.setVolume?.(clamp(nextValue, 0, 100) / 100);
+    audio?.setMusicVolume?.(clamp(nextValue, 0, 100) / 100);
   };
 
   const handleSfxVolumeChange = (event) => {
@@ -40,7 +49,7 @@ const MusicPanel = ({ audio }) => {
     if (Number.isNaN(nextValue)) {
       return;
     }
-    audio?.sfx?.setVolume?.(clamp(nextValue, 0, 100) / 100);
+    audio?.setSfxVolume?.(clamp(nextValue, 0, 100) / 100);
   };
 
   const handleTrackChange = (event) => {
@@ -48,11 +57,11 @@ const MusicPanel = ({ audio }) => {
     if (!nextTrackId || nextTrackId === currentTrackId) {
       return;
     }
-    audio?.music?.setTrackId?.(nextTrackId);
+    audio?.playTrack?.(nextTrackId);
   };
 
   const handleMuteToggle = () => {
-    audio?.setMuted?.(!isMuted);
+    audio?.toggleMute?.();
   };
 
   return (

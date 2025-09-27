@@ -104,7 +104,7 @@ export default function SettingsModal({
           type="button"
           className="btn grad-pink"
           onClick={() => {
-            audio?.sfx?.play?.("click");
+            audio?.playSFX?.("click");
             onClose();
           }}
         >
