@@ -9,6 +9,7 @@ const TAB_DEFINITIONS = [
   { id: "avatars", label: "Avatars" },
   { id: "music", label: "Music" },
   { id: "custom", label: "Custom" },
+  { id: "achievements", label: "Achievements" },
 ];
 
 const CUSTOM_THEME_STORAGE_KEY = "date-night/custom-theme";
@@ -528,6 +529,28 @@ export default function SettingsModal({
             </div>
           </div>
         );
+      case "achievements":
+        return (
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            {(profile?.achievements ?? []).map((ach) => (
+              <div
+                key={ach.id}
+                className={`glass p-4 rounded-lg flex flex-col items-center text-center relative ${
+                  !ach.unlocked ? "opacity-50" : ""
+                }`}
+              >
+                <div className="text-3xl mb-2">{ach.icon}</div>
+                <h3 className="font-bold text-lg">{ach.title}</h3>
+                <p className="text-sm opacity-80">{ach.description}</p>
+                {!ach.unlocked && (
+                  <div className="absolute inset-0 flex items-center justify-center text-2xl opacity-60">
+                    🔒
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        );
       case "custom":
         return (
           <div className="flex flex-col gap-6">
@@ -653,24 +676,16 @@ export default function SettingsModal({
       ]}
     >
       <div className="flex flex-col gap-6 text-left">
-        <div className="flex flex-wrap justify-center gap-3">
-          {TAB_DEFINITIONS.map((tab) => {
-            const isActive = tab.id === activeTab;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`rounded-full px-5 py-2 text-sm font-semibold uppercase tracking-[0.2em] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-black/20 ${
-                  isActive
-                    ? "bg-[var(--theme-primary)] text-black"
-                    : "bg-white/10 text-white/70 hover:bg-white/20"
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+        <div className="flex gap-3 justify-center mb-4">
+          {["themes", "avatars", "music", "custom", "achievements"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`btn ${activeTab === tab ? "grad-neon" : "grad-pink"}`}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
         </div>
         <div className="rounded-3xl border border-white/10 bg-black/40 p-6 shadow-[0_18px_36px_rgba(0,0,0,0.35)]">
           {renderTabContent()}
