@@ -3,9 +3,16 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 const LOCAL_STORAGE_KEY = "selectedAvatar";
 const LEGACY_STORAGE_KEY = "avatar";
 
-const PRESET_AVATARS = Array.from({ length: 8 }, (_, index) =>
-  `/avatars/avatar_${index + 1}.png`
-);
+const PRESET_AVATARS = [
+  { id: "aurora", src: "/avatars/avatar_1.svg", label: "Aurora Glow" },
+  { id: "ember", src: "/avatars/avatar_2.svg", label: "Crimson Ember" },
+  { id: "lumen", src: "/avatars/avatar_3.svg", label: "Lumen Pulse" },
+  { id: "nebula", src: "/avatars/avatar_4.svg", label: "Nebula Drift" },
+  { id: "nova", src: "/avatars/avatar_5.svg", label: "Nova Spark" },
+  { id: "serene", src: "/avatars/avatar_6.svg", label: "Serene Bloom" },
+  { id: "zenith", src: "/avatars/avatar_7.svg", label: "Zenith Crest" },
+  { id: "prism", src: "/avatars/avatar_8.svg", label: "Prism Burst" },
+];
 
 const readStoredAvatar = () => {
   if (typeof window === "undefined") {
@@ -39,7 +46,7 @@ const writeStoredAvatar = (avatarPath) => {
 };
 
 const AvatarSelector = ({ selectedAvatar, onAvatarSelect }) => {
-  const fallbackAvatar = PRESET_AVATARS[0];
+  const fallbackAvatar = PRESET_AVATARS[0]?.src;
   const [currentAvatar, setCurrentAvatar] = useState(() => {
     return selectedAvatar || readStoredAvatar() || fallbackAvatar;
   });
@@ -66,7 +73,7 @@ const AvatarSelector = ({ selectedAvatar, onAvatarSelect }) => {
     const storedAvatar = readStoredAvatar();
     if (storedAvatar && storedAvatar !== currentAvatar) {
       setCurrentAvatar(storedAvatar);
-      onAvatarSelect?.(storedAvatar);
+      onAvatarSelect?.(storedAvatar, { silent: true });
     }
   }, [currentAvatar, onAvatarSelect, selectedAvatar]);
 
@@ -109,14 +116,14 @@ const AvatarSelector = ({ selectedAvatar, onAvatarSelect }) => {
       </div>
 
       <div className="grid grid-cols-4 gap-4">
-        {presetAvatars.map((avatarPath) => {
-          const isSelected = avatarPath === currentAvatar;
+        {presetAvatars.map((avatar) => {
+          const isSelected = avatar.src === currentAvatar;
 
           return (
             <button
-              key={avatarPath}
+              key={avatar.id}
               type="button"
-              onClick={() => handleSelect(avatarPath)}
+              onClick={() => handleSelect(avatar.src)}
               aria-pressed={isSelected}
               className={`group relative flex h-16 w-16 items-center justify-center rounded-full border border-white/15 bg-black/35 transition-transform duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)] ${
                 isSelected
@@ -126,11 +133,12 @@ const AvatarSelector = ({ selectedAvatar, onAvatarSelect }) => {
             >
               <span className="absolute inset-0 rounded-full bg-white/10 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
               <img
-                src={avatarPath}
-                alt="Preset avatar"
+                src={avatar.src}
+                alt={avatar.label}
                 className="relative z-10 h-14 w-14 rounded-full object-cover"
                 draggable={false}
               />
+              <span className="sr-only">{avatar.label}</span>
             </button>
           );
         })}

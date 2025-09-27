@@ -7,7 +7,7 @@ import Modal from "./Modal";
 
 const TAB_DEFINITIONS = [
   { id: "themes", label: "Themes" },
-  { id: "music", label: "Music" },
+  { id: "audio", label: "Audio" },
   { id: "avatars", label: "Avatars" },
   { id: "achievements", label: "Achievements" },
 ];
@@ -19,7 +19,7 @@ export default function SettingsModal({
   onAvatarChange = () => {},
   onThemeChange = () => {},
   themeKey,
-  music,
+  audio,
 }) {
   const [activeTab, setActiveTab] = useState(TAB_DEFINITIONS[0].id);
 
@@ -37,8 +37,8 @@ export default function SettingsModal({
         return (
           <ThemesPanel onThemeChange={onThemeChange} themeKey={themeKey} />
         );
-      case "music":
-        return <MusicPanel music={music} />;
+      case "audio":
+        return <MusicPanel audio={audio} />;
       case "avatars":
         return (
           <div className="flex flex-col gap-6">
@@ -99,7 +99,15 @@ export default function SettingsModal({
       open={open}
       onClose={onClose}
       actions={[
-        <button key="close" type="button" className="btn grad-pink" onClick={onClose}>
+        <button
+          key="close"
+          type="button"
+          className="btn grad-pink"
+          onClick={() => {
+            audio?.sfx?.play?.("click");
+            onClose();
+          }}
+        >
           Close
         </button>,
       ]}

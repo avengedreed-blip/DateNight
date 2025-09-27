@@ -1,65 +1,106 @@
-import React from "react";
+import React, { useMemo } from "react";
 
-import { MUSIC_TRACK_OPTIONS } from "../../hooks/useMusic";
+import { MUSIC_TRACKS } from "../../hooks/useAudio";
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const toPercent = (value) => Math.round(clamp(value, 0, 1) * 100);
 
-const MusicPanel = ({ music }) => {
-  const currentTrackId = music?.currentTrackId ?? MUSIC_TRACK_OPTIONS[0]?.id;
-  const volumePercent = Math.round(clamp((music?.volume ?? 1) * 100, 0, 100));
-  const isMuted = Boolean(music?.isMuted);
+const formatTrackLabel = (id) =>
+  id
+    .split("-")
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
 
-  const handleVolumeChange = (event) => {
+const MusicPanel = ({ audio }) => {
+  const trackOptions = useMemo(
+    () =>
+      Object.keys(MUSIC_TRACKS).map((trackId) => ({
+        id: trackId,
+        label: formatTrackLabel(trackId),
+      })),
+    []
+  );
+
+  const currentTrackId =
+    audio?.music?.trackId ?? trackOptions[0]?.id ?? "classic-dark";
+  const musicVolumePercent = toPercent(audio?.music?.volume ?? 0.8);
+  const sfxVolumePercent = toPercent(audio?.sfx?.volume ?? 0.8);
+  const isMuted = Boolean(audio?.muted);
+
+  const handleMusicVolumeChange = (event) => {
     const nextValue = Number(event.target.value);
     if (Number.isNaN(nextValue)) {
       return;
     }
-    music?.setVolume?.(clamp(nextValue, 0, 100) / 100);
+    audio?.music?.setVolume?.(clamp(nextValue, 0, 100) / 100);
+  };
+
+  const handleSfxVolumeChange = (event) => {
+    const nextValue = Number(event.target.value);
+    if (Number.isNaN(nextValue)) {
+      return;
+    }
+    audio?.sfx?.setVolume?.(clamp(nextValue, 0, 100) / 100);
   };
 
   const handleTrackChange = (event) => {
     const nextTrackId = event.target.value;
-    if (!nextTrackId) {
+    if (!nextTrackId || nextTrackId === currentTrackId) {
       return;
     }
-    if (nextTrackId === currentTrackId) {
-      return;
-    }
-    music?.playTrack?.(nextTrackId);
+    audio?.music?.setTrackId?.(nextTrackId);
   };
 
   const handleMuteToggle = () => {
-    music?.toggleMute?.();
+    audio?.setMuted?.(!isMuted);
   };
 
   return (
     <div className="flex flex-col gap-6">
       <p className="text-sm text-white/70">
-        Adjust the background soundtrack for your session. Volume and mute
-        preferences are saved locally and synced across partners when possible.
+        Fine-tune the vibe with soundtrack and effects levels. Preferences are
+        saved locally so every session starts exactly how you like it.
       </p>
       <div className="flex flex-col gap-5">
         <label className="flex flex-col gap-3">
           <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
-            Volume
+            Music Volume
           </span>
           <input
             type="range"
             min="0"
             max="100"
-            value={volumePercent}
-            onChange={handleVolumeChange}
+            value={musicVolumePercent}
+            onChange={handleMusicVolumeChange}
             className="accent-[var(--theme-primary)]"
           />
           <div className="flex justify-between text-xs text-white/60">
             <span>Muted</span>
-            <span>{volumePercent}%</span>
+            <span>{musicVolumePercent}%</span>
+          </div>
+        </label>
+
+        <label className="flex flex-col gap-3">
+          <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+            Effects Volume
+          </span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={sfxVolumePercent}
+            onChange={handleSfxVolumeChange}
+            className="accent-[var(--theme-primary)]"
+          />
+          <div className="flex justify-between text-xs text-white/60">
+            <span>Muted</span>
+            <span>{sfxVolumePercent}%</span>
           </div>
         </label>
 
         <label className="flex items-center justify-between gap-3">
           <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
-            Mute
+            Global Mute
           </span>
           <button
             type="button"
@@ -70,7 +111,7 @@ const MusicPanel = ({ music }) => {
                 : "bg-[var(--theme-primary)] text-black"
             }`}
           >
-            {isMuted ? "Muted" : "On"}
+            {isMuted ? "Muted" : "Active"}
           </button>
         </label>
 
@@ -83,7 +124,7 @@ const MusicPanel = ({ music }) => {
             onChange={handleTrackChange}
             className="rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-sm text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)]"
           >
-            {MUSIC_TRACK_OPTIONS.map((track) => (
+            {trackOptions.map((track) => (
               <option key={track.id} value={track.id}>
                 {track.label}
               </option>
