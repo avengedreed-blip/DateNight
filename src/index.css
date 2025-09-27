@@ -1,5 +1,106 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-/* Ensure background canvas sits behind UI */
-canvas.particles { position: fixed; inset: 0; z-index: -1; }
+
+canvas.particles {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  /* The main gradient is now on .app-shell for better layering */
+  background-color: var(--bg-gradient-end);
+  color: var(--label-color);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Enhanced Glassmorphism for Modals */
+.glass-modal {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(30, 35, 50, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+/* Wheel Styles */
+.wheel {
+  position: relative;
+  width: 100%;
+  max-width: 550px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 10px 45px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255,255,255,0.08);
+  transition: transform 4s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+
+.wheel-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: 0 0;
+  font-size: clamp(14px, 2.4vw, 20px);
+  font-weight: 700;
+  max-width: clamp(28px, 3ch, 42px);
+  text-align: center;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.wheel-pointer {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-left: 14px solid transparent;
+  border-right: 14px solid transparent;
+  border-bottom: 24px solid var(--ring-color);
+  transform: translateX(-50%);
+  z-index: 50;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
+  transition: transform 0.3s ease;
+}
+
+/* Spark Meter Polish */
+.spark-meter-fill {
+  background: linear-gradient(90deg, var(--truth-color) 0%, var(--dare-color) 35%, var(--trivia-color) 65%, var(--consequence-color) 100%);
+  transition: width 600ms cubic-bezier(0.25, 1, 0.5, 1), box-shadow 400ms ease;
+  will-change: width, box-shadow;
+}
+
+/* Pulse Animations with fallbacks */
+@keyframes subtle-pulse {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(255, 71, 126, 0.6); /* fallback */
+    box-shadow: 0 0 5px color-mix(in srgb, var(--dare-color) 60%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(255, 71, 126, 0.8); /* fallback */
+    box-shadow: 0 0 12px color-mix(in srgb, var(--dare-color) 80%, transparent);
+  }
+}
+.pulse-subtle {
+  animation: subtle-pulse 2.5s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+@keyframes strong-pulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(255, 209, 102, 0.8), /* fallback */
+                0 0 14px color-mix(in srgb, var(--consequence-color) 60%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(255, 71, 126, 0.8), /* fallback */
+                0 0 28px color-mix(in srgb, var(--dare-color) 70%, transparent);
+  }
+}
+.pulse-strong {
+  animation: strong-pulse 1.2s infinite alternate ease-in-out;
+}
