@@ -1,43 +1,57 @@
 export const AppStyles = `
-/* Fonts are pre-imported in index.html or another global CSS file */
+/* Fonts are pre-imported */
 
-/* … unchanged animations … */
-
-/* Wheel Polish */
-.pointer {
-  position: absolute; left: 50%; top: -6px; transform: translateX(-50%);
-  width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent; border-bottom: 24px solid var(--ring-color);
-  z-index: 3;
-  animation: pointer-pulse 2.5s infinite ease-in-out;
+/* --- REFINED IDLE & SPIN ANIMATIONS --- */
+.wheel-pointer {
+  animation: pointer-idle-glow 2.8s infinite ease-in-out;
+}
+.wheel-pointer::after {
+  animation: gem-idle-glow 2.8s infinite ease-in-out;
 }
 
-@keyframes spin-glow {
+@keyframes pointer-idle-glow {
   0%, 100% {
-    box-shadow: 0 0 20px 0px var(--ring-color, #fff),
-                0 0 40px 10px var(--theme-primary, var(--truth-color)),
-                inset 0 0 0 2px rgba(255,255,255,.06);
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
+    transform: translateX(-50%) translateY(0);
   }
   50% {
-    box-shadow: 0 0 35px 5px var(--ring-color, #fff),
-                0 0 60px 20px var(--theme-primary, var(--truth-color)),
-                inset 0 0 0 2px rgba(255,255,255,.06);
+    filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.3));
+    transform: translateX(-50%) translateY(-2px);
   }
 }
-.wheel.spinning { animation: spin-glow 1.2s infinite alternate; }
 
-/* Modal Polish with fallback layering */
-.modal-overlay {
-  position: fixed; inset: 0; z-index: 200;
-  display: grid; place-items: center;
-  background: rgba(10, 12, 18, 0.9); /* always present fallback */
-  opacity: 0;
-  animation: fade-in 0.3s ease forwards;
+@keyframes gem-idle-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px 2px var(--ring), 0 0 12px 4px color-mix(in srgb, var(--ring) 70%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 12px 4px var(--ring), 0 0 22px 8px color-mix(in srgb, var(--ring) 70%, transparent);
+  }
 }
-@supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)) {
-  .modal-overlay {
-    background: rgba(10, 12, 18, 0.5); /* lighter background when blur is active */
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+
+/* REFINED: Spin glow is more intense and now animates the inner ring for a powerful effect */
+.wheel.spinning::before {
+  animation: spin-glow-ring 1.2s infinite alternate ease-out;
+}
+.wheel.spinning {
+  animation: spin-glow-main 1.2s infinite alternate ease-out;
+  transition: transform 4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes spin-glow-main {
+  from { filter: brightness(1.0); }
+  to { filter: brightness(1.2); }
+}
+@keyframes spin-glow-ring {
+  from {
+    opacity: 0.75;
+    transform: scale(1);
+    box-shadow: 0 0 25px color-mix(in srgb, var(--ring) 40%, transparent);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.02);
+    box-shadow: 0 0 45px 5px color-mix(in srgb, var(--ring) 60%, transparent);
   }
 }
 `;
