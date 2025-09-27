@@ -1,5 +1,6 @@
 const mockProfile = {
   username: 'Player1',
+  avatar: '/avatars/avatar_1.svg',
   achievements: [
     { id: 'first_spin', title: 'Spin Cycle', description: 'Completed your first spin.', unlocked: true, icon: '🌀' },
     { id: 'dare_devil', title: 'Dare Devil', description: 'Completed 5 Dares.', unlocked: true, icon: '🔥' },

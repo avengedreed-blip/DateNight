@@ -1,0 +1,18 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="avatar8_bg" x1="24" y1="28" x2="136" y2="132" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1A2980" />
+      <stop offset="0.5" stop-color="#26D0CE" />
+      <stop offset="1" stop-color="#F2FCFE" />
+    </linearGradient>
+    <linearGradient id="avatar8_shape" x1="52" y1="52" x2="116" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF8A65" />
+      <stop offset="0.5" stop-color="#FFD54F" />
+      <stop offset="1" stop-color="#4DD0E1" />
+    </linearGradient>
+  </defs>
+  <rect x="12" y="12" width="136" height="136" rx="68" fill="url(#avatar8_bg)" />
+  <path d="M80 44L116 80L80 116L44 80L80 44Z" fill="url(#avatar8_shape)" fill-opacity="0.9" />
+  <path d="M80 60L100 80L80 100L60 80L80 60Z" fill="#0B1D3A" fill-opacity="0.45" />
+  <circle cx="80" cy="80" r="10" fill="#FFFFFF" fill-opacity="0.8" />
+</svg>

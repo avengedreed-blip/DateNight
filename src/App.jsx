@@ -15,7 +15,7 @@ import ModeSelectionScreen from "./components/Screens/ModeSelectionScreen";
 import GameScreen from "./components/Screens/GameScreen";
 
 import { THEMES } from "./themeConfig";
-import useMusic from "./hooks/useMusic";
+import useAudio, { MUSIC_TRACKS } from "./hooks/useAudio";
 import mockProfile from "./data/mockProfile";
 
 function getLuminance(hex) {
@@ -36,10 +36,10 @@ export default function App() {
   const [themeKey, setThemeKey] = useState("classic-dark");
   const theme = THEMES[themeKey] ?? THEMES["classic-dark"];
 
-  const music = useMusic();
+  const audio = useAudio(themeKey);
   const [profile, setProfile] = useState(() => ({
     ...mockProfile,
-    avatar: mockProfile.avatar ?? "/avatars/avatar_1.png",
+    avatar: mockProfile.avatar ?? "/avatars/avatar_1.svg",
     themeId: mockProfile.themeId ?? "classic-dark",
   }));
 
@@ -81,9 +81,23 @@ export default function App() {
 
   const particleTheme = useMemo(() => theme, [theme]);
 
+  const setTrackForTheme = useCallback(
+    (nextThemeKey) => {
+      if (!nextThemeKey) return;
+      if (!Object.prototype.hasOwnProperty.call(MUSIC_TRACKS, nextThemeKey)) {
+        return;
+      }
+      audio.music?.setTrackId?.(nextThemeKey);
+    },
+    [audio]
+  );
+
   const handleThemeChange = useCallback(
     (nextThemeKey) => {
-      if (!nextThemeKey || !Object.prototype.hasOwnProperty.call(THEMES, nextThemeKey)) {
+      if (
+        !nextThemeKey ||
+        !Object.prototype.hasOwnProperty.call(THEMES, nextThemeKey)
+      ) {
         return;
       }
       setThemeKey(nextThemeKey);
@@ -91,30 +105,38 @@ export default function App() {
         ...prev,
         themeId: nextThemeKey,
       }));
-      music.playTrack?.(nextThemeKey);
+      setTrackForTheme(nextThemeKey);
     },
-    [music]
+    [setTrackForTheme]
   );
 
-  const handleAvatarChange = useCallback((nextAvatar) => {
-    if (!nextAvatar) return;
-    setProfile((prev) => ({
-      ...prev,
-      avatar: nextAvatar,
-    }));
-  }, []);
+  const handleAvatarChange = useCallback(
+    (nextAvatar, options = {}) => {
+      if (!nextAvatar) return;
+      setProfile((prev) => ({
+        ...prev,
+        avatar: nextAvatar,
+      }));
+      if (!options.silent) {
+        audio.sfx?.play?.("click");
+      }
+    },
+    [audio]
+  );
 
   const handlePickMode = useCallback((m) => {
+    audio.sfx?.play?.("click");
     setMode(m);
-    setThemeKey(
+    const nextTheme =
       m === "together"
         ? "romantic-glow"
         : m === "multiplayer"
         ? "playful-neon"
-        : "mystic-night"
-    );
+        : "mystic-night";
+    setThemeKey(nextTheme);
+    setTrackForTheme(nextTheme);
     setScreen("select");
-  }, []);
+  }, [audio, setTrackForTheme]);
 
   const modeSubtitle = useMemo(() => {
     if (!mode) return undefined;
@@ -122,8 +144,23 @@ export default function App() {
     return `${capitalized} Mode`;
   }, [mode]);
 
+  const handleOpenModal = useCallback(
+    (nextModal) => {
+      setModalOpen(nextModal);
+      audio.sfx?.play?.("modal_open");
+    },
+    [audio]
+  );
+
+  const handleCloseModal = useCallback(() => {
+    setModalOpen(null);
+    audio.sfx?.play?.("modal_close");
+  }, [audio]);
+
   const handleSpin = useCallback(() => {
     if (spinning) return;
+
+    audio.sfx?.play?.("spin_start");
 
     const index = Math.floor(Math.random() * 3);
     const center = SLICE_CENTERS[index];
@@ -138,22 +175,33 @@ export default function App() {
     setLastResult(index);
     setRotation(target);
     setSpinning(true);
-  }, [spinning, rotation]);
+  }, [audio, spinning, rotation]);
 
   const handleSpinDone = useCallback(() => {
     setSpinning(false);
-    setSpark((prevSpark) => {
-      const newSpark = Math.min(100, prevSpark + 34);
-      if (newSpark >= 100) {
-        confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
-        setScreenFlash(true);
-        setTimeout(() => setScreenFlash(false), 600);
-        return 0;
-      }
-      return newSpark;
-    });
-    setModalOpen("result");
-  }, []);
+    audio.sfx?.play?.("spin_end");
+
+    const nextSpark = Math.min(100, spark + 34);
+    const triggeredExtreme = nextSpark >= 100;
+
+    if (triggeredExtreme) {
+      confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+      audio.sfx?.play?.("extreme_fanfare");
+      setScreenFlash(true);
+      setTimeout(() => setScreenFlash(false), 600);
+      setSpark(0);
+    } else {
+      audio.sfx?.play?.("success");
+      setSpark(nextSpark);
+    }
+
+    handleOpenModal("result");
+  }, [audio, spark, handleOpenModal]);
+
+  const handleStartGame = useCallback(() => {
+    audio.sfx?.play?.("success");
+    setScreen("game");
+  }, [audio]);
 
   return (
     <div className={`animated-background ${screenFlash ? "screen-flash-active" : ""}`}>
@@ -168,7 +216,7 @@ export default function App() {
       </div>
       <div className={`screen ${screen === "select" ? "enter" : ""}`}>
         {screen === "select" && (
-          <ModeSelectionScreen mode={mode} onStart={() => setScreen("game")} />
+          <ModeSelectionScreen mode={mode} onStart={handleStartGame} />
         )}
       </div>
       <div className={`screen ${screen === "game" ? "enter" : ""}`}>
@@ -179,14 +227,14 @@ export default function App() {
             spinning={spinning}
             spark={spark}
             onSpinDone={handleSpinDone}
-            onHelpClick={() => setModalOpen("help")}
-            onSettingsClick={() => setModalOpen("settings")}
+            onHelpClick={() => handleOpenModal("help")}
+            onSettingsClick={() => handleOpenModal("settings")}
             topBar={
               <TopBar
                 title="Date Night"
                 subtitle={modeSubtitle}
-                onHelp={() => setModalOpen("help")}
-                onSettings={() => setModalOpen("settings")}
+                onHelp={() => handleOpenModal("help")}
+                onSettings={() => handleOpenModal("settings")}
               />
             }
             sparkMeter={<SparkMeter value={spark} />}
@@ -197,12 +245,15 @@ export default function App() {
       <Modal
         title="Result"
         open={modalOpen === "result"}
-        onClose={() => setModalOpen(null)}
+        onClose={handleCloseModal}
         actions={[
           <button
             key="1"
             className="btn grad-pink"
-            onClick={() => setModalOpen(null)}
+            onClick={() => {
+              audio.sfx?.play?.("click");
+              handleCloseModal();
+            }}
           >
             Continue
           </button>,
@@ -217,12 +268,15 @@ export default function App() {
       <Modal
         title="Help"
         open={modalOpen === "help"}
-        onClose={() => setModalOpen(null)}
+        onClose={handleCloseModal}
         actions={[
           <button
             key="1"
             className="btn grad-pink"
-            onClick={() => setModalOpen(null)}
+            onClick={() => {
+              audio.sfx?.play?.("click");
+              handleCloseModal();
+            }}
           >
             Got It!
           </button>,
@@ -234,10 +288,10 @@ export default function App() {
       {modalOpen === "settings" && (
         <SettingsModal
           open
-          onClose={() => setModalOpen(null)}
+          onClose={handleCloseModal}
           themeKey={themeKey}
           onThemeChange={handleThemeChange}
-          music={music}
+          audio={audio}
           profile={profile}
           onAvatarChange={handleAvatarChange}
         />
