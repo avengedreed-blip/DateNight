@@ -30,7 +30,7 @@ const Wheel = memo(({ isSpinning, rotation, onDone }) => {
 
   return (
     <div className="wheel-wrap" style={{ position: "relative" }}>
-      <div className="pointer" />
+      <div className="wheel-pointer" />
       <div
         ref={wheelEl}
         className={`wheel ${bounce ? "wheel-bounce" : ""} ${
