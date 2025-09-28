@@ -1,41 +1,44 @@
-import { memo } from "react";
+import { memo, useId } from "react";
+import "./SparkMeter.css";
 
-const SparkMeter = memo(({ value }) => {
-  const numericValue = Number.isFinite(value) ? value : 0;
-  const clampedValue = Math.min(100, Math.max(0, numericValue));
+const SparkMeter = memo(({ value = 0, theme, label = "Spark" }) => {
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const clampedValue = Math.min(100, Math.max(0, safeValue));
+  const isHigh = clampedValue > 80;
+
+  const themeClass = theme ? `theme-${theme}` : "";
+  const id = useId();
+  const labelId = `spark-meter-label-${id}`;
 
   return (
     <div
-      className="meter"
-      role="progressbar"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={clampedValue}
+      className={`spark-meter ${themeClass}`.trim()}
+      data-testid="spark-meter"
+      data-theme={theme || "default"}
     >
-      <div
-        style={{
-          textAlign: "center",
-          fontWeight: 800,
-          letterSpacing: ".14em",
-          fontSize: 12,
-          opacity: 0.85,
-          marginBottom: 8,
-        }}
-      >
-        SPARK METER
+      <div className="spark-meter-header">
+        <div id={labelId} className="spark-meter-label">
+          {label}
+        </div>
+        <div className="spark-meter-value">{Math.round(clampedValue)}%</div>
       </div>
-      <div className="meter-track">
+      <div
+        className="spark-meter-bar"
+        role="meter"
+        aria-valuenow={clampedValue}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuetext={`${Math.round(clampedValue)}%`}
+        aria-labelledby={labelId}
+      >
         <div
-          className={`meter-fill ${
-            clampedValue > 0 && clampedValue < 100 ? "pulsing" : ""
-          }`}
+          className="spark-meter-fill"
           style={{ width: `${clampedValue}%` }}
+          data-high={isHigh}
         />
       </div>
     </div>
   );
 });
-
-SparkMeter.displayName = "SparkMeter";
 
 export default SparkMeter;
