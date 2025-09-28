@@ -14,7 +14,7 @@ import Modal from "./components/modals/Modal";
 import SettingsModal from "./components/SettingsModal";
 import TopBar from "./components/TopBar";
 
-import SplashScreen from "./components/Screens/SplashScreen";
+import SplashScreen from "./screens/SplashScreen";
 import StartScreen from "./screens/StartScreen.jsx";
 import ModeSelectionScreen from "./screens/ModeSelectionScreen.jsx";
 import GameScreen from "./screens/GameScreen.jsx";
