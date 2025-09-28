@@ -55,6 +55,79 @@ export const AppStyles = `
   }
 }
 
+/* --- Game Screen Layout & Background Glow --- */
+.game-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  overflow: hidden;
+  position: relative;
+}
+
+.game-screen::before {
+  content: "";
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(90vw, 700px);
+  height: min(90vw, 700px);
+  background: radial-gradient(circle, var(--glow-color, #ff477e50) 0%, transparent 65%);
+  filter: blur(120px);
+  opacity: 0.4;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.game-main {
+  flex-grow: 1;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  align-items: center;
+  justify-items: center;
+  gap: clamp(1rem, 4vh, 1.5rem);
+  padding: 1rem 1rem 2rem;
+}
+
+.spin-button {
+  width: clamp(180px, 40vw, 240px);
+  min-height: 54px;
+  padding: 0.8rem 1.5rem;
+  border-radius: 1rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--label-color, #fff);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.3s ease, filter 0.3s ease;
+  will-change: transform, box-shadow;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.35);
+}
+
+.spin-button:hover:not(:disabled) {
+  transform: scale(1.05) translateY(-4px);
+  box-shadow: 0 10px 35px color-mix(in srgb, var(--glow-color, #fff) 60%, transparent);
+  filter: brightness(1.1);
+}
+
+.spin-button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.spin-button:disabled {
+  cursor: not-allowed;
+  filter: saturate(0.5) brightness(0.7);
+  box-shadow: none;
+}
+
+.game-main > *:last-child {
+  align-self: end;
+}
+
 /* --- Start Screen Styles --- */
 /* --- Start Screen Container & Background --- */
 .start-screen-container {

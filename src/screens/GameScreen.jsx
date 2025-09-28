@@ -15,7 +15,7 @@ const GameScreen = memo(
     topBar,
     sparkMeter,
   }) => (
-    <div>
+    <div className="game-screen">
       {topBar ?? (
         <TopBar
           title="Date Night"
@@ -23,18 +23,10 @@ const GameScreen = memo(
           onHelp={onHelpClick}
         />
       )}
-      <main
-        style={{
-          display: "grid",
-          placeItems: "center",
-          gap: 16,
-          padding: "18px 12px 24px",
-        }}
-      >
+      <main className="game-main">
         <Wheel rotation={rotation} isSpinning={spinning} onDone={onSpinDone} />
         <button
-          className="btn grad-neon"
-          style={{ width: 180 }}
+          className="spin-button btn grad-dare"
           onClick={onSpin}
           disabled={spinning}
         >
