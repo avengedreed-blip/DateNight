@@ -5,11 +5,7 @@ import "./styles/layout.css";
 import "./styles/Modal.css";
 
 import ParticleCanvas from "./components/ParticleCanvas";
-import Wheel, {
-  SLICE_LABELS,
-  SLICE_CENTERS,
-  POINTER_ANGLE,
-} from "./components/Wheel";
+import { SLICE_LABELS } from "./components/Wheel";
 import SparkMeter from "./components/SparkMeter";
 import Modal from "./components/modals/Modal";
 import SettingsModal from "./components/SettingsModal";
@@ -82,10 +78,21 @@ export default function App() {
   const [modalOpen, setModalOpen] = useState(null); // null | 'result' | 'help' | 'settings'
   const [screenFlash, setScreenFlash] = useState(false);
 
-  const [rotation, setRotation] = useState(0);
+  const wheelRef = useRef(null);
+  const flashTimeoutRef = useRef(null);
   const [spinning, setSpinning] = useState(false);
   const [spark, setSpark] = useState(0);
   const [lastResult, setLastResult] = useState(0);
+
+  const wheelSlices = useMemo(
+    () =>
+      SLICE_LABELS.map((label) => ({
+        label,
+        category:
+          typeof label === "string" ? label.toLowerCase() : String(label ?? ""),
+      })),
+    []
+  );
 
   // Splash timeout → start screen
   useEffect(() => {
@@ -94,6 +101,12 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [screen]);
+
+  useEffect(() => () => {
+    if (flashTimeoutRef.current) {
+      clearTimeout(flashTimeoutRef.current);
+    }
+  }, []);
 
   // Apply theme tokens to :root
   useEffect(() => {
@@ -213,45 +226,49 @@ export default function App() {
 
   const handleSpin = useCallback(() => {
     if (spinning) return;
+    const api = wheelRef.current;
+    if (!api) return;
+    if (typeof api.isLocked === "function" && api.isLocked()) return;
+    api.spinWheel();
+  }, [spinning, wheelRef]);
 
-    playSfx("spin_start");
-
-    const index = Math.floor(Math.random() * 3);
-    const center = SLICE_CENTERS[index];
-    const pointerTarget =
-      ((POINTER_ANGLE - center) % 360 + 360) % 360;
-    const baseMod = ((rotation % 360) + 360) % 360;
-    let extra = pointerTarget - baseMod;
-    if (extra < 0) extra += 360;
-
-    const spins = 4 + Math.floor(Math.random() * 3);
-    const target = rotation + spins * 360 + extra;
-
-    setLastResult(index);
-    setRotation(target);
+  const handleWheelSpinStart = useCallback(() => {
     setSpinning(true);
-  }, [playSfx, spinning, rotation]);
+    playSfx("spin_start");
+  }, [playSfx]);
 
-  const handleSpinDone = useCallback(() => {
-    setSpinning(false);
-    playSfx("spin_end");
-
-    const nextSpark = Math.min(100, spark + 34);
-    const triggeredExtreme = nextSpark >= 100;
-
-    if (triggeredExtreme) {
-      confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
-      playSfx("extreme_fanfare");
-      setScreenFlash(true);
-      setTimeout(() => setScreenFlash(false), 600);
-      setSpark(0);
-    } else {
-      playSfx("success");
-      setSpark(nextSpark);
+  const triggerExtremeEffects = useCallback(() => {
+    confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+    playSfx("extreme_fanfare");
+    setScreenFlash(true);
+    if (flashTimeoutRef.current) {
+      clearTimeout(flashTimeoutRef.current);
     }
+    flashTimeoutRef.current = setTimeout(() => setScreenFlash(false), 600);
+  }, [playSfx]);
 
-    handleOpenModal("result");
-  }, [playSfx, spark, handleOpenModal]);
+  const handleWheelSpinEnd = useCallback(
+    (result) => {
+      setSpinning(false);
+      if (typeof result?.index === "number") {
+        setLastResult(result.index);
+      }
+
+      const nextSpark = Math.min(100, spark + 34);
+      const isExtremeResult = Boolean(result?.isExtreme);
+
+      if (isExtremeResult) {
+        triggerExtremeEffects();
+        setSpark(0);
+      } else {
+        setSpark(nextSpark);
+        playSfx("spin_end");
+      }
+
+      handleOpenModal("result");
+    },
+    [handleOpenModal, playSfx, spark, triggerExtremeEffects]
+  );
 
   const handleStartGame = useCallback(() => {
     playSfx("success");
@@ -273,11 +290,14 @@ export default function App() {
           onStart: handleStartGame,
         },
         game: {
-          rotation,
           onSpin: handleSpin,
           spinning,
           spark,
-          onSpinDone: handleSpinDone,
+          onWheelSpinStart: handleWheelSpinStart,
+          onWheelSpinEnd: handleWheelSpinEnd,
+          wheelRef,
+          slices: wheelSlices,
+          enableSwipe: true,
           onHelpClick: openHelp,
           onSettingsClick: openSettings,
           topBar: (
@@ -296,12 +316,14 @@ export default function App() {
       handleOpenModal,
       handlePickMode,
       handleSpin,
-      handleSpinDone,
+      handleWheelSpinEnd,
+      handleWheelSpinStart,
       handleStartGame,
       mode,
       modeSubtitle,
-      rotation,
       spark,
+      wheelRef,
+      wheelSlices,
       spinning,
     ]
   );

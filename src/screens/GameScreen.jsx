@@ -5,11 +5,14 @@ import SparkMeter from "../components/SparkMeter";
 
 const GameScreen = memo(
   ({
-    rotation,
     onSpin,
     spinning,
     spark,
-    onSpinDone,
+    onWheelSpinStart,
+    onWheelSpinEnd,
+    wheelRef,
+    slices,
+    enableSwipe = true,
     onSettingsClick,
     onHelpClick,
     topBar,
@@ -24,7 +27,13 @@ const GameScreen = memo(
         />
       )}
       <main className="game-main">
-        <Wheel rotation={rotation} isSpinning={spinning} onDone={onSpinDone} />
+        <Wheel
+          ref={wheelRef}
+          slices={slices}
+          onSpinStart={onWheelSpinStart}
+          onSpinEnd={onWheelSpinEnd}
+          enableSwipe={enableSwipe}
+        />
         <button
           className="spin-button btn grad-dare"
           onClick={onSpin}
