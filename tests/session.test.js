@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const sessionModulePath = path.resolve(__dirname, "../src/firebase/session.js");
-const firebaseConfigPath = path.resolve(__dirname, "../src/config/firebase.js");
+const firebaseConfigPath = path.resolve(__dirname, "../src/firebase/config.js");
 
 const createFakeLocalStorage = () => {
   const store = new Map();

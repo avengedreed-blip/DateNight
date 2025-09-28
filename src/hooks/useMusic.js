@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 
-import { db } from "../config/firebase";
+import { db } from "../firebase/config";
 
 const TRACK_FILE_MAP = Object.freeze({
   "classic-dark": "bgm_classic_dark.mp3",

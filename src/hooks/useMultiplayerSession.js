@@ -6,7 +6,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 
-import { db } from "../config/firebase";
+import { db } from "../firebase/config";
 import { getGameDocRef } from "../firebase/schema";
 
 const DEFAULT_TIMER = {

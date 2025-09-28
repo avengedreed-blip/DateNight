@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 
-import { db } from "../config/firebase";
+import { db } from "../firebase/config";
 import { defaultPrompts, PROMPT_CATEGORIES, PROMPT_INTENSITIES } from "../config/prompts";
 import {
   EXTREME_PHASES,
