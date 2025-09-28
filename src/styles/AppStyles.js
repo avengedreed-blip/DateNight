@@ -224,14 +224,99 @@ export const AppStyles = `
 .grad-dare { background: linear-gradient(45deg, var(--dare-color), color-mix(in srgb, var(--dare-color) 70%, var(--consequence-color))); }
 .grad-trivia { background: linear-gradient(45deg, var(--trivia-color), color-mix(in srgb, var(--trivia-color) 70%, var(--ring-faint))); }
 
-/* --- Entry Animations --- */
-@keyframes slide-in-fade {
-  from { opacity: 0; transform: translateY(20px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+/* --- Modal Backdrop --- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
 }
 
+/* --- Modal Card --- */
+.modal-card {
+  width: min(92vw, 480px);
+  padding: 2rem;
+  border-radius: 1.5rem;
+  text-align: center;
+  background: var(--bg-overlay, rgba(20, 20, 30, 0.7));
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: var(--shadow-strong, rgba(0, 0, 0, 0.6) 0px 10px 40px);
+  transform: translateY(20px);
+  opacity: 0;
+}
+
+/* --- Entry Animation --- */
 .animate-in {
-  animation: slide-in-fade 0.7s cubic-bezier(0.25, 1, 0.5, 1) both;
+  animation: modal-fade-in 0.35s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes modal-fade-in {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* --- Typography --- */
+.modal-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--label-color, #fff);
+  margin-bottom: 1rem;
+}
+
+.modal-content {
+  font-size: 1.1rem;
+  color: var(--label-color, #fff);
+  opacity: 0.9;
+}
+
+/* --- Actions --- */
+.modal-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .modal-actions {
+    flex-direction: row;
+    justify-content: center;
+  }
+}
+
+.modal-btn {
+  flex: 1;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.85rem;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--label-color, #fff);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.35);
+}
+
+.modal-btn:hover {
+  transform: scale(1.04) translateY(-2px);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--glow-color, #fff) 60%, transparent);
+}
+
+.modal-btn:active {
+  transform: scale(0.96);
 }
 
 .delay-1 { animation-delay: 0.1s; }
