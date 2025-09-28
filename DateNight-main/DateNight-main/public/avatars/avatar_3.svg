@@ -1,0 +1,15 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="avatar3_bg" cx="0" cy="0" r="1" gradientTransform="translate(80 80) rotate(45) scale(110)" gradientUnits="userSpaceOnUse">
+      <stop offset="0.1" stop-color="#0CF2FF" />
+      <stop offset="0.55" stop-color="#6C5BFF" />
+      <stop offset="1" stop-color="#FD2EFF" />
+    </radialGradient>
+  </defs>
+  <rect x="8" y="8" width="144" height="144" rx="72" fill="url(#avatar3_bg)" />
+  <path d="M80 42L112 118H48L80 42Z" fill="#021C40" fill-opacity="0.4" />
+  <circle cx="80" cy="76" r="20" fill="#021C40" fill-opacity="0.6" />
+  <circle cx="68" cy="72" r="7" fill="#8BF4FF" />
+  <circle cx="92" cy="72" r="7" fill="#FEE0FF" />
+  <rect x="64" y="98" width="32" height="8" rx="4" fill="#021C40" fill-opacity="0.6" />
+</svg>

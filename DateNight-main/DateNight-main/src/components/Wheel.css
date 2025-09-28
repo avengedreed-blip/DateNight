@@ -1,0 +1,212 @@
+:root {
+  --wheel-size: min(86vw, calc(100vh - 260px));
+  --labelRadius: calc(var(--wheel-size) / 2.6);
+}
+
+.wheel-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--wheel-size);
+  max-width: 520px;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  z-index: 0;
+}
+
+.wheel-container::before {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  background: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--ring) 35%, transparent) 0%,
+    color-mix(in srgb, var(--ring) 15%, transparent) 45%,
+    transparent 75%
+  );
+  filter: blur(24px);
+  opacity: 0.8;
+  z-index: -2;
+  pointer-events: none;
+}
+
+.wheel-container::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.18), transparent 60%);
+  opacity: 0.4;
+  z-index: -3;
+  pointer-events: none;
+}
+
+.wheel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  background:
+    conic-gradient(
+      from -90deg,
+      color-mix(in srgb, var(--truth) 88%, white 12%) 0deg,
+      color-mix(in srgb, var(--truth) 78%, black 22%) 120deg,
+      color-mix(in srgb, var(--dare) 88%, white 12%) 120deg,
+      color-mix(in srgb, var(--dare) 78%, black 22%) 240deg,
+      color-mix(in srgb, var(--trivia) 88%, white 12%) 240deg,
+      color-mix(in srgb, var(--trivia) 78%, black 22%) 360deg
+    );
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 0 35px rgba(0, 0, 0, 0.45),
+    0 0 65px rgba(90, 148, 255, 0.18),
+    inset 0 0 18px rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(14px);
+  transition: transform 3s cubic-bezier(0.2, 0.7, 0.3, 1);
+  will-change: transform;
+}
+
+.wheel::before {
+  content: "";
+  position: absolute;
+  inset: 3%;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--ring) 40%, transparent);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--ring) 30%, transparent);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.wheel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.25), transparent 60%);
+  mix-blend-mode: screen;
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.wheel-bounce {
+  animation: wheel-bounce 0.5s ease;
+}
+
+@keyframes wheel-bounce {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.wheel-svg {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+}
+
+.wheel-svg g path {
+  fill: transparent;
+  stroke-width: 0.35px;
+  mix-blend-mode: lighten;
+}
+
+.wheel-svg g:nth-of-type(1) path {
+  stroke: color-mix(in srgb, var(--truth) 80%, white 20%);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--truth) 45%, transparent));
+}
+
+.wheel-svg g:nth-of-type(2) path {
+  stroke: color-mix(in srgb, var(--dare) 80%, white 20%);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--dare) 45%, transparent));
+}
+
+.wheel-svg g:nth-of-type(3) path {
+  stroke: color-mix(in srgb, var(--trivia) 80%, white 20%);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--trivia) 45%, transparent));
+}
+
+.wheel-separator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1.5px;
+  height: calc(var(--labelRadius) * 2.1);
+  transform-origin: center top;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.45),
+    rgba(255, 255, 255, 0.05)
+  );
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+  z-index: 3;
+}
+
+.wheel-label-text {
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  fill: #fff !important;
+  font-size: clamp(14px, calc(var(--labelRadius) / 2.4), 28px);
+  letter-spacing: 0.12em;
+  text-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.45),
+    0 0 8px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.wheel-pointer {
+  position: absolute;
+  top: calc(50% - var(--wheel-size) / 2 - 18px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 16px solid transparent;
+  border-right: 16px solid transparent;
+  border-bottom: 26px solid var(--ring);
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--ring) 55%, transparent));
+  z-index: 5;
+}
+
+.wheel-pointer::after {
+  content: "";
+  position: absolute;
+  top: 70%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ring);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ring) 70%, transparent);
+}
+
+@media (max-width: 640px) {
+  :root {
+    --wheel-size: min(92vw, calc(100vh - 220px));
+  }
+
+  .wheel-pointer {
+    border-left-width: 14px;
+    border-right-width: 14px;
+    border-bottom-width: 22px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --wheel-size: min(460px, calc(100vh - 300px));
+  }
+}
