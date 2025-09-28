@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rampart+One&display=swap');
+
+:root {
+  /* --- LOCKED THEME TOKENS (No changes here) --- */
+  --bg-gradient-start: #0B0F14;
+  --bg-gradient-end: #0E1320;
+  --truth-color: #00E6D0;
+  --dare-color: #FF477E;
+  --trivia-color: #7AA2FF;
+  --consequence-color: #FFD166;
+  --label-color: #FFFFFF;
+  --ring-color: #FFFFFF;
+  --particle-color: var(--truth-color);
+  --meter-bg: #1A1F2A;
+
+  /* --- NEW DESIGN SYSTEM TOKENS --- */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-full: 999px;
+
+  --shadow-sm: 0 2px 5px rgba(0,0,0,0.2);
+  --shadow-md: 0 8px 15px rgba(0,0,0,0.25);
+  --shadow-lg: 0 15px 35px rgba(0,0,0,0.3);
+
+  --duration-fast: 0.15s;
+  --duration-medium: 0.3s;
+  --duration-slow: 0.5s;
+  --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-decelerate: cubic-bezier(0.0, 0.0, 0.2, 1);
+
+  /* --- RESPONSIVE WHEEL VARIABLES --- */
+  --labelRadius: 60%;
+  --sliceSeparator: 2px;
+}
+
+@media (max-width: 420px) {
+  :root { --labelRadius: 61%; }
+}
+@media (min-width: 900px) {
+  :root { --labelRadius: 58%; }
+}

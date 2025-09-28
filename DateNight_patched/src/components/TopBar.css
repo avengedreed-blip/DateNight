@@ -1,0 +1,91 @@
+/* --- TopBar Polish --- */
+:root {
+  --label-color: #f0f0f5;
+  --glow-color: rgba(142, 197, 252, 0.8); /* A soft blue glow */
+  --bar-bg: rgba(28, 32, 46, 0.5);
+  --bar-border: rgba(255, 255, 255, 0.1);
+  --btn-bg-hover: rgba(255, 255, 255, 0.1);
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: calc(0.75rem + var(--safe-area-top)) clamp(1rem, 5vw, 1.5rem) 0.75rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+
+  background: var(--bar-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--bar-border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.top-bar-title {
+  color: var(--label-color);
+  font-size: clamp(1.1rem, 2.5vw, 1.5rem);
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.top-bar-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.top-bar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  
+  color: var(--label-color);
+  border-radius: 50%;
+  cursor: pointer;
+
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), 
+              background-color 0.2s ease, 
+              box-shadow 0.2s ease;
+  will-change: transform, box-shadow;
+}
+
+.top-bar-btn:hover,
+.top-bar-btn:focus-visible {
+  outline: none;
+  background-color: var(--btn-bg-hover);
+  transform: scale(1.1);
+  box-shadow: 0 0 15px -2px var(--glow-color);
+}
+
+.top-bar-btn:active {
+  transform: scale(0.98);
+  transition-duration: 0.1s;
+}
+
+.top-bar-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+@media (max-width: 600px) {
+  .top-bar {
+    padding: calc(0.65rem + var(--safe-area-top)) clamp(0.85rem, 6vw, 1.2rem) 0.65rem;
+    gap: 0.5rem;
+  }
+
+  .top-bar-title {
+    font-size: clamp(1rem, 5vw, 1.35rem);
+  }
+
+  .top-bar-actions {
+    gap: 0.4rem;
+  }
+}

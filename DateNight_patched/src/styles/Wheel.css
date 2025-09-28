@@ -1,0 +1,244 @@
+:root {
+  /* --- Core Layout & Theme Variables (Unchanged) --- */
+  --wheel-size: min(86vw, calc(100vh - 260px));
+  --labelRadius: calc(var(--wheel-size) / 2.6);
+  --truth: #00aaff;
+  --dare: #ff0055;
+  --trivia: #ffaa00;
+  --ring: #e0e0ff;
+}
+
+.wheel-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--wheel-size);
+  max-width: 520px;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  z-index: 0;
+}
+
+/* REFINED: Outer glow is softer and more atmospheric */
+.wheel-container::before {
+  content: "";
+  position: absolute;
+  inset: 10%;
+  background: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--ring) 35%, transparent) 0%,
+    transparent 65%
+  );
+  filter: blur(40px);
+  opacity: 0.85;
+  z-index: -2;
+  pointer-events: none;
+}
+
+.wheel-container::after {
+  content: "";
+  position: absolute;
+  inset: -5%;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.08), transparent 70%);
+  opacity: 0.6;
+  z-index: -3;
+  pointer-events: none;
+}
+
+.wheel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.15), transparent 60%),
+    conic-gradient(
+      from -90deg,
+      color-mix(in srgb, var(--truth) 95%, white 5%) 0deg,
+      var(--truth) 60deg,
+      color-mix(in srgb, var(--truth) 75%, black 25%) 120deg,
+      color-mix(in srgb, var(--dare) 95%, white 5%) 120deg,
+      var(--dare) 180deg,
+      color-mix(in srgb, var(--dare) 75%, black 25%) 240deg,
+      color-mix(in srgb, var(--trivia) 95%, white 5%) 240deg,
+      var(--trivia) 300deg,
+      color-mix(in srgb, var(--trivia) 75%, black 25%) 360deg
+    );
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 2px 15px rgba(0, 0, 0, 0.4),
+    0 0 90px rgba(90, 148, 255, 0.25),
+    inset 0 0 2px 1px rgba(255, 255, 255, 0.25),
+    inset 0 0 30px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(16px);
+  transition: transform 4s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+
+@supports not ((backdrop-filter: blur(16px)) or (-webkit-backdrop-filter: blur(16px))) {
+  .wheel {
+    background:
+      radial-gradient(circle at center, rgba(255, 255, 255, 0.15), transparent 60%),
+      conic-gradient(
+        from -90deg,
+        var(--truth) 0deg,
+        var(--truth) 120deg,
+        var(--dare) 120deg,
+        var(--dare) 240deg,
+        var(--trivia) 240deg,
+        var(--trivia) 360deg
+      );
+  }
+}
+
+.wheel::before {
+  content: "";
+  position: absolute;
+  inset: 3.5%;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--ring) 60%, transparent);
+  box-shadow: 0 0 25px color-mix(in srgb, var(--ring) 40%, transparent);
+  opacity: 0.75;
+  pointer-events: none;
+  z-index: 1;
+  animation: inner-ring-shimmer 8s infinite linear;
+}
+
+@keyframes inner-ring-shimmer {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.wheel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, rgba(255, 255, 255, 0.25), transparent 55%);
+  mix-blend-mode: overlay;
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.wheel-bounce {
+  animation: wheel-bounce 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes wheel-bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
+.wheel-svg {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  mix-blend-mode: lighten;
+  opacity: 0.9;
+}
+
+.wheel-svg g path { fill: transparent; stroke-width: 0.3px; }
+.wheel-svg g:nth-of-type(1) path {
+  stroke: color-mix(in srgb, var(--truth) 70%, white 30%);
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--truth) 60%, transparent));
+}
+.wheel-svg g:nth-of-type(2) path {
+  stroke: color-mix(in srgb, var(--dare) 70%, white 30%);
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--dare) 60%, transparent));
+}
+.wheel-svg g:nth-of-type(3) path {
+  stroke: color-mix(in srgb, var(--trivia) 70%, white 30%);
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--trivia) 60%, transparent));
+}
+
+.wheel-separator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: calc(var(--labelRadius) * 2.15);
+  transform-origin: center top;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.7),
+    rgba(255, 255, 255, 0.2) 60%,
+    transparent
+  );
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
+  z-index: 3;
+}
+
+.wheel-label-text {
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  fill: #fff !important;
+  font-size: clamp(14px, calc(var(--labelRadius) / 2.4), 28px);
+  letter-spacing: 0.12em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7), 0 0 10px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.wheel-pointer {
+  position: absolute;
+  top: calc(50% - var(--wheel-size) / 2 - 28px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 34px;
+  height: 42px;
+  z-index: 5;
+}
+
+.wheel-pointer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #ffffff 0%, var(--ring) 100%);
+  clip-path: polygon(50% 100%, 0 35%, 20% 0, 80% 0, 100% 35%);
+  border-radius: 4px;
+  box-shadow: inset 0 0 1px 1px rgba(0, 0, 0, 0.1);
+}
+
+.wheel-pointer::after {
+  content: "";
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--ring) 70%, black 30%) 0%,
+    var(--ring) 40%,
+    #ffffff 100%
+  );
+}
+
+@media (max-width: 640px) {
+  :root { --wheel-size: min(92vw, calc(100vh - 220px)); }
+}
+
+@media (min-width: 1024px) {
+  :root { --wheel-size: min(460px, calc(100vh - 300px)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wheel,
+  .wheel::before,
+  .wheel::after,
+  .wheel-pointer,
+  .wheel-pointer::before,
+  .wheel-pointer::after,
+  .wheel-svg g path {
+    animation: none !important;
+    transition: none !important;
+  }
+}
