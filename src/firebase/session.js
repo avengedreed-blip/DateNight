@@ -12,7 +12,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 
-import { db } from "../config/firebase";
+import { db } from "./config";
 import { getGameDocRef } from "./schema";
 import { ANALYTICS_COLLECTION, summarizeAnalyticsEvents } from "../hooks/useAnalytics";
 

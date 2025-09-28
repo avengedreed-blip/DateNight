@@ -10,7 +10,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 
-import { db } from "../config/firebase";
+import { db } from "./config";
 
 const CUSTOM_PROMPTS_COLLECTION = "customPrompts";
 

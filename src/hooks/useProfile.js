@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 
-import { db } from "../config/firebase";
+import { db } from "../firebase/config";
 
 const LOCAL_STORAGE_KEY = "date-night/playerProfile";
 

@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const analyticsModulePath = path.resolve(__dirname, "../src/hooks/useAnalytics.js");
-const firebaseConfigPath = path.resolve(__dirname, "../src/config/firebase.js");
+const firebaseConfigPath = path.resolve(__dirname, "../src/firebase/config.js");
 
 const importAnalyticsModule = async () => {
   vi.resetModules();

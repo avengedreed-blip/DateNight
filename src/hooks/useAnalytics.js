@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
-import { db } from "../config/firebase";
+import { db } from "../firebase/config";
 import { addAchievementsToProfile } from "../firebase/profile";
 
 const EVENTS_COLLECTION = "analytics";

@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const profileModulePath = path.resolve(__dirname, "../src/firebase/profile.js");
-const firebaseConfigPath = path.resolve(__dirname, "../src/config/firebase.js");
+const firebaseConfigPath = path.resolve(__dirname, "../src/firebase/config.js");
 
 const importProfileModule = async (firestoreOptions = {}) => {
   vi.resetModules();

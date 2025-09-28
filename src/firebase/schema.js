@@ -4,7 +4,7 @@ import {
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
-import { db } from "../config/firebase";
+import { db } from "./config";
 
 const STREAK_BADGE_CONFIG = Object.freeze([
   { tier: "bronze", badgeId: "streak-bronze", minStreak: 3 },
