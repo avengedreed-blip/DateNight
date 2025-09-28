@@ -23,28 +23,3 @@ body, #root {
   transition: background 0.5s ease;
 }
 
-/* Top Bar */
-.top-bar {
-  padding: calc(0.75rem + var(--safe-area-top)) clamp(1rem, 5vw, 1.5rem) 0.75rem;
-  width: 100%;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.top-bar__inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.top-bar__title {
-  margin: 0;
-  font-family: 'Baloo 2', sans-serif;
-  font-size: clamp(1.5rem, 3vw, 2.25rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  text-shadow: 0 2px 5px rgba(0,0,0,0.2);
-}
