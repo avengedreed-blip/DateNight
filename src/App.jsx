@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import confetti from "canvas-confetti";
 import { AppStyles } from "./styles/AppStyles";
 import "./styles/layout.css";
+import "./styles/Modal.css";
 
 import ParticleCanvas from "./components/ParticleCanvas";
 import Wheel, {
