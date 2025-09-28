@@ -15,10 +15,7 @@ import Modal from "./components/modals/Modal";
 import SettingsModal from "./components/SettingsModal";
 import TopBar from "./components/TopBar";
 
-import SplashScreen from "./screens/SplashScreen";
-import StartScreen from "./screens/StartScreen.jsx";
-import ModeSelectionScreen from "./screens/ModeSelectionScreen.jsx";
-import GameScreen from "./screens/GameScreen.jsx";
+import { APP_ROUTES } from "./routes/appRoutes";
 
 import { THEMES } from "./themeConfig";
 import AudioManager from "./audio/AudioManager";
@@ -261,6 +258,54 @@ export default function App() {
     setScreen("game");
   }, [playSfx]);
 
+  const routeSpecificProps = useMemo(
+    () => {
+      const openHelp = () => handleOpenModal("help");
+      const openSettings = () => handleOpenModal("settings");
+
+      return {
+        splash: {},
+        start: {
+          onPickMode: handlePickMode,
+        },
+        select: {
+          mode,
+          onStart: handleStartGame,
+        },
+        game: {
+          rotation,
+          onSpin: handleSpin,
+          spinning,
+          spark,
+          onSpinDone: handleSpinDone,
+          onHelpClick: openHelp,
+          onSettingsClick: openSettings,
+          topBar: (
+            <TopBar
+              title="Date Night"
+              subtitle={modeSubtitle}
+              onHelp={openHelp}
+              onSettings={openSettings}
+            />
+          ),
+          sparkMeter: <SparkMeter value={spark} />,
+        },
+      };
+    },
+    [
+      handleOpenModal,
+      handlePickMode,
+      handleSpin,
+      handleSpinDone,
+      handleStartGame,
+      mode,
+      modeSubtitle,
+      rotation,
+      spark,
+      spinning,
+    ]
+  );
+
   return (
     <div className={`animated-background ${screenFlash ? "screen-flash-active" : ""}`}>
       <style>{AppStyles}</style>
@@ -274,39 +319,16 @@ export default function App() {
         <SparkMeter value={100} theme="consequence" />
       </section>
 
-      <div className={`screen ${screen === "splash" ? "enter" : ""}`}>
-        {screen === "splash" && <SplashScreen />}
-      </div>
-      <div className={`screen ${screen === "start" ? "enter" : ""}`}>
-        {screen === "start" && <StartScreen onPickMode={handlePickMode} />}
-      </div>
-      <div className={`screen ${screen === "select" ? "enter" : ""}`}>
-        {screen === "select" && (
-          <ModeSelectionScreen mode={mode} onStart={handleStartGame} />
-        )}
-      </div>
-      <div className={`screen ${screen === "game" ? "enter" : ""}`}>
-        {screen === "game" && (
-          <GameScreen
-            rotation={rotation}
-            onSpin={handleSpin}
-            spinning={spinning}
-            spark={spark}
-            onSpinDone={handleSpinDone}
-            onHelpClick={() => handleOpenModal("help")}
-            onSettingsClick={() => handleOpenModal("settings")}
-            topBar={
-              <TopBar
-                title="Date Night"
-                subtitle={modeSubtitle}
-                onHelp={() => handleOpenModal("help")}
-                onSettings={() => handleOpenModal("settings")}
-              />
-            }
-            sparkMeter={<SparkMeter value={spark} />}
-          />
-        )}
-      </div>
+      {APP_ROUTES.map(({ id, Component }) => {
+        const isActive = screen === id;
+        const props = routeSpecificProps[id] ?? {};
+
+        return (
+          <div key={id} className={`screen ${isActive ? "enter" : ""}`}>
+            {isActive ? <Component {...props} /> : null}
+          </div>
+        );
+      })}
 
       <Modal
         title="Result"
