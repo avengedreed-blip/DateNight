@@ -265,6 +265,10 @@ export default function App() {
     <div className={`animated-background ${screenFlash ? "screen-flash-active" : ""}`}>
       <style>{AppStyles}</style>
       <ParticleCanvas theme={particleTheme} />
+      <SparkMeter value={65} theme="truth" />
+      <SparkMeter value={85} theme="dare" />
+      <SparkMeter value={45} theme="trivia" />
+      <SparkMeter value={100} theme="consequence" />
 
       <div className={`screen ${screen === "splash" ? "enter" : ""}`}>
         {screen === "splash" && <SplashScreen />}
