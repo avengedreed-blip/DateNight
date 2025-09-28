@@ -265,10 +265,14 @@ export default function App() {
     <div className={`animated-background ${screenFlash ? "screen-flash-active" : ""}`}>
       <style>{AppStyles}</style>
       <ParticleCanvas theme={particleTheme} />
-      <SparkMeter value={65} theme="truth" />
-      <SparkMeter value={85} theme="dare" />
-      <SparkMeter value={45} theme="trivia" />
-      <SparkMeter value={100} theme="consequence" />
+      {/* The SparkMeters are now containerized in a styled section */}
+      <section className="spark-section" aria-labelledby="spark-section-heading">
+        <h2 id="spark-section-heading">Spark Meter Showcase</h2>
+        <SparkMeter value={65} theme="truth" />
+        <SparkMeter value={85} theme="dare" />
+        <SparkMeter value={45} theme="trivia" />
+        <SparkMeter value={100} theme="consequence" />
+      </section>
 
       <div className={`screen ${screen === "splash" ? "enter" : ""}`}>
         {screen === "splash" && <SplashScreen />}
